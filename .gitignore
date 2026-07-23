@@ -1,31 +1,13 @@
-# Dependências
-node_modules/
+# Monorepo: papelaria-bot (chatbot) + venancio-ai-ops (dashboard).
+# Cada subprojeto tem seu próprio .gitignore (node_modules, dist, .env, etc.).
 
-# Variáveis de ambiente
-.env
-.env.local
-
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-logs/
-*.log
-
-# Sistema operacional
-.DS_Store
-Thumbs.db
-
-# Editores/IDEs
-.vscode/
-.idea/
-
-# Build/cache
-dist/
-coverage/
-.cache/
-
-# Dados de negócio / mídia pesada (não são código-fonte, ficam só localmente)
-/materiais/
-/ORÇAMENTOS 2026-20260712T201159Z-2-001/
-/assets/
+# Notas pessoais / configs locais fora do escopo dos dois projetos versionados
+/frontend.md
+/melhoriaclaudecode.md
+/n8n.md
+/readme
+/segurança.md
+/skill.md
+/n8n-workflows/
+/chatbot/.claude/
+/chatbot/AGENTE DE IA (N8N)/

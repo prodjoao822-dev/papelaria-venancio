@@ -1,0 +1,680 @@
+{
+  "name": "Agente 2 (Comercial - v2 · State + PG Memory)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "fcff0621-f98a-4520-b127-27ec5231a103",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        912,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "telefone",
+              "value": "={{ $json.phone || $json.telefone }}",
+              "type": "string"
+            },
+            {
+              "id": "2",
+              "name": "mensagem",
+              "value": "={{ $json.user_message || $json.message || $json.mensagem }}",
+              "type": "string"
+            },
+            {
+              "id": "3",
+              "name": "conversa_id",
+              "value": "={{ $json.conversationId || $json.conversa_id }}",
+              "type": "string"
+            },
+            {
+              "id": "4",
+              "name": "empresa_id",
+              "value": "={{ $json.context?.empresa_id || $json.empresa_id }}",
+              "type": "string"
+            },
+            {
+              "id": "5",
+              "name": "nome_cliente",
+              "value": "={{ $json.customerName || $json.nome_cliente }}",
+              "type": "string"
+            },
+            {
+              "id": "6",
+              "name": "cliente_id",
+              "value": "={{ $json.clienteId || $json.cliente_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "207f160a-f773-4d6e-b894-c5e5f3fafca2",
+      "name": "Carrega Contexto",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1136,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "conversation_state",
+        "limit": 1,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "phone",
+              "condition": "eq",
+              "keyValue": "={{ $('Carrega Contexto').item.json.telefone }}"
+            }
+          ]
+        }
+      },
+      "id": "f996baae-13ff-445c-ad56-37bb2e27c6b1",
+      "name": "Busca Conversation State",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1360,
+        368
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "IlPIhLKj72bLR8RD",
+          "name": "Supabase account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "telefone",
+              "value": "={{ $('Carrega Contexto').item.json.telefone }}",
+              "type": "string"
+            },
+            {
+              "id": "2",
+              "name": "mensagem",
+              "value": "={{ $('Carrega Contexto').item.json.mensagem }}",
+              "type": "string"
+            },
+            {
+              "id": "3",
+              "name": "conversa_id",
+              "value": "={{ $('Carrega Contexto').item.json.conversa_id || $('Busca Conversation State').item.json.conversation_id || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "4",
+              "name": "empresa_id",
+              "value": "={{ $('Carrega Contexto').item.json.empresa_id || $('Busca Conversation State').item.json.empresa_id || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "5",
+              "name": "nome_cliente",
+              "value": "={{ $('Carrega Contexto').item.json.nome_cliente || $('Busca Conversation State').item.json.customer_name || 'Cliente' }}",
+              "type": "string"
+            },
+            {
+              "id": "6",
+              "name": "intent",
+              "value": "={{ $('Execute Workflow Trigger').item.json.intent }}",
+              "type": "string"
+            },
+            {
+              "id": "7",
+              "name": "ultima_mensagem_faq",
+              "value": "={{ $('Busca Conversation State').item.json.last_message || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "8",
+              "name": "workflow_ativo",
+              "value": "={{ $('Busca Conversation State').item.json.workflow_ativo || 'comercial' }}",
+              "type": "string"
+            },
+            {
+              "id": "9",
+              "name": "prompt_com_contexto",
+              "value": "={{ '[CONTEXTO DA SESSÃO]\\n• Cliente: ' + ($('Carrega Contexto').item.json.nome_cliente || $('Busca Conversation State').item.json.customer_name || 'Cliente') + '\\n• Intenção detectada: ' + ($('Busca Conversation State').item.json.intent || 'produto') + '\\n\\n[MENSAGEM]\\n' + $('Carrega Contexto').item.json.mensagem }}",
+              "type": "string"
+            },
+            {
+              "id": "10",
+              "name": "cliente_id",
+              "value": "={{ $('Carrega Contexto').item.json.cliente_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "37b24778-e34b-47ab-b677-64cca98113b5",
+      "name": "Monta Contexto Completo",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1600,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "cond-produto",
+                    "leftValue": "={{ $('Monta Contexto Completo').item.json.intent }}",
+                    "rightValue": "produto",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Produto (Vendas)"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "cond-orcamento",
+                    "leftValue": "={{ $('Monta Contexto Completo').item.json.intent }}",
+                    "rightValue": "orcamento",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Orçamento (Bulk)"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "0"
+        }
+      },
+      "id": "99df95e3-4fba-4c93-9748-aee0ac35c3e4",
+      "name": "Switch Intenção",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1824,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Monta Contexto Completo').item.json.prompt_com_contexto }}",
+        "options": {
+          "systemMessage": "=# PAPEL\nVocê é o Agente Comercial da Papelaria Venâncio.\nVocê é um vendedor experiente, simpático, prestativo e focado em resolver o problema do cliente.\nSeu objetivo é ajudar o cliente a encontrar exatamente o que ele precisa, oferecendo um atendimento natural, leve e consultivo.\nO cliente nunca deve perceber que está falando com uma IA.\n\n# REGRAS DE CONSULTA E ESTOQUE (CRÍTICO)\n- Você possui uma ferramenta conectada ao banco de dados chamada \"Estoque_produtos\".\n- SEMPRE que o cliente mencionar um produto, perguntar sobre disponibilidade ou perguntar preços, você DEVE OBRIGATORIAMENTE executar a ferramenta para buscar a informação real.\n- NUNCA, em hipótese alguma, invente preços, marcas, características ou disponibilidade. \n- Use APENAS os dados exatos que a ferramenta retornar.\n- Se a ferramenta não encontrar o produto ou retornar vazio, informe educadamente que aquele item está em falta no momento e, se fizer sentido, ofereça um produto similar que você tenha encontrado.\n\n# PERSONALIDADE E FORMATO\n- Seja educado e objetivo.\n- Converse como um atendente humano faria pelo WhatsApp.\n- Utilize frases curtas. Responda em no máximo 3 mensagens curtas por vez.\n- NUNCA utilize formatação markdown (não use asteriscos **, não use negrito, não use listas complexas).\n- Evite parecer um robô. Use emojis de forma moderada (ex: 😊, 👍, 📚).\n\n# CONTINUIDADE E CONTEXTO\n- Você está dando continuidade a uma conversa iniciada pelo Agente de Atendimento.\n- Nunca se apresente novamente, não diga que foi transferido e não diga o seu nome, a menos que perguntem.\n- Você receberá um bloco [CONTEXTO DA SESSÃO]. Leia-o em silêncio para saber o nome do cliente e a intenção, mas NUNCA repita ou mencione esses dados técnicos na sua resposta. \n- Responda apenas com base na [MENSAGEM] do cliente.\n\n# VENDA CONSULTIVA\n- Primeiro entenda a necessidade do cliente (ex: \"Você procura para uso escolar ou escritório?\").\n- Sugira produtos complementares de forma natural, mas apenas se estiverem disponíveis na consulta da ferramenta. Ex: quem compra cartolina costuma levar cola e tesoura. Nunca insista ou force uma venda."
+        }
+      },
+      "id": "7a04ca22-4f4b-4a6a-8f61-da2cf3495bb4",
+      "name": "Agente Vendedor",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        2432,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Monta Contexto Completo').item.json.prompt_com_contexto }}",
+        "options": {
+          "systemMessage": "=# PAPEL\nVocê é o Especialista em Orçamentos e Atacado da Papelaria Venâncio.\nVocê atende clientes que desejam comprar em grandes quantidades (empresas, escolas, escritórios ou revendas).\nSeu objetivo é coletar a lista exata de itens, quantidades desejadas e registrar os dados para a preparação do orçamento formal.\nO cliente nunca deve perceber que está falando com uma IA.\n\n# REGRAS DE ORÇAMENTO E FERRAMENTAS (CRÍTICO)\n- NUNCA invente preços de atacado ou prometa descontos específicos. \n- Você possui ferramentas conectadas ao banco de dados (Supabase). Utilize-as para consultar a base de produtos quando necessário e para registrar a solicitação de orçamento do cliente.\n- Sua prioridade é ter a clareza exata do que o cliente quer. Se ele mandar uma lista incompleta, pergunte as quantidades, cores ou marcas de cada item faltante.\n- Assim que a lista estiver completa, informe que a solicitação será processada e registrada para que a equipe humana aplique os descontos de atacado adequados.\n\n# PERSONALIDADE E FORMATO\n- Seja educado, corporativo, direto e extremamente organizado.\n- Converse de maneira fluida pelo WhatsApp.\n- NUNCA utilize formatação markdown (proibido o uso de ** ou itálico).\n- Mensagens diretas e claras, sem enrolação.\n\n# CONTINUIDADE E CONTEXTO\n- Você está assumindo uma conversa que já começou.\n- Nunca se apresente novamente ou diga que a chamada foi transferida. Continue a conversa naturalmente de onde parou.\n- Analise o [CONTEXTO DA SESSÃO] silenciosamente, mas formule sua resposta focada inteiramente na [MENSAGEM] atual do cliente.\n\n# COMPORTAMENTO\n- Confirme os itens com o cliente antes de finalizar.\n- Exemplo de condução: \"Perfeito, [Nome]. Já anotei as 500 canetas azuis e os 200 cadernos. Para finalizarmos a solicitação de orçamento, precisa de mais algum material de escritório?\""
+        }
+      },
+      "id": "961aa6d8-2393-4866-be80-e8a903afcba7",
+      "name": "Agente Especialista em Orçamentos",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        2352,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "model": "google/gemini-2.5-flash",
+        "options": {}
+      },
+      "id": "bbca81cc-17e5-4964-925c-5f61703f7aa1",
+      "name": "OpenRouter LLM",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        2336,
+        256
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "dTNCl0a58GFaDINq",
+          "name": "openrouter_cloudfy"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Monta Contexto Completo').item.json.telefone }}",
+        "contextWindowLength": 10
+      },
+      "id": "7d7c190e-3299-4fc2-8579-f9b73fbf8d9f",
+      "name": "Memória PostgreSQL",
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.1,
+      "position": [
+        2512,
+        256
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "wUiWMF0T6RorPopr",
+          "name": "postgres_cloudfy"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "VENANCIO",
+        "remoteJid": "={{ $('Monta Contexto Completo').item.json.telefone }}",
+        "messageText": "={{ $json.output }}",
+        "options_message": {}
+      },
+      "id": "deb63d54-b6d0-4f50-a332-6a1504e27a6f",
+      "name": "Enviar Resposta Evolution",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        3168,
+        336
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "6i9g6VgRlbuCwWCq",
+          "name": "evolution_cloudfy"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "conversation_state",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "phone",
+              "condition": "eq",
+              "keyValue": "={{ $('Monta Contexto Completo').item.json.telefone }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "workflow_ativo",
+              "fieldValue": "comercial"
+            },
+            {
+              "fieldId": "updated_at",
+              "fieldValue": "={{ $now.toISO() }}"
+            }
+          ]
+        }
+      },
+      "id": "32934f76-f1d6-49a9-b5b0-ecaeff8da6d6",
+      "name": "Atualiza State Comercial",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3408,
+        336
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "IlPIhLKj72bLR8RD",
+          "name": "Supabase account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Busca produtos no catálogo. Parâmetro: termo de busca.",
+        "operation": "getAll",
+        "tableId": "produtos",
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.supabaseTool",
+      "typeVersion": 1,
+      "position": [
+        2656,
+        256
+      ],
+      "id": "bf3e70a8-ba05-4360-806a-70c01b0674e7",
+      "name": "Estoque_produtos",
+      "credentials": {
+        "supabaseApi": {
+          "id": "IlPIhLKj72bLR8RD",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "google/gemini-2.5-flash",
+        "options": {
+          "maxTokens": 4000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        2240,
+        720
+      ],
+      "id": "359b0d65-4de8-45bf-91a6-32a4be96846a",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "dTNCl0a58GFaDINq",
+          "name": "openrouter_cloudfy"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Monta Contexto Completo').item.json.telefone }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        2432,
+        704
+      ],
+      "id": "9deec831-f056-44dc-b8fa-5c508430c3f7",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Registra a solicitação de orçamento (compra em atacado) do cliente atual assim que a lista de itens e quantidades estiver completa e confirmada com o cliente. Preencha 'conteudo' com um array JSON dos itens/quantidades solicitados e 'valor_total' se for possível estimar.",
+        "operation": "create",
+        "tableId": "orcamentos",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "cliente_id",
+              "fieldValue": "={{ $('Monta Contexto Completo').item.json.cliente_id }}"
+            },
+            {
+              "fieldId": "origem",
+              "fieldValue": "whatsapp"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "pendente"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabaseTool",
+      "typeVersion": 1,
+      "position": [
+        2608,
+        704
+      ],
+      "id": "9587aece-d9bf-43e5-9594-f1f4e62816ac",
+      "name": "Registrar Orçamento",
+      "credentials": {
+        "supabaseApi": {
+          "id": "IlPIhLKj72bLR8RD",
+          "name": "Supabase account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Execute Workflow Trigger": [
+      {
+        "json": {
+          "conversationId": "0138d60c-de69-4643-bfff-087f89c9aedc",
+          "phone": "5527998489094",
+          "customerName": "João Victor",
+          "message": "quero o papel sulfite com 500 folhas, está saindo a quanto?",
+          "intent": "produto",
+          "timestamp": "2026-07-08T11:57:37.973-04:00",
+          "context": {
+            "empresa_id": "uuid-da-empresa-aqui"
+          },
+          "workflow_ativo": "comercial"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Carrega Contexto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Carrega Contexto": {
+      "main": [
+        [
+          {
+            "node": "Busca Conversation State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca Conversation State": {
+      "main": [
+        [
+          {
+            "node": "Monta Contexto Completo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta Contexto Completo": {
+      "main": [
+        [
+          {
+            "node": "Switch Intenção",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Intenção": {
+      "main": [
+        [
+          {
+            "node": "Agente Vendedor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Agente Especialista em Orçamentos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente Vendedor": {
+      "main": [
+        [
+          {
+            "node": "Enviar Resposta Evolution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente Especialista em Orçamentos": {
+      "main": [
+        [
+          {
+            "node": "Enviar Resposta Evolution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Resposta Evolution": {
+      "main": [
+        [
+          {
+            "node": "Atualiza State Comercial",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter LLM": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agente Vendedor",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Memória PostgreSQL": {
+      "ai_memory": [
+        [
+          {
+            "node": "Agente Vendedor",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Estoque_produtos": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Vendedor",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agente Especialista em Orçamentos",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Agente Especialista em Orçamentos",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar Orçamento": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Especialista em Orçamentos",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "2764c5fe-7c9e-4f2a-a872-7beebb5ac2fc",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "09304f7ddfc01635a9120999ac264bbfa4eb4005b5f25bf3d517f6739c27a5a7"
+  },
+  "id": "ftSTjZ6ZzIhw5NpC",
+  "tags": []
+}
