@@ -1,0 +1,24 @@
+{
+  "name": "papelaria-bot",
+  "version": "1.0.0",
+  "description": "Bot de atendimento via WhatsApp (Evolution API) para uma papelaria",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "chat": "node src/cli.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "undici": "^6.27.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}
