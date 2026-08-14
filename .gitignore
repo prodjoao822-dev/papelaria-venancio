@@ -2,12 +2,18 @@
 # Cada subprojeto tem seu próprio .gitignore (node_modules, dist, .env, etc.).
 
 # Notas pessoais / configs locais fora do escopo dos dois projetos versionados
+# (mesmos arquivos hoje organizados em SKILLS/ — regra estendida para acompanhar)
 /frontend.md
 /melhoriaclaudecode.md
 /n8n.md
 /readme
 /segurança.md
 /skill.md
+/SKILLS/frontend.md
+/SKILLS/melhoriaclaudecode.md
+/SKILLS/n8n.md
+/SKILLS/segurança.md
+/SKILLS/skill.md
 /n8n-workflows/
 /chatbot/.claude/
 /chatbot/AGENTE DE IA (N8N)/
