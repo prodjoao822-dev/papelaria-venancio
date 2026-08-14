@@ -9,6 +9,8 @@ import { NovoPedidoModal } from '@/components/pedidos/NovoPedidoModal'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { usePedidos, useKpis } from '@/hooks/usePedidos'
+import { useAtendimentoAtivo } from '@/hooks/useAtendimentoAtivo'
+import { ResumoAtendimentoOperadores } from '@/components/atendimento/ResumoAtendimentoOperadores'
 import { STATUS } from '@/utils/status'
 
 const ABAS = [
@@ -27,6 +29,7 @@ function minutosEmStatus(createdAt) {
 export function DashboardPage() {
   const { pedidos, carregando, realtimeStatus, atualizarStatus } = usePedidos()
   const { kpis } = useKpis()
+  const { mapa: mapaAtendimento, linhas: linhasAtendimento, carregando: carregandoAtendimento } = useAtendimentoAtivo()
   const [pedidoSelecionado, setPedidoSelecionado] = useState(null)
   const [novoPedidoAberto, setNovoPedidoAberto] = useState(false)
   const [abaAtiva, setAbaAtiva] = useState('TODOS')
@@ -204,12 +207,14 @@ export function DashboardPage() {
               <thead>
                 <tr>
                   <th className="tabela-th">#</th>
+                  <th className="tabela-th">Sequência</th>
                   <th className="tabela-th">Cliente</th>
                   <th className="tabela-th tabela-cell--itens">Itens</th>
                   <th className="tabela-th">Valor</th>
                   <th className="tabela-th">Entrega</th>
                   <th className="tabela-th">Status</th>
                   <th className="tabela-th">Tempo</th>
+                  <th className="tabela-th">Responsável</th>
                   <th className="tabela-th"></th>
                 </tr>
               </thead>
@@ -220,6 +225,7 @@ export function DashboardPage() {
                     pedido={pedido}
                     atrasado={pedidosAtrasados.some((a) => a.id === pedido.id)}
                     onClick={(p) => setPedidoSelecionado(p.id)}
+                    nomeAtendente={mapaAtendimento[pedido.clientes?.id]}
                   />
                 ))}
               </tbody>
@@ -234,6 +240,7 @@ export function DashboardPage() {
           <MetricasComerciais />
         </div>
         <div className="dashboard-bottom-side">
+          <ResumoAtendimentoOperadores linhas={linhasAtendimento} carregando={carregandoAtendimento} />
           <ActivityFeed limite={15} />
         </div>
       </div>

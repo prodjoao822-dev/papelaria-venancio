@@ -1,12 +1,18 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { PRIORIDADE_CONFIG, INTENCOES_CONFIG, STATUS_ATENDIMENTO_CONFIG } from '@/utils/constants'
+import { PRIORIDADE_CONFIG, INTENCOES_CONFIG, STATUS_ATENDIMENTO_CONFIG, DEMO_MODE } from '@/utils/constants'
 import { atendimentoService } from '@/services/atendimento.service'
+import { useConversas, useMensagens } from '@/hooks/useAtendimento'
+import { RealtimeIndicator } from '@/components/dashboard/RealtimeIndicator'
+import { ErrorState } from '@/components/ui/ErrorState'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { useToast } from '@/contexts/AppContext'
 import { useAuth } from '@/contexts/AuthContext'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MOCK DATA — usado quando Supabase não tem conversas cadastradas
-// Dados realistas simulando uma tarde de movimento na Venâncio Papelaria
+// MOCK DATA — só usada com VITE_DEMO_MODE=true (opt-in explícito, ver
+// .env.example). Nunca é um fallback automático de erro: se o Supabase real
+// falhar com DEMO_MODE desligado (padrão), a tela mostra erro explícito —
+// ver ErrorState abaixo.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const now = Date.now()
@@ -213,44 +219,42 @@ const FILTROS = [
 ]
 
 export function AtendimentoPage() {
-  const [conversas, setConversas] = useState(MOCK_CONVERSAS)
-  const [mensagensMap, setMensagensMap] = useState(MOCK_MENSAGENS)
-  const [conversaId, setConversaId] = useState(MOCK_CONVERSAS[0]?.id ?? null)
-  const [filtro, setFiltro] = useState('todos')
-  const [busca, setBusca] = useState('')
-  const [input, setInput] = useState('')
-  const [tagInput, setTagInput] = useState('')
-  const [modoReal, setModoReal] = useState(false)
-  const [carregando, setCarregando] = useState(false)
-  const msgsEndRef = useRef(null)
   const { toast } = useToast()
   const { operador } = useAuth()
   const OPERADOR_ATUAL = operador?.nome ?? 'Operador'
 
-  // Tenta carregar dados reais do Supabase
+  const real = useConversas()
+  const [conversasMock, setConversasMock] = useState(MOCK_CONVERSAS)
+  const conversas = DEMO_MODE ? conversasMock : real.conversas
+  const setConversas = DEMO_MODE ? setConversasMock : real.setConversas
+
+  const [conversaId, setConversaId] = useState(null)
+  const [painelMobile, setPainelMobile] = useState('fila')
+  const [filtro, setFiltro] = useState('todos')
+  const [busca, setBusca] = useState('')
+  const [input, setInput] = useState('')
+  const [tagInput, setTagInput] = useState('')
+  const msgsEndRef = useRef(null)
+
+  const mensagensReal = useMensagens(DEMO_MODE ? null : conversaId)
+  const [mensagensMock, setMensagensMock] = useState(MOCK_MENSAGENS)
+  const mensagens = DEMO_MODE ? (mensagensMock[conversaId] ?? []) : mensagensReal.mensagens
+  const setMensagens = mensagensReal.setMensagens
+
+  // Seleciona a primeira conversa assim que a lista carrega
   useEffect(() => {
-    atendimentoService.listar()
-      .then((data) => {
-        if (data.length > 0) {
-          setConversas(data)
-          setConversaId(data[0].id)
-          setModoReal(true)
-        }
-      })
-      .catch(() => { /* usa mock */ })
-  }, [])
+    if (!conversaId && conversas.length > 0) setConversaId(conversas[0].id)
+  }, [conversas, conversaId])
 
   // Scroll automático ao final das mensagens
   useEffect(() => {
     msgsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [conversaId, mensagensMap])
+  }, [conversaId, mensagens])
 
   const conversa = useMemo(
     () => conversas.find((c) => c.id === conversaId) ?? null,
     [conversas, conversaId]
   )
-
-  const mensagens = mensagensMap[conversaId] ?? []
 
   const conversasFiltradas = useMemo(() => {
     let lista = [...conversas]
@@ -276,21 +280,18 @@ export function AtendimentoPage() {
     return lista.sort((a, b) => (b.prioridade_score ?? 0) - (a.prioridade_score ?? 0))
   }, [conversas, filtro, busca])
 
-  // ── Handlers de estado local (mock + real) ──────────────────────────────────
+  // ── Helpers de mensagem local (decoração — "sistema" não é persistido) ──────
 
-  function mutarConversa(id, campos) {
-    setConversas((prev) => prev.map((c) => (c.id === id ? { ...c, ...campos } : c)))
-  }
-
-  function adicionarMensagem(conversaId_, msg) {
-    setMensagensMap((prev) => ({
-      ...prev,
-      [conversaId_]: [...(prev[conversaId_] ?? []), msg],
-    }))
+  function adicionarMensagemLocal(cId, msg) {
+    if (DEMO_MODE) {
+      setMensagensMock((prev) => ({ ...prev, [cId]: [...(prev[cId] ?? []), msg] }))
+    } else if (cId === conversaId) {
+      setMensagens((prev) => [...prev, msg])
+    }
   }
 
   function addSistema(cId, texto) {
-    adicionarMensagem(cId, {
+    adicionarMensagemLocal(cId, {
       id: `sys-${Date.now()}`,
       remetente: 'sistema',
       conteudo: texto,
@@ -298,62 +299,81 @@ export function AtendimentoPage() {
     })
   }
 
+  function mutarConversaLocal(id, campos) {
+    setConversas((prev) => prev.map((c) => (c.id === id ? { ...c, ...campos } : c)))
+  }
+
   // ── Ações do operador ───────────────────────────────────────────────────────
 
   async function handleAssumir() {
     if (!conversa) return
-    mutarConversa(conversa.id, {
-      operador_nome: OPERADOR_ATUAL,
-      ia_ativa: false,
-      status: 'aguardando_operador',
-    })
-    addSistema(conversa.id, `${OPERADOR_ATUAL} assumiu o atendimento`)
-    toast.sucesso('Conversa assumida')
-
-    if (modoReal) {
-      try { await atendimentoService.assumirConversa(conversa.id, operador?.id) }
-      catch (e) { toast.erro(e.message) }
+    if (DEMO_MODE) {
+      mutarConversaLocal(conversa.id, { operador_nome: OPERADOR_ATUAL, ia_ativa: false, status: 'aguardando_operador' })
+      addSistema(conversa.id, `${OPERADOR_ATUAL} assumiu o atendimento`)
+      toast.sucesso('Conversa assumida')
+      return
+    }
+    try {
+      const atualizada = await atendimentoService.assumirConversa(conversa.id, operador?.id)
+      setConversas((prev) => prev.map((c) => (c.id === atualizada.id ? atualizada : c)))
+      addSistema(conversa.id, `${OPERADOR_ATUAL} assumiu o atendimento`)
+      toast.sucesso('Conversa assumida')
+    } catch (e) {
+      toast.erro(e.message)
     }
   }
 
   async function handleLiberar() {
     if (!conversa) return
-    mutarConversa(conversa.id, {
-      operador_nome: null,
-      ia_ativa: true,
-      status: 'aguardando_cliente',
-    })
-    addSistema(conversa.id, 'Operador liberou — IA retomou o atendimento')
-    toast.info('IA retomou o atendimento')
-
-    if (modoReal) {
-      try { await atendimentoService.liberarConversa(conversa.id) }
-      catch (e) { toast.erro(e.message) }
+    if (DEMO_MODE) {
+      mutarConversaLocal(conversa.id, { operador_nome: null, ia_ativa: true, status: 'aguardando_cliente' })
+      addSistema(conversa.id, 'Operador liberou — IA retomou o atendimento')
+      toast.info('IA retomou o atendimento')
+      return
+    }
+    try {
+      const atualizada = await atendimentoService.liberarConversa(conversa.id)
+      setConversas((prev) => prev.map((c) => (c.id === atualizada.id ? atualizada : c)))
+      addSistema(conversa.id, 'Operador liberou — IA retomou o atendimento')
+      toast.info('IA retomou o atendimento')
+    } catch (e) {
+      toast.erro(e.message)
     }
   }
 
   async function handleToggleIA() {
     if (!conversa) return
     const novoEstado = !conversa.ia_ativa
-    mutarConversa(conversa.id, { ia_ativa: novoEstado })
-    addSistema(conversa.id, novoEstado ? 'IA reativada' : 'IA pausada pelo operador')
-    toast.info(novoEstado ? 'IA ativada' : 'IA pausada')
-
-    if (modoReal) {
-      try { await atendimentoService.toggleIA(conversa.id, novoEstado) }
-      catch (e) { toast.erro(e.message) }
+    if (DEMO_MODE) {
+      mutarConversaLocal(conversa.id, { ia_ativa: novoEstado })
+      addSistema(conversa.id, novoEstado ? 'IA reativada' : 'IA pausada pelo operador')
+      toast.info(novoEstado ? 'IA ativada' : 'IA pausada')
+      return
+    }
+    try {
+      const atualizada = await atendimentoService.toggleIA(conversa.id, novoEstado)
+      setConversas((prev) => prev.map((c) => (c.id === atualizada.id ? atualizada : c)))
+      addSistema(conversa.id, novoEstado ? 'IA reativada' : 'IA pausada pelo operador')
+      toast.info(novoEstado ? 'IA ativada' : 'IA pausada')
+    } catch (e) {
+      toast.erro(e.message)
     }
   }
 
   async function handleChangePrioridade(prioridade) {
     if (!conversa) return
-    const score = PRIORIDADE_CONFIG[prioridade]?.score ?? 50
-    mutarConversa(conversa.id, { prioridade, prioridade_score: score })
-    toast.sucesso(`Prioridade alterada para ${PRIORIDADE_CONFIG[prioridade]?.label}`)
-
-    if (modoReal) {
-      try { await atendimentoService.atualizarPrioridade(conversa.id, prioridade) }
-      catch (e) { toast.erro(e.message) }
+    if (DEMO_MODE) {
+      const score = PRIORIDADE_CONFIG[prioridade]?.score ?? 50
+      mutarConversaLocal(conversa.id, { prioridade, prioridade_score: score })
+      toast.sucesso(`Prioridade alterada para ${PRIORIDADE_CONFIG[prioridade]?.label}`)
+      return
+    }
+    try {
+      const atualizada = await atendimentoService.atualizarPrioridade(conversa.id, prioridade)
+      setConversas((prev) => prev.map((c) => (c.id === atualizada.id ? atualizada : c)))
+      toast.sucesso(`Prioridade alterada para ${PRIORIDADE_CONFIG[prioridade]?.label}`)
+    } catch (e) {
+      toast.erro(e.message)
     }
   }
 
@@ -362,22 +382,26 @@ export function AtendimentoPage() {
     const texto = input.trim()
     setInput('')
 
-    const msg = {
-      id: `op-${Date.now()}`,
-      remetente: 'operador',
-      operador_nome: OPERADOR_ATUAL,
-      conteudo: texto,
-      created_at: new Date().toISOString(),
+    if (DEMO_MODE) {
+      adicionarMensagemLocal(conversa.id, {
+        id: `op-${Date.now()}`,
+        remetente: 'operador',
+        operador_nome: OPERADOR_ATUAL,
+        conteudo: texto,
+        created_at: new Date().toISOString(),
+      })
+      mutarConversaLocal(conversa.id, { ultima_mensagem: texto, ultima_msg_at: new Date().toISOString() })
+      return
     }
-    adicionarMensagem(conversa.id, msg)
-    mutarConversa(conversa.id, {
-      ultima_mensagem: texto,
-      ultima_msg_at: new Date().toISOString(),
-    })
 
-    if (modoReal) {
-      try { await atendimentoService.enviarMensagem(conversa.id, texto, operador?.id) }
-      catch (e) { toast.erro('Erro ao enviar: ' + e.message) }
+    try {
+      // Não insere otimista na lista local: a mensagem volta pelo canal
+      // realtime de `mensagens` (INSERT) assim que o Supabase confirma —
+      // fonte única de verdade, sem duplicar a bolha na tela.
+      await atendimentoService.enviarMensagem(conversa.id, texto, operador?.id)
+    } catch (e) {
+      toast.erro('Erro ao enviar: ' + e.message)
+      setInput(texto)
     }
   }
 
@@ -391,24 +415,32 @@ export function AtendimentoPage() {
   async function handleAddTag() {
     const t = tagInput.trim().toLowerCase().replace(/\s+/g, '_')
     if (!t || !conversa) return
-    const novasTags = [...new Set([...(conversa.tags ?? []), t])]
-    mutarConversa(conversa.id, { tags: novasTags })
     setTagInput('')
-
-    if (modoReal) {
-      try { await atendimentoService.adicionarTag(conversa.id, t, conversa.tags) }
-      catch (e) { toast.erro(e.message) }
+    if (DEMO_MODE) {
+      const novasTags = [...new Set([...(conversa.tags ?? []), t])]
+      mutarConversaLocal(conversa.id, { tags: novasTags })
+      return
+    }
+    try {
+      const atualizada = await atendimentoService.adicionarTag(conversa.id, t, conversa.tags)
+      setConversas((prev) => prev.map((c) => (c.id === atualizada.id ? atualizada : c)))
+    } catch (e) {
+      toast.erro(e.message)
     }
   }
 
   async function handleRemoveTag(tag) {
     if (!conversa) return
-    const novasTags = (conversa.tags ?? []).filter((t) => t !== tag)
-    mutarConversa(conversa.id, { tags: novasTags })
-
-    if (modoReal) {
-      try { await atendimentoService.removerTag(conversa.id, tag, conversa.tags) }
-      catch (e) { toast.erro(e.message) }
+    if (DEMO_MODE) {
+      const novasTags = (conversa.tags ?? []).filter((t) => t !== tag)
+      mutarConversaLocal(conversa.id, { tags: novasTags })
+      return
+    }
+    try {
+      const atualizada = await atendimentoService.removerTag(conversa.id, tag, conversa.tags)
+      setConversas((prev) => prev.map((c) => (c.id === atualizada.id ? atualizada : c)))
+    } catch (e) {
+      toast.erro(e.message)
     }
   }
 
@@ -431,10 +463,10 @@ export function AtendimentoPage() {
           <p className="page-descricao">Conversas WhatsApp • IA + Operador em tempo real</p>
         </div>
         <div className="page-header-acoes">
-          {!modoReal && (
-            <span className="atend-mock-aviso">
-              📡 Modo demonstração — conecte a Evolution API para conversas reais
-            </span>
+          {DEMO_MODE ? (
+            <span className="badge-mock">⚡ Demo</span>
+          ) : (
+            <RealtimeIndicator status={real.realtimeStatus} />
           )}
           <div className="atend-chips">
             {nCriticos > 0 && (
@@ -449,8 +481,18 @@ export function AtendimentoPage() {
         </div>
       </div>
 
+      {!DEMO_MODE && real.erro && (
+        <ErrorState
+          compacto
+          titulo="Não foi possível carregar as conversas"
+          detalhe={`Verifique a conexão com o Supabase. (${real.erro})`}
+          onRetry={real.carregar}
+        />
+      )}
+
       {/* ── Layout 3 colunas ── */}
-      <div className="atend-layout">
+      {(DEMO_MODE || !real.erro) && (
+      <div className={`atend-layout atend-layout--mobile-${painelMobile}`}>
 
         {/* ── COL 1: Fila de Atendimento ── */}
         <div className="atend-fila">
@@ -476,7 +518,9 @@ export function AtendimentoPage() {
           </div>
 
           <div className="atend-fila-lista">
-            {conversasFiltradas.length === 0 ? (
+            {!DEMO_MODE && real.carregando ? (
+              <LoadingSpinner mensagem="Carregando conversas..." />
+            ) : conversasFiltradas.length === 0 ? (
               <div className="atend-fila-vazia">
                 <span>💬</span>
                 <p>Nenhuma conversa</p>
@@ -489,7 +533,7 @@ export function AtendimentoPage() {
                   <button
                     key={c.id}
                     className={`atend-conversa-item ${ativa ? 'atend-conversa-item--ativa' : ''} ${c.prioridade === 'critica' ? 'atend-conversa-item--critica' : ''}`}
-                    onClick={() => setConversaId(c.id)}
+                    onClick={() => { setConversaId(c.id); setPainelMobile('chat') }}
                   >
                     {/* Avatar */}
                     <div
@@ -535,6 +579,13 @@ export function AtendimentoPage() {
             <>
               {/* Chat Header */}
               <div className="atend-chat-header">
+                <button
+                  className="atend-voltar-fila"
+                  onClick={() => setPainelMobile('fila')}
+                  aria-label="Voltar para a fila de conversas"
+                >
+                  ←
+                </button>
                 <div className="atend-chat-header-info">
                   <span className="atend-chat-nome">{conversa.nome_cliente ?? conversa.telefone}</span>
                   <span className="atend-chat-telefone">{conversa.telefone}</span>
@@ -551,7 +602,16 @@ export function AtendimentoPage() {
 
               {/* Mensagens */}
               <div className="atend-chat-msgs">
-                {mensagens.length === 0 ? (
+                {!DEMO_MODE && mensagensReal.erro ? (
+                  <ErrorState
+                    compacto
+                    titulo="Não foi possível carregar as mensagens"
+                    detalhe={mensagensReal.erro}
+                    onRetry={mensagensReal.recarregar}
+                  />
+                ) : !DEMO_MODE && mensagensReal.carregando ? (
+                  <LoadingSpinner mensagem="Carregando mensagens..." />
+                ) : mensagens.length === 0 ? (
                   <div className="atend-msgs-vazio">
                     <span>💬</span>
                     <p>Sem mensagens ainda</p>
@@ -733,6 +793,7 @@ export function AtendimentoPage() {
         </div>
 
       </div>
+      )}
     </div>
   )
 }

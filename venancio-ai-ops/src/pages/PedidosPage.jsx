@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { FiltrosPedidos } from '@/components/pedidos/FiltrosPedidos'
 import { PedidoRow } from '@/components/pedidos/PedidoRow'
 import { PedidoModal } from '@/components/pedidos/PedidoModal'
@@ -6,12 +7,24 @@ import { RealtimeIndicator } from '@/components/dashboard/RealtimeIndicator'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { usePedidos } from '@/hooks/usePedidos'
+import { useAtendimentoAtivo } from '@/hooks/useAtendimentoAtivo'
 
 export function PedidosPage() {
   const [filtros, setFiltros] = useState({})
   const [pedidoSelecionado, setPedidoSelecionado] = useState(null)
+  const location = useLocation()
+  const navigate = useNavigate()
 
   const { pedidos, carregando, realtimeStatus, carregar } = usePedidos(filtros)
+  const { mapa: mapaAtendimento } = useAtendimentoAtivo()
+
+  // Aberto via busca global do Header (navigate('/pedidos', { state: { abrirPedidoId } })).
+  useEffect(() => {
+    if (location.state?.abrirPedidoId) {
+      setPedidoSelecionado(location.state.abrirPedidoId)
+      navigate(location.pathname, { replace: true, state: null })
+    }
+  }, [location.state, location.pathname, navigate])
 
   const handleFiltroChange = useCallback(
     (novosFiltros) => {
@@ -53,12 +66,14 @@ export function PedidosPage() {
               <thead>
                 <tr>
                   <th className="tabela-th">#</th>
+                  <th className="tabela-th">Sequência</th>
                   <th className="tabela-th">Cliente</th>
                   <th className="tabela-th">Itens</th>
                   <th className="tabela-th">Valor</th>
                   <th className="tabela-th">Entrega</th>
                   <th className="tabela-th">Status</th>
                   <th className="tabela-th">Data/Hora</th>
+                  <th className="tabela-th">Responsável</th>
                   <th className="tabela-th"></th>
                 </tr>
               </thead>
@@ -68,6 +83,7 @@ export function PedidosPage() {
                     key={pedido.id}
                     pedido={pedido}
                     onClick={(p) => setPedidoSelecionado(p.id)}
+                    nomeAtendente={mapaAtendimento[pedido.clientes?.id]}
                   />
                 ))}
               </tbody>

@@ -1,4 +1,5 @@
 import { supabase } from '@/supabase/client'
+import { BOT_API_URL } from '@/utils/constants'
 
 // A UI (ConsultasPage) foi construída em cima do vocabulário do dashboard
 // antigo (product_name, query_type, status pending/assigned/answered/expired,
@@ -115,6 +116,33 @@ export const operationalQueriesService = {
 
     if (error) throw error
     return normalizar(data)
+  },
+
+  /** Entrega a resposta já gravada (status 'respondida') pro WhatsApp do
+   * cliente, através do JS Bot — a credencial da Evolution API fica só lá
+   * (mesmo caminho de atendimento.service.js:enviarMensagem, ver
+   * AUDITORIA_INTEGRACAO.md item 1). Best-effort: quem chama decide se uma
+   * falha aqui desfaz ou não o status já salvo. */
+  async notificarCliente(id) {
+    if (!BOT_API_URL) {
+      throw new Error('VITE_BOT_API_URL não configurado — não é possível notificar o cliente pelo WhatsApp.')
+    }
+
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) throw new Error('Sessão expirada. Faça login novamente.')
+
+    const resposta = await fetch(`${BOT_API_URL}/operador/consultas/${id}/notificar`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    })
+
+    const corpo = await resposta.json().catch(() => ({}))
+    if (!resposta.ok || !corpo.ok) {
+      throw new Error(corpo.erro || 'Falha ao notificar o cliente pelo WhatsApp.')
+    }
   },
 
   async expirarManual(id) {

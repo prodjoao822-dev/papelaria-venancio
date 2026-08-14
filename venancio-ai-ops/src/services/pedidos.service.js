@@ -12,8 +12,11 @@ const SELECT_PEDIDO_COMPLETO = `
   *,
   clientes (id, nome, telefone, observacoes),
   operadores (id, nome),
+  responsavel_separacao:funcionarios!responsavel_separacao_id (id, nome),
+  responsavel_entrega:funcionarios!responsavel_entrega_id (id, nome),
   itens_pedido (
     id, nome_item, quantidade, valor_unitario, valor_total, separado, produto_id,
+    tipo_observacao, observacao,
     produtos (id, nome, sku, imagem_url)
   )
 `
@@ -50,6 +53,26 @@ export const pedidosService = {
     }
 
     const { data, error } = await query
+    if (error) throw error
+    return (data ?? []).map(normalizarPedido)
+  },
+
+  /** Busca rápida pra autocomplete global (Header): protocolo, nome ou telefone do cliente. */
+  async buscarRapido(termo) {
+    if (!termo || termo.trim().length < 2) return []
+
+    const t = termo.trim()
+    const { data, error } = await supabase
+      .from('pedidos')
+      .select(`
+        id, protocolo, valor_total, criado_em, status, forma_entrega,
+        pronto_para_retirada_em, saiu_para_entrega_em,
+        clientes (nome, telefone)
+      `)
+      .or(`protocolo.ilike.%${t}%,clientes.nome.ilike.%${t}%,clientes.telefone.ilike.%${t}%`)
+      .order('criado_em', { ascending: false })
+      .limit(8)
+
     if (error) throw error
     return (data ?? []).map(normalizarPedido)
   },
@@ -204,6 +227,44 @@ export const pedidosService = {
 
     if (error) throw error
   },
+
+  /** tipo: 'separacao' | 'entrega'. Chama a RPC (registra no histórico do pedido). */
+  async atribuirResponsavel(pedidoId, tipo, funcionarioId, operadorId = null) {
+    const { data, error } = await supabase.rpc('atribuir_responsavel_pedido', {
+      p_pedido_id: pedidoId,
+      p_tipo: tipo,
+      p_funcionario_id: funcionarioId,
+      p_operador_id: operadorId,
+    })
+    if (error) throw error
+    return data
+  },
+
+  /** Campos da Ficha de Separação por item: { tipo_observacao?, observacao? }. */
+  async atualizarItemFicha(itemId, dados) {
+    const { data, error } = await supabase
+      .from('itens_pedido')
+      .update(dados)
+      .eq('id', itemId)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  },
+
+  /** Sequência/Operação do ShopControl, sempre opcionais e editáveis a qualquer momento. */
+  async atualizarSequencia(pedidoId, { sequencia, operacao }) {
+    const { data, error } = await supabase
+      .from('pedidos')
+      .update({ sequencia, operacao })
+      .eq('id', pedidoId)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  },
 }
 
 export { mapStatusRealParaDashboard }
@@ -218,10 +279,17 @@ async function notificarN8n(evento, payload) {
   }
 
   const url = `${base}${endpoints[evento] ?? ''}`
+  const token = import.meta.env.VITE_N8N_STATUS_WEBHOOK_TOKEN
   try {
     await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        // O webhook de status-atualizado passou a exigir auth (AUDITORIA_INTEGRACAO.md,
+        // item 4). Como isto roda no navegador, este token é público (qualquer VITE_*
+        // é visível no bundle) — barra flood/scan automatizado, não é segredo forte.
+        ...(token ? { 'x-n8n-webhook-token': token } : {}),
+      },
       body: JSON.stringify({ evento, ...payload, timestamp: new Date().toISOString() }),
     })
   } catch {

@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react'
 import { useClientes } from '@/hooks/useClientes'
+import { useAtendimentoAtivo } from '@/hooks/useAtendimentoAtivo'
 import { ClienteModal } from '@/components/clientes/ClienteModal'
+import { EtiquetaAtendimento } from '@/components/atendimento/EtiquetaAtendimento'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { formatCurrency, formatPhone, formatDate, formatTimeAgo } from '@/utils/formatters'
@@ -42,6 +44,7 @@ const ORDENACOES = [
 
 export function ClientesPage() {
   const { clientes, carregando, carregar } = useClientes()
+  const { mapa: mapaAtendimento } = useAtendimentoAtivo()
   const [busca, setBusca] = useState('')
   const [filtroStatus, setFiltroStatus] = useState('')
   const [ordenacao, setOrdenacao] = useState('recente')
@@ -201,6 +204,7 @@ export function ClientesPage() {
                           <div>
                             <div className="pedido-cliente-nome">{cliente.nome ?? '—'}</div>
                             <div className="pedido-cliente-tel">{formatPhone(cliente.telefone)}</div>
+                            <EtiquetaAtendimento nome={mapaAtendimento[cliente.id]} />
                           </div>
                         </div>
                       </td>

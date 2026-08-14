@@ -2,7 +2,18 @@ export const APP_NAME = import.meta.env.VITE_APP_NAME ?? 'Venâncio Operations'
 export const APP_VERSION = import.meta.env.VITE_APP_VERSION ?? '2.0.0'
 
 export const N8N_WEBHOOK_BASE = import.meta.env.VITE_N8N_WEBHOOK_BASE ?? null
-export const EVOLUTION_API_URL = import.meta.env.VITE_EVOLUTION_API_URL ?? null
+
+// URL do JS Bot (chatbot/papelaria-bot) — é ele quem fala com a Evolution API.
+// A credencial da Evolution API NUNCA deve ficar numa variável VITE_* (o
+// bundle do frontend é público) — por isso não existe mais um
+// EVOLUTION_API_URL aqui. Ver AUDITORIA_INTEGRACAO.md, item 1.
+export const BOT_API_URL = import.meta.env.VITE_BOT_API_URL ?? null
+
+// Opt-in explícito pra dados de exemplo quando não há Supabase configurado
+// (demonstração/dev sem banco). Nunca deve ligar sozinho a partir de um erro
+// de query real — isso esconderia bugs de integração atrás de uma UI que
+// "parece funcionar". Ver VITE_DEMO_MODE em .env.example.
+export const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true'
 
 export const PEDIDOS_POR_PAGINA = 50
 
@@ -10,6 +21,27 @@ export const FORMAS_ENTREGA = [
   { value: 'retirada',       label: 'Retirada na loja' },
   { value: 'entrega_propria', label: 'Entrega própria' },
   { value: 'uber_flash',     label: 'Uber Flash / Motoboy' },
+]
+
+// funcionarios.papeis (text[]) — chatbot/papelaria-bot/supabase/extensao_funcionarios_responsaveis.sql
+export const PAPEIS_FUNCIONARIO = [
+  { value: 'separacao', label: 'Separação' },
+  { value: 'entrega',   label: 'Entrega' },
+]
+
+// itens_pedido.tipo_observacao — campos da Ficha de Separação
+export const TIPOS_OBSERVACAO_ITEM = [
+  { value: 'padrao',           label: 'Padrão' },
+  { value: 'presente_menina',  label: 'Presente - Menina' },
+  { value: 'presente_menino',  label: 'Presente - Menino' },
+  { value: 'fragil',           label: 'Frágil' },
+  { value: 'a_granel',         label: 'A Granel' },
+]
+
+// pedidos.operacao / orcamentos.operacao — código de operação do ShopControl
+export const OPERACOES_SHOPCONTROL = [
+  { value: '550', label: '550 — Orçamento' },
+  { value: '650', label: '650 — Venda' },
 ]
 
 // clientes.origem só aceita estes dois valores (chatbot/papelaria-bot/supabase/squemanovo.sql)
@@ -29,11 +61,11 @@ export const STATUS_ORCAMENTO = {
 }
 
 export const STATUS_ORCAMENTO_CONFIG = {
-  rascunho: { label: 'Rascunho', cor: '#64748B', bg: 'rgba(100,116,139,0.10)', borda: 'rgba(100,116,139,0.25)', icone: '📝' },
-  enviado:  { label: 'Enviado',  cor: '#3B82F6', bg: 'rgba(59,130,246,0.10)',  borda: 'rgba(59,130,246,0.25)',  icone: '📤' },
-  aceito:   { label: 'Aceito',  cor: '#10B981', bg: 'rgba(16,185,129,0.10)',  borda: 'rgba(16,185,129,0.25)',  icone: '✅' },
-  recusado: { label: 'Recusado', cor: '#EF4444', bg: 'rgba(239,68,68,0.10)',   borda: 'rgba(239,68,68,0.25)',   icone: '❌' },
-  expirado: { label: 'Expirado', cor: '#6B7280', bg: 'rgba(107,114,128,0.10)', borda: 'rgba(107,114,128,0.20)', icone: '⌛' },
+  rascunho: { label: 'Rascunho', cor: '#8A90A6', bg: 'rgba(138,144,166,0.14)', borda: 'rgba(138,144,166,0.25)', icone: '📝' },
+  enviado:  { label: 'Enviado',  cor: '#7C93F0', bg: 'rgba(108,142,239,0.14)', borda: 'rgba(108,142,239,0.30)', icone: '📤' },
+  aceito:   { label: 'Aceito',  cor: '#2FA85A', bg: 'rgba(47,168,90,0.14)',   borda: 'rgba(47,168,90,0.28)',   icone: '✅' },
+  recusado: { label: 'Recusado', cor: '#E5484D', bg: 'rgba(229,72,77,0.14)',  borda: 'rgba(229,72,77,0.28)',   icone: '❌' },
+  expirado: { label: 'Expirado', cor: '#8A90A6', bg: 'rgba(138,144,166,0.14)', borda: 'rgba(138,144,166,0.25)', icone: '⌛' },
 }
 
 export const TIPOS_LOG = {

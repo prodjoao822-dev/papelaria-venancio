@@ -3,14 +3,18 @@ import { AppProvider } from '@/contexts/AppContext'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { Layout } from '@/components/layout/Layout'
 import { ToastContainer } from '@/components/ui/Toast'
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { LoginPage } from '@/pages/LoginPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { PedidosPage } from '@/pages/PedidosPage'
+import { FichaSeparacaoPage } from '@/pages/FichaSeparacaoPage'
 import { ClientesPage } from '@/pages/ClientesPage'
 import { CatalogPage } from '@/pages/CatalogPage'
+import { MarcasCategoriasPage } from '@/pages/MarcasCategoriasPage'
 import { ConfigPage } from '@/pages/ConfigPage'
 import { OrcamentosPage } from '@/pages/OrcamentosPage'
+import { FuncionariosPage } from '@/pages/FuncionariosPage'
 import { LogisticaPage } from '@/pages/LogisticaPage'
 import { AtendimentoPage } from '@/pages/AtendimentoPage'
 import { RelatoriosPage } from '@/pages/RelatoriosPage'
@@ -33,35 +37,40 @@ export default function App() {
   }
 
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <AppProvider>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route
-              element={
-                <RequireAuth>
-                  <Layout />
-                </RequireAuth>
-              }
-            >
-              <Route index              element={<DashboardPage />} />
-              <Route path="pedidos"     element={<PedidosPage />} />
-              <Route path="logistica"   element={<LogisticaPage />} />
-              <Route path="atendimento" element={<AtendimentoPage />} />
-              <Route path="clientes"    element={<ClientesPage />} />
-              <Route path="orcamentos"  element={<OrcamentosPage />} />
-              <Route path="catalogo"    element={<CatalogPage />} />
-              <Route path="memoria-ia"  element={<ProductMemoryPage />} />
-              <Route path="demanda"     element={<DemandPage />} />
-              <Route path="relatorios"  element={<RelatoriosPage />} />
-              <Route path="consultas"   element={<ConsultasPage />} />
-              <Route path="configuracoes" element={<ConfigPage />} />
-            </Route>
-          </Routes>
-          <ToastContainer />
-        </AppProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AuthProvider>
+          <AppProvider>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route
+                element={
+                  <RequireAuth>
+                    <Layout />
+                  </RequireAuth>
+                }
+              >
+                <Route index              element={<DashboardPage />} />
+                <Route path="pedidos"     element={<PedidosPage />} />
+                <Route path="pedidos/:id/ficha" element={<FichaSeparacaoPage />} />
+                <Route path="logistica"   element={<LogisticaPage />} />
+                <Route path="atendimento" element={<AtendimentoPage />} />
+                <Route path="clientes"    element={<ClientesPage />} />
+                <Route path="orcamentos"  element={<OrcamentosPage />} />
+                <Route path="funcionarios" element={<FuncionariosPage />} />
+                <Route path="catalogo"    element={<CatalogPage />} />
+                <Route path="marcas-categorias" element={<MarcasCategoriasPage />} />
+                <Route path="memoria-ia"  element={<ProductMemoryPage />} />
+                <Route path="demanda"     element={<DemandPage />} />
+                <Route path="relatorios"  element={<RelatoriosPage />} />
+                <Route path="consultas"   element={<ConsultasPage />} />
+                <Route path="configuracoes" element={<ConfigPage />} />
+              </Route>
+            </Routes>
+            <ToastContainer />
+          </AppProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   )
 }

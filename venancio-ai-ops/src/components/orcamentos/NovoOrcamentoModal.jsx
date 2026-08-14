@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { orcamentosService } from '@/services/orcamentos.service'
 import { clientesService } from '@/services/clientes.service'
+import { ProdutoAutocompleteInput } from '@/components/pedidos/ProdutoAutocompleteInput'
 import { useToast } from '@/contexts/AppContext'
 import { formatCurrency } from '@/utils/formatters'
 
-const ITEM_VAZIO = { descricao_livre: '', quantidade: 1, valor_unitario: '' }
+const ITEM_VAZIO = { descricao_livre: '', quantidade: 1, valor_unitario: '', produto_id: null }
 
 export function NovoOrcamentoModal({ onFechar, onCriado }) {
   const { toast } = useToast()
@@ -20,7 +21,27 @@ export function NovoOrcamentoModal({ onFechar, onCriado }) {
 
   function addItem() { setItens((p) => [...p, { ...ITEM_VAZIO }]) }
   function removeItem(idx) { setItens((p) => p.filter((_, i) => i !== idx)) }
-  function setItem(idx, campo, val) { setItens((p) => p.map((it, i) => i === idx ? { ...it, [campo]: val } : it)) }
+  function setItem(idx, campo, val) {
+    setItens((p) => p.map((it, i) => {
+      if (i !== idx) return it
+      if (campo === 'descricao_livre' && it.produto_id) {
+        return { ...it, descricao_livre: val, produto_id: null }
+      }
+      return { ...it, [campo]: val }
+    }))
+  }
+  function selecionarProduto(idx, produto) {
+    setItens((p) => p.map((it, i) =>
+      i === idx
+        ? {
+            ...it,
+            produto_id: produto.id,
+            descricao_livre: produto.nome,
+            valor_unitario: it.valor_unitario ? it.valor_unitario : String(produto.preco ?? ''),
+          }
+        : it
+    ))
+  }
 
   async function handleSalvar() {
     if (!cliente.nome.trim())     { toast.aviso('Informe o nome do cliente.'); return }
@@ -43,6 +64,7 @@ export function NovoOrcamentoModal({ onFechar, onCriado }) {
         status,
         observacoes: observacoes || null,
         itens: itensFiltrados.map((i) => ({
+          produto_id:      i.produto_id ?? null,
           descricao_livre: i.descricao_livre.trim(),
           quantidade:      Number(i.quantidade) || 1,
           valor_unitario:  parseFloat(String(i.valor_unitario).replace(',', '.')) || 0,
@@ -124,8 +146,12 @@ export function NovoOrcamentoModal({ onFechar, onCriado }) {
                 </div>
                 {itens.map((item, idx) => (
                   <div key={idx} className="item-input-linha">
-                    <input className="input input-sm" placeholder="Nome do produto" value={item.descricao_livre}
-                      onChange={(e) => setItem(idx, 'descricao_livre', e.target.value)} />
+                    <ProdutoAutocompleteInput
+                      placeholder="Nome do produto (busca no catálogo)"
+                      value={item.descricao_livre}
+                      onChangeText={(v) => setItem(idx, 'descricao_livre', v)}
+                      onSelecionar={(produto) => selecionarProduto(idx, produto)}
+                    />
                     <input className="input input-sm" type="number" min="1" value={item.quantidade}
                       onChange={(e) => setItem(idx, 'quantidade', e.target.value)} style={{ textAlign: 'center' }} />
                     <input className="input input-sm" placeholder="0,00" value={item.valor_unitario}

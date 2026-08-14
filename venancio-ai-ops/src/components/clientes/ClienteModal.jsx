@@ -8,9 +8,9 @@ import { formatCurrency, formatDate, formatPhone } from '@/utils/formatters'
 import { useToast } from '@/contexts/AppContext'
 
 const STATUS_CLIENTE_CONFIG = {
-  ativo:   { label: 'Ativo',   cor: '#10B981', bg: 'rgba(16,185,129,0.10)',  borda: 'rgba(16,185,129,0.25)'  },
-  inativo: { label: 'Inativo', cor: '#6B7280', bg: 'rgba(107,114,128,0.08)', borda: 'rgba(107,114,128,0.20)' },
-  vip:     { label: 'VIP ⭐',  cor: '#F59E0B', bg: 'rgba(245,158,11,0.10)',  borda: 'rgba(245,158,11,0.25)'  },
+  ativo:   { label: 'Ativo',   cor: '#2FA85A', bg: 'rgba(47,168,90,0.14)',   borda: 'rgba(47,168,90,0.28)'   },
+  inativo: { label: 'Inativo', cor: '#8A90A6', bg: 'rgba(138,144,166,0.12)', borda: 'rgba(138,144,166,0.22)' },
+  vip:     { label: 'VIP ⭐',  cor: '#F0B23E', bg: 'rgba(240,178,62,0.14)',  borda: 'rgba(240,178,62,0.28)'  },
 }
 
 export function ClienteModal({ clienteId, onFechar }) {
@@ -82,6 +82,8 @@ export function ClienteModal({ clienteId, onFechar }) {
         <div className="modal-body">
           {carregando ? (
             <LoadingSpinner mensagem="Carregando cliente..." />
+          ) : !cliente ? (
+            <p style={{ padding: 16, textAlign: 'center', color: 'var(--text-3)' }}>Cliente não encontrado.</p>
           ) : (
             <div className="pedido-detalhe">
 

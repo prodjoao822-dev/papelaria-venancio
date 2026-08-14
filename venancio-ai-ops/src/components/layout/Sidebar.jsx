@@ -5,6 +5,7 @@ import { useKpis } from '@/hooks/usePedidos'
 import { STATUS } from '@/utils/status'
 import { operationalQueriesService } from '@/services/operational-queries.service'
 import { demandIntelligenceService } from '@/services/demand-intelligence.service'
+import { useTheme } from '@/contexts/AppContext'
 
 function useConsultasPendentes() {
   const [count, setCount] = useState(0)
@@ -74,13 +75,15 @@ const NAV_OPERACOES = [
 
 const NAV_CATALOGO = [
   { to: '/catalogo',    label: 'Catálogo',      icone: '🏷️' },
+  { to: '/marcas-categorias', label: 'Marcas & Categorias', icone: '🔖' },
   { to: '/memoria-ia',  label: 'Memória IA',    icone: '🧠' },
   { to: '/demanda',     label: 'Demanda',        icone: '📈', badgeKey: 'alertasDemanda', badgeAlerta: true },
 ]
 
 const NAV_CADASTROS = [
-  { to: '/clientes',    label: 'Clientes',      icone: '👥' },
-  { to: '/orcamentos',  label: 'Orçamentos',    icone: '📋' },
+  { to: '/clientes',      label: 'Clientes',      icone: '👥' },
+  { to: '/orcamentos',    label: 'Orçamentos',    icone: '📋' },
+  { to: '/funcionarios',  label: 'Funcionários',  icone: '🧑‍🤝‍🧑' },
 ]
 
 const NAV_SISTEMA = [
@@ -92,6 +95,7 @@ export function Sidebar({ aberta, onFechar }) {
   const { kpis }             = useKpis()
   const consultasPendentes   = useConsultasPendentes()
   const alertasDemanda       = useAlertasDemanda()
+  const { theme, toggleTheme } = useTheme()
 
   const pedidosAtivos =
     (kpis?.contadores?.[STATUS.NOVO_PEDIDO]           ?? 0) +
@@ -111,13 +115,15 @@ export function Sidebar({ aberta, onFechar }) {
   return (
     <>
       {aberta && <div className="sidebar-overlay" onClick={onFechar} />}
-      <aside className={`sidebar ${aberta ? 'sidebar--aberta' : ''}`}>
+      <aside className={`sidebar no-print ${aberta ? 'sidebar--aberta' : ''}`}>
 
         <div className="sidebar-logo">
-          <div className="sidebar-logo-marca">🏪</div>
+          <div className="sidebar-logo-marca">
+            <img src="/logo-mascote.png" alt={APP_NAME} />
+          </div>
           <div className="sidebar-logo-info">
             <span className="sidebar-logo-nome">{APP_NAME}</span>
-            <span className="sidebar-logo-subtitulo">Central Operacional</span>
+            <span className="sidebar-logo-subtitulo">OPERATIONS</span>
           </div>
         </div>
 
@@ -163,6 +169,15 @@ export function Sidebar({ aberta, onFechar }) {
               <span className="sidebar-footer-cargo">Sede Logística</span>
             </div>
             <div className="sidebar-footer-status" title="Conectado" />
+          </div>
+
+          <div className="sidebar-theme-toggle" onClick={toggleTheme}>
+            <span className="sidebar-theme-toggle-label">
+              {theme === 'dark' ? 'Modo escuro' : 'Modo claro'}
+            </span>
+            <div className={`sidebar-theme-toggle-track ${theme === 'light' ? 'sidebar-theme-toggle-track--light' : ''}`}>
+              <div className="sidebar-theme-toggle-knob" />
+            </div>
           </div>
         </div>
 

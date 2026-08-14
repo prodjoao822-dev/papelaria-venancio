@@ -2,11 +2,13 @@ import { useState, useEffect, useCallback } from 'react'
 import { productEngineService, calcularNivelConfianca } from '@/services/product-engine.service'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { ErrorState } from '@/components/ui/ErrorState'
 import { useToast } from '@/contexts/AppContext'
 import { formatCurrency } from '@/utils/formatters'
 import {
   CONFIDENCE_CONFIG,
   DISPONIBILIDADE_CONFIG,
+  DEMO_MODE,
 } from '@/utils/constants'
 
 // ── Barra de confiança visual ─────────────────────────────────────────────────
@@ -246,7 +248,7 @@ export function ProductMemoryPage() {
   const [filtroDispon, setFiltroDispon] = useState('')
   const [filtroConf, setFiltroConf]     = useState('')
   const [editando, setEditando]         = useState(null)
-  const [usandoMock, setUsandoMock]     = useState(false)
+  const [erro, setErro]                 = useState(null)
   const { toast } = useToast()
 
   const MOCK_MEMORIAS = [
@@ -277,6 +279,12 @@ export function ProductMemoryPage() {
 
   const carregar = useCallback(async () => {
     setCarregando(true)
+    if (DEMO_MODE) {
+      setMemorias(MOCK_MEMORIAS)
+      setErro(null)
+      setCarregando(false)
+      return
+    }
     try {
       const filtros = {}
       if (filtroDispon) filtros.disponibilidade = filtroDispon
@@ -286,10 +294,9 @@ export function ProductMemoryPage() {
 
       const data = await productEngineService.listarMemoria(filtros)
       setMemorias(data)
-      setUsandoMock(false)
-    } catch {
-      setMemorias(MOCK_MEMORIAS)
-      setUsandoMock(true)
+      setErro(null)
+    } catch (err) {
+      setErro(err.message)
     } finally {
       setCarregando(false)
     }
@@ -298,16 +305,16 @@ export function ProductMemoryPage() {
   useEffect(() => { carregar() }, [carregar])
 
   useEffect(() => {
-    if (usandoMock) return
+    if (DEMO_MODE) return
     let channel = null
     try {
       channel = productEngineService.subscribe(() => carregar())
     } catch { channel = null }
     return () => { try { channel?.unsubscribe() } catch { /* ignora */ } }
-  }, [carregar, usandoMock])
+  }, [carregar])
 
   async function handleSalvarEdicao(id, dados) {
-    if (usandoMock) {
+    if (DEMO_MODE) {
       setMemorias((prev) => prev.map((m) => m.id === id ? { ...m, ...dados, nivel_confianca: calcularNivelConfianca(dados.confidence_score) } : m))
       return
     }
@@ -329,7 +336,7 @@ export function ProductMemoryPage() {
           <p className="page-descricao">Produtos aprendidos por confirmações de operadores</p>
         </div>
         <div className="page-header-acoes">
-          {usandoMock && <span className="badge-mock">⚡ Demo</span>}
+          {DEMO_MODE && <span className="badge-mock">⚡ Demo</span>}
           <button className="btn btn-ghost btn-sm" onClick={carregar}>↺ Atualizar</button>
         </div>
       </div>
@@ -396,6 +403,12 @@ export function ProductMemoryPage() {
       <div className="memorias-lista">
         {carregando ? (
           <LoadingSpinner mensagem="Carregando memória da IA…" />
+        ) : erro ? (
+          <ErrorState
+            titulo="Não foi possível carregar a memória de produtos"
+            detalhe={`Verifique a conexão com o Supabase. (${erro})`}
+            onRetry={carregar}
+          />
         ) : memorias.length === 0 ? (
           <EmptyState
             icone="🧠"

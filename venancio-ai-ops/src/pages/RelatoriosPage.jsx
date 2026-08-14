@@ -4,6 +4,7 @@ import { metricasService } from '@/services/metricas.service'
 import { formatCurrency } from '@/utils/formatters'
 import { STATUS_CONFIG } from '@/utils/status'
 import { useKpis } from '@/hooks/usePedidos'
+import { ErrorState } from '@/components/ui/ErrorState'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GRÁFICO DE BARRAS CSS — Faturamento 7 dias
@@ -98,26 +99,6 @@ function MiniGauge({ pct, cor }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MOCK PARA DEMO (sem dados reais ainda)
-// ─────────────────────────────────────────────────────────────────────────────
-
-function gerarMockHistorico() {
-  const hoje = new Date()
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(hoje)
-    d.setDate(d.getDate() - (6 - i))
-    d.setHours(0, 0, 0, 0)
-    const isWeekend = d.getDay() === 0 || d.getDay() === 6
-    const base = isWeekend ? 0 : Math.random() * 800 + 200
-    return {
-      dia: d,
-      label: d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit' }),
-      valor: i === 6 ? 0 : Math.round(base),
-    }
-  })
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -125,20 +106,23 @@ export function RelatoriosPage() {
   const { metricas, carregando } = useMetricas(120000)
   const { kpis } = useKpis()
   const [historico, setHistorico] = useState(null)
+  const [historicoErro, setHistoricoErro] = useState(false)
   const [periodoFiltro, setPeriodoFiltro] = useState('hoje')
 
   const hoje = new Date().toLocaleDateString('pt-BR', {
     weekday: 'long', day: '2-digit', month: 'long', year: 'numeric',
   })
 
-  useEffect(() => {
+  function carregarHistorico() {
+    setHistoricoErro(false)
     metricasService
       .buscarHistorico7Dias()
-      .then((d) => {
-        const temDados = d.some((dia) => dia.valor > 0)
-        setHistorico(temDados ? d : gerarMockHistorico())
-      })
-      .catch(() => setHistorico(gerarMockHistorico()))
+      .then((d) => setHistorico(d))
+      .catch(() => setHistoricoErro(true))
+  }
+
+  useEffect(() => {
+    carregarHistorico()
   }, [])
 
   // Trend vs ontem
@@ -252,7 +236,14 @@ export function RelatoriosPage() {
             </span>
           </div>
           <div style={{ padding: '16px 20px 20px' }}>
-            {historico ? (
+            {historicoErro ? (
+              <ErrorState
+                titulo="Não foi possível carregar o faturamento dos últimos 7 dias"
+                detalhe="Verifique a conexão com o Supabase."
+                onRetry={carregarHistorico}
+                compacto
+              />
+            ) : historico ? (
               <GraficoSemanal dados={historico} />
             ) : (
               <div style={{ height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-3)' }}>

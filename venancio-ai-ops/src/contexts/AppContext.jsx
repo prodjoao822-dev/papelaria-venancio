@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useCallback, useRef } from 'react'
+import { createContext, useContext, useReducer, useCallback, useRef, useState, useEffect } from 'react'
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 const ToastContext = createContext(null)
@@ -7,6 +7,34 @@ export function useToast() {
   const ctx = useContext(ToastContext)
   if (!ctx) throw new Error('useToast deve ser usado dentro de AppProvider')
   return ctx
+}
+
+// ─── Tema (claro/escuro) ───────────────────────────────────────────────────────
+const ThemeContext = createContext(null)
+const THEME_STORAGE_KEY = 'venancio-theme'
+
+export function useTheme() {
+  const ctx = useContext(ThemeContext)
+  if (!ctx) throw new Error('useTheme deve ser usado dentro de AppProvider')
+  return ctx
+}
+
+function useThemeState() {
+  const [theme, setTheme] = useState(() => {
+    if (typeof window === 'undefined') return 'dark'
+    return localStorage.getItem(THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark'
+  })
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem(THEME_STORAGE_KEY, theme)
+  }, [theme])
+
+  const toggleTheme = useCallback(() => {
+    setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
+  }, [])
+
+  return { theme, toggleTheme }
 }
 
 // ─── Realtime ────────────────────────────────────────────────────────────────
@@ -34,6 +62,7 @@ function toastReducer(state, action) {
 export function AppProvider({ children }) {
   const [toasts, dispatch] = useReducer(toastReducer, [])
   const realtimeHandlers = useRef({})
+  const themeState = useThemeState()
 
   const showToast = useCallback((mensagem, tipo = 'info', duracao = 4000) => {
     const id = `toast-${Date.now()}-${Math.random()}`
@@ -63,10 +92,12 @@ export function AppProvider({ children }) {
   }, [])
 
   return (
-    <ToastContext.Provider value={{ toasts, toast, removeToast }}>
-      <RealtimeContext.Provider value={{ registrarHandler, dispararEvento }}>
-        {children}
-      </RealtimeContext.Provider>
-    </ToastContext.Provider>
+    <ThemeContext.Provider value={themeState}>
+      <ToastContext.Provider value={{ toasts, toast, removeToast }}>
+        <RealtimeContext.Provider value={{ registrarHandler, dispararEvento }}>
+          {children}
+        </RealtimeContext.Provider>
+      </ToastContext.Provider>
+    </ThemeContext.Provider>
   )
 }

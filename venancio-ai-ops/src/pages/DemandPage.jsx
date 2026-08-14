@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback } from 'react'
 import { demandIntelligenceService } from '@/services/demand-intelligence.service'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { ErrorState } from '@/components/ui/ErrorState'
 import { useToast } from '@/contexts/AppContext'
 import { formatCurrency } from '@/utils/formatters'
-import { DEMAND_ALERT_STATUS_CONFIG } from '@/utils/constants'
+import { DEMAND_ALERT_STATUS_CONFIG, DEMO_MODE } from '@/utils/constants'
 
 // ── Mock data ─────────────────────────────────────────────────────────────────
 
@@ -215,10 +216,20 @@ export function DemandPage() {
   const [config, setConfig]         = useState(null)
   const [diasRanking, setDiasRanking] = useState(7)
   const [carregando, setCarregando] = useState(true)
-  const [usandoMock, setUsandoMock] = useState(false)
+  const [erro, setErro] = useState(null)
 
   const carregar = useCallback(async () => {
     setCarregando(true)
+    if (DEMO_MODE) {
+      setTopDemanda(MOCK_TOP)
+      setOportunidades(MOCK_OPORTUNIDADES)
+      setAlertas(MOCK_ALERTAS)
+      setResumo(MOCK_RESUMO)
+      setConfig({ limite_consultas: 10, janela_horas: 24, canal_alerta: 'dashboard' })
+      setErro(null)
+      setCarregando(false)
+      return
+    }
     try {
       const [top, opor, alert, res, cfg] = await Promise.all([
         demandIntelligenceService.topDemanda(diasRanking, 10),
@@ -232,14 +243,9 @@ export function DemandPage() {
       setAlertas(alert)
       setResumo(res)
       setConfig(cfg)
-      setUsandoMock(false)
-    } catch {
-      setTopDemanda(MOCK_TOP)
-      setOportunidades(MOCK_OPORTUNIDADES)
-      setAlertas(MOCK_ALERTAS)
-      setResumo(MOCK_RESUMO)
-      setConfig({ limite_consultas: 10, janela_horas: 24, canal_alerta: 'dashboard' })
-      setUsandoMock(true)
+      setErro(null)
+    } catch (err) {
+      setErro(err.message)
     } finally {
       setCarregando(false)
     }
@@ -248,24 +254,24 @@ export function DemandPage() {
   useEffect(() => { carregar() }, [carregar])
 
   useEffect(() => {
-    if (usandoMock) return
+    if (DEMO_MODE) return
     let channel = null
     try {
       channel = demandIntelligenceService.subscribeAlertas(() => carregar())
     } catch { channel = null }
     return () => { try { channel?.unsubscribe() } catch { /* ignora */ } }
-  }, [carregar, usandoMock])
+  }, [carregar])
 
   async function handleMarcarVisto(id) {
     try {
-      if (!usandoMock) await demandIntelligenceService.marcarVisto(id)
+      if (!DEMO_MODE) await demandIntelligenceService.marcarVisto(id)
       setAlertas((prev) => prev.map((a) => a.id === id ? { ...a, status: 'visto' } : a))
     } catch (err) { toast.erro(err.message) }
   }
 
   async function handleMarcarResolvido(id) {
     try {
-      if (!usandoMock) await demandIntelligenceService.marcarResolvido(id)
+      if (!DEMO_MODE) await demandIntelligenceService.marcarResolvido(id)
       setAlertas((prev) => prev.map((a) => a.id === id ? { ...a, status: 'resolvido' } : a))
     } catch (err) { toast.erro(err.message) }
   }
@@ -278,7 +284,7 @@ export function DemandPage() {
   const alertasNovos = alertas.filter((a) => a.status === 'novo').length
   const maxConsultas = topDemanda[0]?.total_consultas ?? 1
 
-  const res = resumo ?? MOCK_RESUMO
+  const res = resumo ?? { total: 0, respondidos: 0, consultados: 0, nao_encontrados: 0, sem_estoque: 0, convertidos: 0 }
   const taxaResposta = res.total > 0 ? Math.round(((res.respondidos + res.consultados) / res.total) * 100) : 0
 
   return (
@@ -289,7 +295,7 @@ export function DemandPage() {
           <p className="page-descricao">Análise de interesse em produtos e oportunidades comerciais</p>
         </div>
         <div className="page-header-acoes">
-          {usandoMock && <span className="badge-mock">⚡ Demo</span>}
+          {DEMO_MODE && <span className="badge-mock">⚡ Demo</span>}
           <button className="btn btn-ghost btn-sm" onClick={carregar}>↺ Atualizar</button>
         </div>
       </div>
@@ -346,6 +352,12 @@ export function DemandPage() {
 
       {carregando ? (
         <LoadingSpinner mensagem="Carregando dados de demanda…" />
+      ) : erro ? (
+        <ErrorState
+          titulo="Não foi possível carregar a inteligência de demanda"
+          detalhe={`Verifique a conexão com o Supabase. (${erro})`}
+          onRetry={carregar}
+        />
       ) : (
         <>
           {/* Ranking */}

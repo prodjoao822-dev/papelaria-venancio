@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { eventLogService } from '@/services/event-log.service'
-import { EVENT_TYPE_CONFIG, ACTOR_TYPE_CONFIG } from '@/utils/constants'
+import { EVENT_TYPE_CONFIG, ACTOR_TYPE_CONFIG, DEMO_MODE } from '@/utils/constants'
+import { ErrorState } from '@/components/ui/ErrorState'
 
 const MOCK_FEED = [
   { id: 'e1', tipo_evento: 'pedido_status_alterado', ator_tipo: 'sistema', ator_nome: 'WhatsApp', descricao: 'Pedido mudou de (novo) para confirmado', criado_em: new Date(Date.now() - 3 * 60000).toISOString() },
@@ -20,17 +21,21 @@ function formatarTempo(isoString) {
 
 export function ActivityFeed({ limite = 15 }) {
   const [eventos, setEventos] = useState([])
-  const [usandoMock, setUsandoMock] = useState(false)
+  const [erro, setErro] = useState(null)
   const [, setTick] = useState(0)
 
   const carregar = useCallback(async () => {
+    if (DEMO_MODE) {
+      setEventos(MOCK_FEED)
+      setErro(null)
+      return
+    }
     try {
       const data = await eventLogService.listarAtividadeFeed(limite)
       setEventos(data)
-      setUsandoMock(false)
-    } catch {
-      setEventos(MOCK_FEED)
-      setUsandoMock(true)
+      setErro(null)
+    } catch (err) {
+      setErro(err.message)
     }
   }, [limite])
 
@@ -44,7 +49,7 @@ export function ActivityFeed({ limite = 15 }) {
 
   // Realtime: novo evento → prepend sem reload total
   useEffect(() => {
-    if (usandoMock) return
+    if (DEMO_MODE) return
     let channel = null
     try {
       channel = eventLogService.subscribe((payload) => {
@@ -56,18 +61,25 @@ export function ActivityFeed({ limite = 15 }) {
       channel = null
     }
     return () => { try { channel?.unsubscribe() } catch { /* ignora */ } }
-  }, [usandoMock, limite])
+  }, [limite])
 
   return (
     <div className="activity-feed">
       <div className="activity-feed-header">
         <span className="activity-feed-titulo">Feed de Atividade</span>
-        {usandoMock && <span className="badge-mock badge-mock--xs">demo</span>}
+        {DEMO_MODE && <span className="badge-mock badge-mock--xs">demo</span>}
         <div className="activity-feed-dot" title="Ao vivo" />
       </div>
 
       <div className="activity-feed-lista">
-        {eventos.length === 0 ? (
+        {erro ? (
+          <ErrorState
+            compacto
+            titulo="Não foi possível carregar o feed de atividade"
+            detalhe={erro}
+            onRetry={carregar}
+          />
+        ) : eventos.length === 0 ? (
           <div className="activity-feed-vazio">Nenhuma atividade recente</div>
         ) : (
           eventos.map((evento) => {

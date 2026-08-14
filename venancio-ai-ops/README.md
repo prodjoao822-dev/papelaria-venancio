@@ -15,8 +15,7 @@ Central operacional de vendas, pedidos e atendimento integrado ao WhatsApp com I
 | Backend | Supabase (PostgreSQL + Realtime + Auth) |
 | Orquestração | n8n |
 | WhatsApp | Evolution API |
-| IA | OpenAI + LangChain (ai-service/) |
-| Cache | Redis (ai-service/) |
+| IA | Agentes n8n (Vendas + Orçamento), chamados direto pelo JS Bot — ver [nota abaixo](#ia-agentes-n8n) |
 
 ---
 
@@ -123,22 +122,44 @@ Configure `VITE_N8N_WEBHOOK_BASE` no `.env`. O sistema já dispara webhooks nos 
 
 Importe os workflows de `automation/workflows/`.
 
-### WhatsApp (Evolution API)
+### WhatsApp (via JS Bot)
 
-Configure `VITE_EVOLUTION_API_URL` no `.env`.
+Configure `VITE_BOT_API_URL` no `.env`, apontando para a URL pública do JS Bot
+(`chatbot/papelaria-bot`). O dashboard chama `POST /operador/mensagens/enviar`
+nele — a credencial da Evolution API fica só no `.env` do bot, nunca numa
+variável `VITE_*` do dashboard (o bundle do frontend é público).
 
-O fluxo completo:
+O fluxo completo (ver detalhes na seção [IA (Agentes n8n)](#ia-agentes-n8n) abaixo):
 ```
-Evolution API → n8n webhook → AI Service → Supabase → Dashboard (realtime)
+Evolution API → JS Bot → Agentes n8n → Supabase → Dashboard (realtime)
 ```
 
-### IA (ai-service/)
+### IA (Agentes n8n) {#ia-agentes-n8n}
 
-Serviço Node.js separado com:
-- OpenAI GPT-4
-- LangChain com tools (buscarProduto, criarOrcamento, registrarPedido)
-- Buffer Redis para mensagens em rajada
-- Memória conversacional no Supabase
+A IA **não** roda em um serviço Node.js separado (`ai-service/`) — essa pasta
+nunca chegou a existir de fato neste repositório e não faz parte da
+arquitetura em produção. O fluxo real é:
+
+```
+Evolution API → JS Bot (chatbot/papelaria-bot) → Agentes n8n → Supabase → Dashboard (realtime)
+```
+
+O JS Bot fala **direto** com dois workflows n8n via `n8nClient.js`
+(`chatbot/papelaria-bot/src/integracoes/n8nClient.js`):
+- **Agente de Vendas** — consulta síncrona, com timeout (`consultarAgenteVendas`)
+- **Agente de Orçamento** — notificação best-effort, fire-and-forget (`notificarAgenteOrcamento`)
+
+Cada um é um workflow n8n independente (ver `chatbot/AGENTE DE IA (N8N)/` na
+raiz do monorepo), configurado via `N8N_ORCAMENTO_WEBHOOK_URL` e
+`N8N_VENDAS_WEBHOOK_URL` no `.env` do próprio JS Bot — não no `.env` deste
+dashboard. `VITE_N8N_WEBHOOK_BASE` (aqui no `venancio-ai-ops`) é uma
+integração separada: webhooks de notificação de pedido/status
+(`/novo-pedido`, `/status-atualizado`), não a IA em si.
+
+> **Descontinuado:** qualquer menção anterior a um `ai-service/` (Node.js +
+> LangChain + Redis) neste README ou no `ConfigPage.jsx` descrevia um plano
+> que nunca foi implementado. Não há nada para desligar ou remover — só a
+> documentação estava desatualizada.
 
 ---
 
@@ -155,7 +176,7 @@ A pasta `dist/` pode ser servida por qualquer servidor estático (Nginx, Vercel,
 | Serviço | Para |
 |---------|------|
 | Vercel / Netlify | Dashboard (gratuito) |
-| VPS + Nginx | n8n + Evolution API + AI Service |
+| VPS + Nginx | n8n + Evolution API + JS Bot (chatbot/papelaria-bot) |
 | Supabase Cloud | Banco de dados (gerenciado) |
 
 ---

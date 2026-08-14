@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { pedidosService, mapStatusRealParaDashboard } from '@/services/pedidos.service'
+import { funcionariosService } from '@/services/funcionarios.service'
 import { StatusBadge } from './StatusBadge'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import {
@@ -9,8 +10,129 @@ import {
   formatEntrega,
 } from '@/utils/formatters'
 import { getStatusConfig } from '@/utils/status'
+import { OPERACOES_SHOPCONTROL } from '@/utils/constants'
 import { useToast } from '@/contexts/AppContext'
 import { useAuth } from '@/contexts/AuthContext'
+
+// ── Responsáveis + Sequência ShopControl ───────────────────────────────────────
+function ResponsaveisSequencia({ pedido, onAtualizar }) {
+  const [funcSeparacao, setFuncSeparacao] = useState([])
+  const [funcEntrega, setFuncEntrega] = useState([])
+  const [sequencia, setSequencia] = useState(pedido.sequencia ?? '')
+  const [operacao, setOperacao] = useState(pedido.operacao ?? '')
+  const [salvandoSeq, setSalvandoSeq] = useState(false)
+  const { toast } = useToast()
+  const { operador } = useAuth()
+
+  useEffect(() => {
+    setSequencia(pedido.sequencia ?? '')
+    setOperacao(pedido.operacao ?? '')
+  }, [pedido.id, pedido.sequencia, pedido.operacao])
+
+  useEffect(() => {
+    Promise.all([
+      funcionariosService.listarPorPapel('separacao'),
+      funcionariosService.listarPorPapel('entrega'),
+    ])
+      .then(([sep, ent]) => { setFuncSeparacao(sep); setFuncEntrega(ent) })
+      .catch((err) => toast.erro('Erro ao carregar funcionários: ' + err.message))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function handleResponsavel(tipo, funcionarioId) {
+    try {
+      await pedidosService.atribuirResponsavel(pedido.id, tipo, funcionarioId || null, operador?.id ?? null)
+      toast.sucesso('Responsável atualizado.')
+      onAtualizar?.()
+    } catch (err) {
+      toast.erro('Erro ao atribuir responsável: ' + err.message)
+    }
+  }
+
+  async function handleSalvarSequencia() {
+    setSalvandoSeq(true)
+    try {
+      await pedidosService.atualizarSequencia(pedido.id, {
+        sequencia: sequencia.trim() || null,
+        operacao: operacao || null,
+      })
+      toast.sucesso('Sequência atualizada.')
+      onAtualizar?.()
+    } catch (err) {
+      toast.erro('Erro ao salvar sequência: ' + err.message)
+    } finally {
+      setSalvandoSeq(false)
+    }
+  }
+
+  return (
+    <>
+      <section className="pedido-detalhe-secao">
+        <h3 className="pedido-detalhe-titulo">Responsáveis</h3>
+        <div className="pedido-detalhe-grid">
+          <div className="pedido-detalhe-campo">
+            <span className="campo-label">Separação</span>
+            <select
+              className="input input-sm"
+              value={pedido.responsavel_separacao?.id ?? ''}
+              onChange={(e) => handleResponsavel('separacao', e.target.value)}
+            >
+              <option value="">— Selecionar —</option>
+              {funcSeparacao.map((f) => (
+                <option key={f.id} value={f.id}>{f.nome}</option>
+              ))}
+            </select>
+          </div>
+          <div className="pedido-detalhe-campo">
+            <span className="campo-label">Entrega</span>
+            <select
+              className="input input-sm"
+              value={pedido.responsavel_entrega?.id ?? ''}
+              onChange={(e) => handleResponsavel('entrega', e.target.value)}
+              disabled={pedido.forma_entrega === 'retirada'}
+            >
+              <option value="">— Selecionar —</option>
+              {funcEntrega.map((f) => (
+                <option key={f.id} value={f.id}>{f.nome}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <section className="pedido-detalhe-secao">
+        <h3 className="pedido-detalhe-titulo">Sequência ShopControl</h3>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div className="pedido-detalhe-campo">
+            <span className="campo-label">Sequência</span>
+            <input
+              className="input input-sm"
+              value={sequencia}
+              onChange={(e) => setSequencia(e.target.value)}
+              placeholder="Ex: SC-10475"
+            />
+          </div>
+          <div className="pedido-detalhe-campo">
+            <span className="campo-label">Operação</span>
+            <select
+              className="input input-sm"
+              value={operacao}
+              onChange={(e) => setOperacao(e.target.value)}
+            >
+              <option value="">—</option>
+              {OPERACOES_SHOPCONTROL.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={handleSalvarSequencia} disabled={salvandoSeq}>
+            {salvandoSeq ? '...' : 'Salvar'}
+          </button>
+        </div>
+      </section>
+    </>
+  )
+}
 
 // ── Checklist de separação ────────────────────────────────────────────────────
 function ChecklistSeparacao({ pedido, onAtualizar }) {
@@ -229,6 +351,8 @@ export function PedidoModal({ pedidoId, onFechar, onStatusAtualizado }) {
                   )}
                 </div>
               </section>
+
+              <ResponsaveisSequencia pedido={pedido} onAtualizar={carregar} />
 
               {/* Itens */}
               <section className="pedido-detalhe-secao">

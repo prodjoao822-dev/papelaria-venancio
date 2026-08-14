@@ -1,5 +1,6 @@
 import { useLocation } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
+import { BuscaPedidoGlobal } from '@/components/pedidos/BuscaPedidoGlobal'
 
 const TITULOS = {
   '/':              { pai: 'Visão Geral',  atual: 'Dashboard de Operações' },
@@ -8,7 +9,9 @@ const TITULOS = {
   '/atendimento':   { pai: 'Operações',    atual: 'Atendimento'            },
   '/clientes':      { pai: 'Cadastros',    atual: 'Clientes'               },
   '/orcamentos':    { pai: 'Cadastros',    atual: 'Orçamentos'             },
+  '/funcionarios':  { pai: 'Cadastros',    atual: 'Funcionários'           },
   '/catalogo':      { pai: 'Cadastros',    atual: 'Catálogo de Produtos'   },
+  '/marcas-categorias': { pai: 'Cadastros', atual: 'Marcas & Categorias'   },
   '/relatorios':    { pai: 'Sistema',      atual: 'Relatórios'             },
   '/configuracoes': { pai: 'Sistema',      atual: 'Configurações'          },
 }
@@ -26,7 +29,7 @@ export function Header({ onToggleSidebar }) {
   }).format(agora)
 
   return (
-    <header className="app-header">
+    <header className="app-header no-print">
       <div className="app-header-esquerda">
         <button
           className="header-menu-btn"
@@ -43,15 +46,7 @@ export function Header({ onToggleSidebar }) {
         </div>
       </div>
 
-      <div className="header-search">
-        <span className="header-search-icone">🔍</span>
-        <input
-          className="header-search-input"
-          type="text"
-          placeholder="Buscar pedidos, clientes..."
-          aria-label="Busca global"
-        />
-      </div>
+      <BuscaPedidoGlobal />
 
       <div className="app-header-direita">
         <span className="app-header-data">{data}</span>

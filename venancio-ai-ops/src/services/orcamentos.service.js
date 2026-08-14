@@ -141,6 +141,19 @@ export const orcamentosService = {
 
     return orcamentosService.buscarPorId(id)
   },
+
+  /** Sequência/Operação do ShopControl — pode ser preenchida antes de virar pedido. */
+  async atualizarSequencia(orcamentoId, { sequencia, operacao }) {
+    const { data, error } = await supabase
+      .from('orcamentos')
+      .update({ sequencia, operacao })
+      .eq('id', orcamentoId)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  },
 }
 
 async function notificarN8n(evento, payload) {

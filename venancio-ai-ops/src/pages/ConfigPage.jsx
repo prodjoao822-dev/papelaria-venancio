@@ -1,4 +1,4 @@
-import { APP_NAME, APP_VERSION, N8N_WEBHOOK_BASE, EVOLUTION_API_URL } from '@/utils/constants'
+import { APP_NAME, APP_VERSION, N8N_WEBHOOK_BASE, BOT_API_URL } from '@/utils/constants'
 
 export function ConfigPage() {
   return (
@@ -21,16 +21,16 @@ export function ConfigPage() {
               dica="Configure VITE_N8N_WEBHOOK_BASE no .env"
             />
             <IntegracaoItem
-              nome="Evolution API (WhatsApp)"
-              descricao={EVOLUTION_API_URL ?? 'Não configurado'}
-              ativo={!!EVOLUTION_API_URL}
-              dica="Configure VITE_EVOLUTION_API_URL no .env"
+              nome="Envio de WhatsApp (via JS Bot)"
+              descricao={BOT_API_URL ?? 'Não configurado'}
+              ativo={!!BOT_API_URL}
+              dica="Configure VITE_BOT_API_URL no .env — a credencial da Evolution API fica só no JS Bot, nunca no dashboard"
             />
             <IntegracaoItem
-              nome="OpenAI / IA"
-              descricao="Configurado no AI Service (Node.js separado)"
-              ativo={false}
-              dica="Configure no serviço ai-service/"
+              nome="IA (Agentes n8n)"
+              descricao={N8N_WEBHOOK_BASE ? 'Agente de Vendas + Agente de Orçamento via n8n' : 'Não configurado'}
+              ativo={!!N8N_WEBHOOK_BASE}
+              dica="A IA roda como workflows n8n chamados direto pelo JS Bot — configure VITE_N8N_WEBHOOK_BASE"
             />
           </div>
         </div>
@@ -42,8 +42,8 @@ export function ConfigPage() {
             <ModuloItem nome="Dashboard Operacional" status="ativo" />
             <ModuloItem nome="Gestão de Pedidos" status="ativo" />
             <ModuloItem nome="Realtime (Supabase)" status="ativo" />
-            <ModuloItem nome="Integração WhatsApp" status="preparado" />
-            <ModuloItem nome="IA + LangChain" status="preparado" />
+            <ModuloItem nome="Integração WhatsApp" status={BOT_API_URL ? 'ativo' : 'preparado'} />
+            <ModuloItem nome="IA (Agentes n8n)" status={N8N_WEBHOOK_BASE ? 'ativo' : 'preparado'} />
             <ModuloItem nome="Multiagentes" status="futuro" />
             <ModuloItem nome="App Mobile / APK" status="futuro" />
             <ModuloItem nome="Notificações Push" status="futuro" />
@@ -88,10 +88,10 @@ export function ConfigPage() {
             <li>Configure o <code>.env</code> com credenciais do Supabase</li>
             <li>Execute a migration SQL no dashboard do Supabase</li>
             <li>Execute o seed de produtos (opcional)</li>
-            <li>Configure o n8n com os workflows da pasta <code>automation/</code></li>
-            <li>Configure a Evolution API para receber mensagens WhatsApp</li>
-            <li>Deploy do <code>ai-service/</code> (Node.js) no servidor</li>
-            <li>Configure VITE_N8N_WEBHOOK_BASE e VITE_EVOLUTION_API_URL</li>
+            <li>Importe os workflows do Agente de Vendas e do Agente de Orçamento no n8n</li>
+            <li>Configure a Evolution API para receber e enviar mensagens WhatsApp</li>
+            <li>Deploy do JS Bot (<code>chatbot/papelaria-bot/</code>), que fala direto com os agentes n8n e com a Evolution API</li>
+            <li>Configure VITE_N8N_WEBHOOK_BASE e VITE_BOT_API_URL (URL pública do JS Bot)</li>
           </ol>
         </div>
       </div>

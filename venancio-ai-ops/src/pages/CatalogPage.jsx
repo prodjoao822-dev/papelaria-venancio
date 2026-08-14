@@ -12,11 +12,12 @@ const CATEGORIAS_DEFAULT = [
   'Arte e Pintura', 'Informática', 'Escritório', 'Escolar', 'Outros',
 ]
 
-function ProdutoModal({ produto, categorias, onSalvar, onFechar }) {
+function ProdutoModal({ produto, categorias, marcas, onSalvar, onFechar }) {
   const isEdicao = !!produto?.id
   const [form, setForm] = useState({
     nome:       produto?.nome       ?? '',
     categoria:  produto?.categoria  ?? '',
+    marca:      produto?.marca      ?? '',
     sku:        produto?.sku        ?? '',
     preco:      produto?.preco      ?? '',
     estoque:    produto?.estoque    ?? 0,
@@ -69,6 +70,7 @@ function ProdutoModal({ produto, categorias, onSalvar, onFechar }) {
       const dados = {
         nome:       form.nome.trim(),
         categoria:  form.categoria.trim(),
+        marca:      form.marca.trim()     || null,
         sku:        form.sku.trim()       || null,
         preco:      parseFloat(form.preco),
         estoque:    parseInt(form.estoque) || 0,
@@ -121,6 +123,22 @@ function ProdutoModal({ produto, categorias, onSalvar, onFechar }) {
               <datalist id="categorias-list">
                 {[...new Set([...CATEGORIAS_DEFAULT, ...categorias])].map((c) => (
                   <option key={c} value={c} />
+                ))}
+              </datalist>
+            </div>
+
+            <div className="form-grupo">
+              <label className="form-label">Marca</label>
+              <input
+                className="input"
+                list="marcas-list"
+                value={form.marca}
+                onChange={(e) => set('marca', e.target.value)}
+                placeholder="Ex: Faber-Castell"
+              />
+              <datalist id="marcas-list">
+                {marcas.map((m) => (
+                  <option key={m} value={m} />
                 ))}
               </datalist>
             </div>
@@ -273,9 +291,11 @@ export function CatalogPage() {
   const [busca, setBusca]               = useState('')
   const [filtroAtivo, setFiltroAtivo]   = useState('ativo')
   const [filtroCategoria, setFiltroCategoria] = useState('')
+  const [filtroMarca, setFiltroMarca]   = useState('')
   const [modalAberto, setModalAberto]   = useState(false)
   const [produtoEditar, setProdutoEditar] = useState(null)
   const [categorias, setCategorias]     = useState([])
+  const [marcas, setMarcas]             = useState([])
   const { toast } = useToast()
 
   const carregar = useCallback(async () => {
@@ -285,19 +305,22 @@ export function CatalogPage() {
       if (filtroAtivo === 'ativo')   filtros.ativo = true
       if (filtroAtivo === 'inativo') filtros.ativo = false
       if (filtroCategoria) filtros.categoria = filtroCategoria
+      if (filtroMarca) filtros.marca = filtroMarca
 
-      const [data, cats] = await Promise.all([
+      const [data, cats, marcasData] = await Promise.all([
         produtosService.listar(filtros),
         produtosService.listarCategorias(),
+        produtosService.listarMarcas(),
       ])
       setProdutos(data)
       setCategorias(cats)
+      setMarcas(marcasData)
     } catch (err) {
       toast.erro('Erro ao carregar catálogo: ' + (err.message ?? 'desconhecido'))
     } finally {
       setCarregando(false)
     }
-  }, [filtroAtivo, filtroCategoria, toast])
+  }, [filtroAtivo, filtroCategoria, filtroMarca, toast])
 
   useEffect(() => { carregar() }, [carregar])
 
@@ -305,6 +328,7 @@ export function CatalogPage() {
     ? produtos.filter((p) =>
         p.nome.toLowerCase().includes(busca.toLowerCase()) ||
         p.categoria.toLowerCase().includes(busca.toLowerCase()) ||
+        p.marca?.toLowerCase().includes(busca.toLowerCase()) ||
         p.sku?.toLowerCase().includes(busca.toLowerCase()) ||
         (p.aliases ?? []).some((a) => a.toLowerCase().includes(busca.toLowerCase()))
       )
@@ -414,6 +438,18 @@ export function CatalogPage() {
               {categorias.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           )}
+
+          {marcas.length > 0 && (
+            <select
+              className="input"
+              style={{ width: 'auto', minWidth: '160px' }}
+              value={filtroMarca}
+              onChange={(e) => setFiltroMarca(e.target.value)}
+            >
+              <option value="">Todas as marcas</option>
+              {marcas.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+          )}
         </div>
       </div>
 
@@ -512,6 +548,7 @@ export function CatalogPage() {
         <ProdutoModal
           produto={produtoEditar}
           categorias={categorias}
+          marcas={marcas}
           onSalvar={handleSalvar}
           onFechar={() => { setModalAberto(false); setProdutoEditar(null) }}
         />

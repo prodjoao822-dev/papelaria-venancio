@@ -6,10 +6,12 @@ import {
   QUERY_STATUS_CONFIG,
   QUERY_STATUS,
   PRIORIDADE_CONFIG,
+  DEMO_MODE,
 } from '@/utils/constants'
 import { useToast } from '@/contexts/AppContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatCurrency } from '@/utils/formatters'
+import { ErrorState } from '@/components/ui/ErrorState'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -135,7 +137,7 @@ const FILTROS_STATUS = [
 
 // ── Card de consulta ──────────────────────────────────────────────────────────
 
-function ConsultaCard({ consulta, onResponder, usandoMock }) {
+function ConsultaCard({ consulta, onResponder }) {
   const [expandido, setExpandido]       = useState(false)
   const [respondendo, setRespondendo]   = useState(false)
   const [resposta, setResposta]         = useState('')
@@ -300,10 +302,16 @@ export function ConsultasPage() {
   const [filtroStatus, setFiltroStatus] = useState('ativos')
   const [filtroTipo, setFiltroTipo]     = useState('')
   const [busca, setBusca]               = useState('')
-  const [usandoMock, setUsandoMock]     = useState(false)
+  const [erro, setErro]                 = useState(null)
   const [aprendizados, setAprendizados] = useState(0)
 
   const carregarConsultas = useCallback(async () => {
+    if (DEMO_MODE) {
+      setConsultas(MOCK_CONSULTAS)
+      setErro(null)
+      setLoading(false)
+      return
+    }
     try {
       let data
       if (filtroStatus === 'ativos') {
@@ -317,10 +325,9 @@ export function ConsultasPage() {
         data = await operationalQueriesService.listar(filtros)
       }
       setConsultas(data)
-      setUsandoMock(false)
-    } catch {
-      setConsultas(MOCK_CONSULTAS)
-      setUsandoMock(true)
+      setErro(null)
+    } catch (err) {
+      setErro(err.message)
     } finally {
       setLoading(false)
     }
@@ -332,7 +339,7 @@ export function ConsultasPage() {
   }, [carregarConsultas])
 
   useEffect(() => {
-    if (usandoMock) return
+    if (DEMO_MODE) return
     let channel = null
     try {
       channel = operationalQueriesService.subscribe(() => carregarConsultas())
@@ -342,11 +349,22 @@ export function ConsultasPage() {
     return () => {
       try { channel?.unsubscribe() } catch { /* ignora */ }
     }
-  }, [carregarConsultas, usandoMock])
+  }, [carregarConsultas])
 
   async function handleResponder(id, resposta, deveAprender, produtoNome) {
     try {
-      await operationalQueriesService.responder(id, resposta, operador?.id)
+      if (!DEMO_MODE) await operationalQueriesService.responder(id, resposta, operador?.id)
+
+      // Best-effort: a resposta já foi gravada acima — uma falha aqui não deve
+      // reverter o status "respondida" nem impedir o fluxo de aprendizado
+      // abaixo, só avisa que o cliente pode não ter recebido a mensagem.
+      if (!DEMO_MODE) {
+        try {
+          await operationalQueriesService.notificarCliente(id)
+        } catch (erroNotificacao) {
+          toast.aviso('Resposta salva, mas não consegui mandar pro WhatsApp do cliente: ' + erroNotificacao.message)
+        }
+      }
 
       // Auto-aprendizado: extrai preço e disponibilidade e salva na memória
       if (deveAprender && produtoNome) {
@@ -373,7 +391,7 @@ export function ConsultasPage() {
         toast.sucesso('Consulta respondida com sucesso.')
       }
 
-      if (!usandoMock) {
+      if (!DEMO_MODE) {
         await carregarConsultas()
       } else {
         setConsultas((prev) => prev.map((c) =>
@@ -406,7 +424,7 @@ export function ConsultasPage() {
           <p className="page-subtitle">Perguntas da IA que precisam de resposta humana</p>
         </div>
         <div className="page-header-acoes">
-          {usandoMock && <span className="badge-mock">⚡ Demo</span>}
+          {DEMO_MODE && <span className="badge-mock">⚡ Demo</span>}
           {aprendizados > 0 && (
             <span className="aprendizado-session-badge">
               🧠 {aprendizados} produto{aprendizados > 1 ? 's' : ''} aprendido{aprendizados > 1 ? 's' : ''} hoje
@@ -490,6 +508,12 @@ export function ConsultasPage() {
             <div className="loading-spinner" />
             <p>Carregando consultas…</p>
           </div>
+        ) : erro ? (
+          <ErrorState
+            titulo="Não foi possível carregar as consultas operacionais"
+            detalhe={`Verifique a conexão com o Supabase. (${erro})`}
+            onRetry={carregarConsultas}
+          />
         ) : consultasFiltradas.length === 0 ? (
           <div className="consultas-empty">
             <span className="consultas-empty-icone">✅</span>
@@ -504,7 +528,6 @@ export function ConsultasPage() {
               key={consulta.id}
               consulta={consulta}
               onResponder={handleResponder}
-              usandoMock={usandoMock}
             />
           ))
         )}
