@@ -35,6 +35,32 @@ test('escolhe o arquivo certo por período quando a escola tem variação', () =
 });
 
 test('retorna null quando a escola+ano não tem material cadastrado', () => {
-  assert.equal(materiaisEscolares.buscarMaterial('Mundo Livre', '4º ano - Fundamental'), null);
+  // Turma que não existe no catálogo de nenhuma escola: o cliente chega nela
+  // digitando a turma no passo "Não encontrei a turma do meu filho".
+  assert.equal(materiaisEscolares.buscarMaterial('Mundo Livre', 'Grupo 9'), null);
   assert.equal(materiaisEscolares.buscarMaterial('Escola Inexistente', '1º ano - Fundamental'), null);
+});
+
+// O bot manda a cotação com preço; a lista crua da escola só entra onde não há
+// orçamento na origem (ver scripts/importarListasEscolares.js).
+test('o menu da escola lista as turmas na ordem escolar, do Infantil ao Médio', () => {
+  const anos = materiaisEscolares.listarAnos('CEC');
+
+  assert.deepEqual(anos.slice(0, 4), [
+    'Grupo 3', 'Grupo 4', 'Grupo 5', '1º ano - Fundamental',
+  ]);
+  assert.equal(anos.at(-1), '3º ano - Ensino Médio');
+});
+
+test('escola fora do catálogo não tem menu próprio', () => {
+  assert.deepEqual(materiaisEscolares.listarAnos('Escola Inexistente'), []);
+});
+
+test('marca se o arquivo é o orçamento (com preço) ou a lista crua da escola', () => {
+  // CEC tem orçamento de todas as turmas.
+  assert.equal(materiaisEscolares.buscarMaterial('CEC', '1º ano - Fundamental').ehOrcamento, true);
+  // Salesiano JC tem orçamento só do 1º, 2º, Infantil 2 e Infantil 3 — o resto
+  // é a lista da escola, sem preço.
+  assert.equal(materiaisEscolares.buscarMaterial('Salesiano JC', '1º ano - Fundamental').ehOrcamento, true);
+  assert.equal(materiaisEscolares.buscarMaterial('Salesiano JC', '5º ano - Fundamental').ehOrcamento, false);
 });

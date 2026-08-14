@@ -6,6 +6,8 @@ const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 
 const { estadoInicial, processarMensagem } = require('../../src/botEngine/stateMachine');
+const ESCOLAS_CATALOGO = require('../../src/config/escolas.json');
+const materiaisEscolares = require('../../src/config/materiaisEscolares');
 
 describe('estado inicial', () => {
   test('começa sempre no menu principal, sem dados', () => {
@@ -88,7 +90,7 @@ describe('menu principal: horário de atendimento', () => {
   test('dentro do horário, mostra o cartão institucional mas sem o aviso de fechado', () => {
     const resultado = processarMensagem(estadoInicial(), 'oi', { agora: QUARTA_10H_BRT });
     assert.match(resultado.resposta, /Horários de Atendimento/);
-    assert.match(resultado.resposta, /Av\. Central, 1270/);
+    assert.match(resultado.resposta, /Av\. Primeira Avenida, 232/);
     assert.doesNotMatch(resultado.resposta, /fora do nosso horário/);
   });
 
@@ -96,7 +98,37 @@ describe('menu principal: horário de atendimento', () => {
     const resultado = processarMensagem(estadoInicial(), 'oi', { agora: QUARTA_20H_BRT });
     assert.match(resultado.resposta, /fora do nosso horário/);
     assert.match(resultado.resposta, /Horários de Atendimento/);
-    assert.match(resultado.resposta, /Av\. Central, 1270/);
+    assert.match(resultado.resposta, /Av\. Eldes Scherrer, 1482/);
+  });
+
+  // A loja da Av. Central saiu da operação; o cartão não pode voltar a citá-la.
+  test('o cartão institucional não menciona mais a loja da Av. Central', () => {
+    const resultado = processarMensagem(estadoInicial(), 'oi', { agora: QUARTA_10H_BRT });
+    assert.doesNotMatch(resultado.resposta, /Av\. Central/);
+  });
+
+  // Cada loja tem o seu horário: 9h-18h na Primeira Avenida, 8h30-19h na Eldes
+  // Scherrer. O cartão precisa mostrar os dois, não uma média.
+  test('o cartão mostra o horário de cada loja separadamente', () => {
+    const resultado = processarMensagem(estadoInicial(), 'oi', { agora: QUARTA_10H_BRT });
+    assert.match(resultado.resposta, /Segunda a Sexta: 9h às 18h/);
+    assert.match(resultado.resposta, /Segunda a Sexta: 8h30 às 19h/);
+  });
+
+  // 08h40 e 18h40 estão fora do horário da Primeira Avenida, mas a Eldes
+  // Scherrer está aberta — tem gente pra atender, então nada de aviso.
+  test('a janela de atendimento cobre a união das duas lojas', () => {
+    const QUARTA_8H40_BRT = new Date('2026-07-15T11:40:00Z');
+    const QUARTA_18H40_BRT = new Date('2026-07-15T21:40:00Z');
+
+    assert.doesNotMatch(
+      processarMensagem(estadoInicial(), 'oi', { agora: QUARTA_8H40_BRT }).resposta,
+      /fora do nosso horário/
+    );
+    assert.doesNotMatch(
+      processarMensagem(estadoInicial(), 'oi', { agora: QUARTA_18H40_BRT }).resposta,
+      /fora do nosso horário/
+    );
   });
 
   test('domingo (sem expediente), acrescenta o aviso de fechado mesmo de manhã', () => {
@@ -407,11 +439,37 @@ describe('fluxo completo de lista escolar', () => {
     return sessao; // LISTA_ESCOLAR_ESCOLA
   }
 
+  // A posição de cada escola no menu muda toda vez que o catálogo é regerado
+  // (escolas.json vem de scripts/importarListasEscolares.js). Os testes buscam
+  // a opção pelo nome pra continuar valendo quando uma escola entra ou sai.
+  function opcaoDaEscola(nome) {
+    const indice = ESCOLAS_CATALOGO.findIndex((escola) => escola.nome === nome);
+    assert.notEqual(indice, -1, `escola "${nome}" não está no catálogo de teste`);
+    return String(indice + 1);
+  }
+
+  // O menu de ano é montado por escola (só as turmas que ela tem, no vocabulário
+  // dela), então a posição também muda a cada regeração do catálogo — mesma
+  // razão de buscar pelo rótulo em vez de fixar o número.
+  function opcaoDoAno(nomeEscola, rotulo) {
+    const anos = materiaisEscolares.listarAnos(nomeEscola);
+    const indice = anos.indexOf(rotulo);
+    assert.notEqual(indice, -1, `"${rotulo}" não está no menu de ${nomeEscola}: ${anos.join(' / ')}`);
+    return String(indice + 1);
+  }
+
+  // Última opção do menu de ano de uma escola com catálogo próprio.
+  function opcaoOutroAno(nomeEscola) {
+    return String(materiaisEscolares.listarAnos(nomeEscola).length + 1);
+  }
+
+  const OPCAO_OUTRA_ESCOLA = String(ESCOLAS_CATALOGO.length + 1);
+
   test('escola sem variação de período pula direto para observação', () => {
-    let { sessao } = processarMensagem(irParaListaEscolar(), '1'); // CEC
+    let { sessao } = processarMensagem(irParaListaEscolar(), opcaoDaEscola('CEC'));
     assert.equal(sessao.estado, 'LISTA_ESCOLAR_ANO');
 
-    ({ sessao } = processarMensagem(sessao, '3')); // "1º ano - Fundamental"
+    ({ sessao } = processarMensagem(sessao, opcaoDoAno('CEC', '1º ano - Fundamental')));
     assert.equal(sessao.estado, 'LISTA_ESCOLAR_OBSERVACAO');
 
     const final = processarMensagem(sessao, 'sem observação');
@@ -425,8 +483,8 @@ describe('fluxo completo de lista escolar', () => {
   });
 
   test('Linus Pauling do 1º ao 5º ano pergunta o período antes da observação', () => {
-    let { sessao } = processarMensagem(irParaListaEscolar(), '3'); // Linus Pauling
-    ({ sessao } = processarMensagem(sessao, '3')); // "1º ano - Fundamental"
+    let { sessao } = processarMensagem(irParaListaEscolar(), opcaoDaEscola('Linus Pauling'));
+    ({ sessao } = processarMensagem(sessao, opcaoDoAno('Linus Pauling', '1º ano - Fundamental')));
     assert.equal(sessao.estado, 'LISTA_ESCOLAR_PERIODO');
 
     ({ sessao } = processarMensagem(sessao, '1')); // Integral
@@ -437,24 +495,66 @@ describe('fluxo completo de lista escolar', () => {
     assert.equal(final.acoes[1].dados.nomeArquivo, '1-ano-fundamental-integral.pdf');
   });
 
-  test('escola/ano sem material cadastrado só notifica, sem enviar arquivo', () => {
-    let { sessao } = processarMensagem(irParaListaEscolar(), '4'); // Mundo Livre
-    ({ sessao } = processarMensagem(sessao, '1')); // Maternal (não mapeado)
+  // Educação Infantil não é traduzida pra "Maternal"/"Jardim": o menu mostra a
+  // turma no vocabulário da escola e o PDF sai por ela.
+  test('turma de Educação Infantil sai pelo nome que a escola usa', () => {
+    let { sessao } = processarMensagem(irParaListaEscolar(), opcaoDaEscola('Múltipla'));
+    ({ sessao } = processarMensagem(sessao, opcaoDoAno('Múltipla', 'Infantil 3')));
     assert.equal(sessao.estado, 'LISTA_ESCOLAR_OBSERVACAO');
+
+    const final = processarMensagem(sessao, 'nenhuma');
+    assert.equal(final.acoes[0].dados.ano, 'Infantil 3');
+    assert.equal(final.acoes[1].tipo, 'ENVIAR_ARQUIVO');
+    assert.equal(final.acoes[1].dados.nomeArquivo, 'infantil-3.pdf');
+  });
+
+  test('anuncia o anexo pelo que ele é: orçamento com preço ou lista sem preço', () => {
+    let { sessao } = processarMensagem(irParaListaEscolar(), opcaoDaEscola('CEC'));
+    ({ sessao } = processarMensagem(sessao, opcaoDoAno('CEC', '1º ano - Fundamental')));
+    const comOrcamento = processarMensagem(sessao, 'nenhuma');
+    assert.match(comOrcamento.resposta, /orçamento do material de CEC/);
+    assert.equal(comOrcamento.acoes[0].dados.enviadoSemOrcamento, false);
+
+    // Salesiano JC não tem orçamento do 5º ano na origem — vai a lista da escola.
+    ({ sessao } = processarMensagem(irParaListaEscolar(), opcaoDaEscola('Salesiano JC')));
+    ({ sessao } = processarMensagem(sessao, opcaoDoAno('Salesiano JC', '5º ano - Fundamental')));
+    const semOrcamento = processarMensagem(sessao, 'nenhuma');
+    assert.match(semOrcamento.resposta, /lista de material de Salesiano JC/);
+    assert.equal(semOrcamento.acoes[0].dados.enviadoSemOrcamento, true);
+  });
+
+  test('o menu de ano só oferece o que aquela escola tem', () => {
+    const { resposta } = processarMensagem(irParaListaEscolar(), opcaoDaEscola('Oceanus'));
+    assert.match(resposta, /Grupo 2/);
+    assert.match(resposta, /9º ano - Fundamental/);
+    // Oceanus vai até o 9º ano: oferecer Ensino Médio levaria a uma escolha que
+    // nunca resulta em PDF.
+    assert.doesNotMatch(resposta, /Ensino Médio/);
+  });
+
+  test('turma fora do menu da escola é digitada e só notifica, sem enviar arquivo', () => {
+    let { sessao } = processarMensagem(irParaListaEscolar(), opcaoDaEscola('Mundo Livre'));
+    ({ sessao } = processarMensagem(sessao, opcaoOutroAno('Mundo Livre')));
+    assert.equal(sessao.estado, 'LISTA_ESCOLAR_ANO_OUTRO');
+
+    ({ sessao } = processarMensagem(sessao, 'Grupo 9'));
+    assert.equal(sessao.estado, 'LISTA_ESCOLAR_OBSERVACAO');
+    assert.equal(sessao.dados.anoSelecionado, 'Grupo 9');
 
     const final = processarMensagem(sessao, 'sem obs');
     assert.equal(final.acoes.length, 1);
+    assert.equal(final.acoes[0].dados.ano, 'Grupo 9');
     assert.equal(final.acoes[0].dados.materialEnviadoAutomaticamente, false);
   });
 
   test('opção inválida no passo da escola não avança de estado', () => {
-    const resultado = processarMensagem(irParaListaEscolar(), '99');
+    const resultado = processarMensagem(irParaListaEscolar(), '999');
     assert.equal(resultado.sessao.estado, 'LISTA_ESCOLAR_ESCOLA');
     assert.match(resultado.resposta, /Opção inválida/);
   });
 
   test('opção "outra escola" (a última da lista) pede nome, ano, a lista de material e pula a pergunta de período', () => {
-    let { sessao } = processarMensagem(irParaListaEscolar(), '5'); // 5ª opção: outra escola
+    let { sessao } = processarMensagem(irParaListaEscolar(), OPCAO_OUTRA_ESCOLA);
     assert.equal(sessao.estado, 'LISTA_ESCOLAR_ESCOLA_OUTRA_NOME');
 
     ({ sessao } = processarMensagem(sessao, 'Colégio Novo'));
@@ -482,7 +582,7 @@ describe('fluxo completo de lista escolar', () => {
   });
 
   test('opção "outra escola" com cadastro fiscal já completo pula direto pro fechamento', () => {
-    let { sessao } = processarMensagem(irParaListaEscolar(), '5');
+    let { sessao } = processarMensagem(irParaListaEscolar(), OPCAO_OUTRA_ESCOLA);
     ({ sessao } = processarMensagem(sessao, 'Colégio Novo'));
     ({ sessao } = processarMensagem(sessao, '3'));
     ({ sessao } = processarMensagem(sessao, '5 cadernos'));
@@ -499,7 +599,7 @@ describe('comandos globais', () => {
   function irParaListaEscolarAno() {
     let { sessao } = processarMensagem(estadoInicial(), '1'); // SUBMENU_VENDAS
     ({ sessao } = processarMensagem(sessao, '1')); // LISTA_ESCOLAR_ESCOLA
-    ({ sessao } = processarMensagem(sessao, '1')); // LISTA_ESCOLAR_ANO (CEC)
+    ({ sessao } = processarMensagem(sessao, '1')); // LISTA_ESCOLAR_ANO (a 1ª escola do catálogo)
     return sessao;
   }
 
@@ -562,7 +662,7 @@ describe('comandos globais', () => {
   test('a pergunta de observação aceita "menu" como texto livre, sem acionar o comando global', () => {
     let { sessao } = processarMensagem(estadoInicial(), '1');
     ({ sessao } = processarMensagem(sessao, '1')); // LISTA_ESCOLAR_ESCOLA
-    ({ sessao } = processarMensagem(sessao, '1')); // LISTA_ESCOLAR_ANO (CEC)
+    ({ sessao } = processarMensagem(sessao, '1')); // LISTA_ESCOLAR_ANO (a 1ª escola do catálogo)
     ({ sessao } = processarMensagem(sessao, '3')); // "1º ano - Fundamental" -> observação
 
     assert.equal(sessao.estado, 'LISTA_ESCOLAR_OBSERVACAO');

@@ -25,9 +25,66 @@ test('extrai telefone, nome, texto e fromMe de um payload válido', () => {
     nome: 'Cliente Teste',
     texto: 'Olá',
     documentoPdf: null,
+    audio: null,
     fromMe: false,
     mensagemId: 'MSG1',
   });
+});
+
+// Áudio: o bot não transcreve, mas precisa reconhecer pra chamar a Vanessa em
+// vez de ignorar em silêncio (bug real de 10/08 — 4 áudios sem resposta).
+test('reconhece uma nota de voz (ptt) enviada pelo cliente', () => {
+  const resultado = parsePayload({
+    event: 'messages.upsert',
+    data: {
+      key: { remoteJid: '5527996620160@s.whatsapp.net', fromMe: false, id: 'AUD1' },
+      pushName: 'Safira',
+      message: { audioMessage: { ptt: true, seconds: 12, mimetype: 'audio/ogg; codecs=opus' } },
+    },
+  });
+
+  assert.deepEqual(resultado.audio, { notaDeVoz: true, duracaoSegundos: 12 });
+  assert.equal(resultado.texto, null);
+});
+
+test('arquivo de áudio anexado (sem ptt) também é reconhecido', () => {
+  const resultado = parsePayload({
+    event: 'messages.upsert',
+    data: {
+      key: { remoteJid: '5527996620160@s.whatsapp.net', fromMe: false, id: 'AUD2' },
+      message: { audioMessage: { seconds: 30, mimetype: 'audio/mpeg' } },
+    },
+  });
+
+  assert.deepEqual(resultado.audio, { notaDeVoz: false, duracaoSegundos: 30 });
+});
+
+// Sem `seconds` o campo vira null em vez de 0 — o texto que a Vanessa recebe
+// omite a duração nesse caso, em vez de dizer "de 0s".
+test('áudio sem duração informada não vira "0s"', () => {
+  const resultado = parsePayload({
+    event: 'messages.upsert',
+    data: {
+      key: { remoteJid: '5527996620160@s.whatsapp.net', fromMe: false, id: 'AUD3' },
+      message: { audioMessage: { ptt: true } },
+    },
+  });
+
+  assert.equal(resultado.audio.duracaoSegundos, null);
+});
+
+// Figurinha e reação continuam fora: não têm conteúdo pra alguém responder, e
+// notificar a Vanessa a cada emoji seria ruído puro.
+test('figurinha e reação não são confundidas com áudio', () => {
+  for (const message of [{ stickerMessage: {} }, { reactionMessage: { text: '👍' } }]) {
+    const resultado = parsePayload({
+      event: 'messages.upsert',
+      data: { key: { remoteJid: '5527996620160@s.whatsapp.net', fromMe: false, id: 'X' }, message },
+    });
+
+    assert.equal(resultado.audio, null);
+    assert.equal(resultado.texto, null);
+  }
 });
 
 test('remove o sufixo de grupo do telefone', () => {

@@ -162,3 +162,58 @@ describe('menuEngine: opção inválida', () => {
     assert.match(segunda.resposta, /Opção inválida/);
   });
 });
+
+// --- correção de 13/08: opção de menu que entrega o cliente pra uma pessoa ---
+//
+// Uma opção `notificar` responde "já vamos te atender por aqui!". Sem sinalizar
+// a pausa, o bot continuava no ar e a próxima mensagem do cliente levava o menu
+// de volta — por cima de quem já tinha sido chamado pra atender.
+
+test('opção notificar com pausarBot pede a pausa do atendimento automático', () => {
+  const menu = criarEstadoDeMenu({
+    STATE: 'TESTE',
+    rodape: 'Escolha:',
+    opcoes: {
+      1: { rotulo: 'Falar com atendente', tipo: 'notificar', alvo: 'vendas', pausarBot: true },
+    },
+  });
+
+  const { acoes } = menu.processar('1', { estado: 'TESTE', dados: {} });
+
+  assert.deepEqual(acoes.map((a) => a.tipo), ['NOTIFICAR_HUMANO', 'PAUSAR_ATENDIMENTO_AUTOMATICO']);
+});
+
+test('opção notificar sem pausarBot continua sem pausar', () => {
+  const menu = criarEstadoDeMenu({
+    STATE: 'TESTE',
+    rodape: 'Escolha:',
+    opcoes: { 1: { rotulo: 'Serviços', tipo: 'notificar', alvo: 'servicos' } },
+  });
+
+  const { acoes } = menu.processar('1', { estado: 'TESTE', dados: {} });
+
+  assert.deepEqual(acoes.map((a) => a.tipo), ['NOTIFICAR_HUMANO']);
+});
+
+test('a pausa carrega um motivo legível pro log', () => {
+  const menu = criarEstadoDeMenu({
+    STATE: 'TESTE',
+    rodape: 'Escolha:',
+    opcoes: { 1: { rotulo: 'Falar com um atendente', tipo: 'notificar', alvo: 'vendas', pausarBot: true } },
+  });
+
+  const acao = menu.processar('1', { estado: 'TESTE', dados: {} })
+    .acoes.find((a) => a.tipo === 'PAUSAR_ATENDIMENTO_AUTOMATICO');
+
+  assert.match(acao.dados.motivo, /Falar com um atendente/);
+});
+
+test('a opção 6 do submenu de vendas pausa o bot de verdade', () => {
+  // eslint-disable-next-line global-require -- carregado aqui pra manter o teste local
+  const submenuVendas = require('../../src/botEngine/states/submenuVendas');
+
+  const { acoes, resposta } = submenuVendas.processar('6', { estado: 'SUBMENU_VENDAS', dados: {} }, { nomeCliente: 'Erika' });
+
+  assert.ok(acoes.some((a) => a.tipo === 'PAUSAR_ATENDIMENTO_AUTOMATICO'));
+  assert.match(resposta, /já vamos te atender/);
+});
