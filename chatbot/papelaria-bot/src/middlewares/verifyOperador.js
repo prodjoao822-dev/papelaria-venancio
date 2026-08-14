@@ -24,7 +24,7 @@ async function verifyOperador(req, res, next) {
 
     const { data: operador, error: erroOperador } = await supabase
       .from('operadores')
-      .select('id, nome, ativo')
+      .select('id, nome, ativo, papel')
       .eq('id', data.user.id)
       .maybeSingle();
 

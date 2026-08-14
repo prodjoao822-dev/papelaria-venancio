@@ -17,4 +17,17 @@ const limiteWebhook = rateLimit({
   message: { erro: 'Muitas requisições em pouco tempo. Tente novamente em instantes.' },
 });
 
-module.exports = { limiteWebhook };
+// Login do Separador (código + PIN) — teto bem mais apertado que o do
+// webhook: aqui o objetivo é especificamente dificultar força bruta de PIN
+// por IP (defesa em profundidade, além do bloqueio por conta em
+// separadorAuthController.js#login, que é por código_funcionario e
+// sobrevive a quem tenta de vários IPs).
+const limiteLoginSeparador = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, erro: 'Muitas tentativas de login em pouco tempo. Tente novamente em instantes.' },
+});
+
+module.exports = { limiteWebhook, limiteLoginSeparador };

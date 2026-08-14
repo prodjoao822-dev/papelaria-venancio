@@ -4,9 +4,10 @@ const express = require('express');
 const env = require('./config/env'); // valida as variáveis de ambiente já na subida (falha rápido)
 const verifyToken = require('./middlewares/verifyToken');
 const verifyOperador = require('./middlewares/verifyOperador');
-const { limiteWebhook } = require('./middlewares/rateLimiter');
+const { limiteWebhook, limiteLoginSeparador } = require('./middlewares/rateLimiter');
 const webhookController = require('./webhook/webhookController');
 const operadorController = require('./dashboard/operadorController');
+const separadorAuthController = require('./dashboard/separadorAuthController');
 const analyticsService = require('./services/analyticsService');
 const logger = require('./utils/logger');
 
@@ -109,6 +110,18 @@ app.post('/operador/mensagens/enviar', corsDashboard, verifyOperador, operadorCo
 
 app.options('/operador/consultas/:id/notificar', corsDashboard);
 app.post('/operador/consultas/:id/notificar', corsDashboard, verifyOperador, operadorController.notificarRespostaConsulta);
+
+// Login do Separador (código + PIN) — SEM verifyOperador: quem chama ainda
+// não tem sessão nenhuma, é o próprio login. Rate limit dedicado
+// (limiteLoginSeparador) por ser um endpoint especificamente exposto a
+// força bruta de PIN. Ver separadorAuthController.js.
+app.options('/operador/separador/login', corsDashboard);
+app.post('/operador/separador/login', corsDashboard, limiteLoginSeparador, separadorAuthController.login);
+
+// Reset de PIN — exige sessão de operador ADMIN (verifyOperador +
+// checagem de papel dentro do controller). Nunca self-service.
+app.options('/operador/separador/:funcionarioId/reset-pin', corsDashboard);
+app.post('/operador/separador/:funcionarioId/reset-pin', corsDashboard, verifyOperador, separadorAuthController.resetPin);
 
 app.listen(env.PORT, () => {
   logger.info(`Papelaria bot escutando na porta ${env.PORT}`);

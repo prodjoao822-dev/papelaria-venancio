@@ -27,3 +27,10 @@
 # Bundle de export de design não relacionado ao código-fonte dos dois projetos
 /venancio-ai-ops/Sistema de gestão de papelaria.zip
 /venancio-ai-ops/Sistema de gestão de papelaria/
+
+# Config MCP local — .mcp.json passou a carregar DATABASE_URL (senha real do
+# Postgres do Supabase) direto no campo "env" do servidor "supabase" (ver
+# servidor supabase/supabase-mcp-server/), porque o dotenv relativo ao cwd
+# não resolvia o .env do servidor quando o Claude Code sobe o processo stdio.
+# Nunca versionar.
+/.mcp.json
