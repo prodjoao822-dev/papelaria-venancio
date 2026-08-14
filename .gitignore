@@ -11,3 +11,13 @@
 /n8n-workflows/
 /chatbot/.claude/
 /chatbot/AGENTE DE IA (N8N)/
+
+# Backups locais com segredos ou exports não-revisados — nunca versionar
+# (ver Vistoria Técnica 13/08/2026, Problemas 2 e 9: arquivo local continha a
+# chave antiga da Evolution API em texto plano num bloco pinData)
+/chatbot/papelaria-bot/.env.bak*
+/venancio-ai-ops/WorkflowsN8n/Agente 1 (BACKUP pré-refatoração).json
+
+# Bundle de export de design não relacionado ao código-fonte dos dois projetos
+/venancio-ai-ops/Sistema de gestão de papelaria.zip
+/venancio-ai-ops/Sistema de gestão de papelaria/
