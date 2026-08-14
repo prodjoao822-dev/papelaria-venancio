@@ -5,12 +5,15 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { useToast } from '@/contexts/AppContext'
 
-function LookupColumn({ titulo, singular, itens, carregando, onAdicionar, onRenomear, onExcluir }) {
+function LookupColumn({ titulo, singular, itens, carregando, onAdicionar, onRenomear, onExcluir, onMesclar }) {
   const [novoNome, setNovoNome] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [editandoId, setEditandoId] = useState(null)
   const [editandoNome, setEditandoNome] = useState('')
   const [excluindo, setExcluindo] = useState(null)
+  const [mesclandoId, setMesclandoId] = useState(null)
+  const [destinoMesclagem, setDestinoMesclagem] = useState('')
+  const [mesclando, setMesclando] = useState(false)
 
   async function handleAdicionar() {
     if (!novoNome.trim()) return
@@ -45,6 +48,22 @@ function LookupColumn({ titulo, singular, itens, carregando, onAdicionar, onReno
     } catch { /* toast já mostrado pelo chamador */ }
   }
 
+  function iniciarMesclagem(item) {
+    setMesclandoId(item.id)
+    setDestinoMesclagem('')
+  }
+
+  async function confirmarMesclagem(item) {
+    if (!destinoMesclagem) return
+    setMesclando(true)
+    try {
+      await onMesclar(item.id, destinoMesclagem)
+      setMesclandoId(null)
+    } catch { /* toast já mostrado pelo chamador */ } finally {
+      setMesclando(false)
+    }
+  }
+
   return (
     <div className="card" style={{ padding: 18 }}>
       <div className="section-titulo" style={{ marginBottom: 14, display: 'block' }}>{titulo}</div>
@@ -69,32 +88,61 @@ function LookupColumn({ titulo, singular, itens, carregando, onAdicionar, onReno
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           {itens.map((item) => (
-            <div
-              key={item.id}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '9px 4px', borderBottom: '1px solid var(--border)',
-              }}
-            >
-              {editandoId === item.id ? (
-                <>
-                  <input
+            <div key={item.id} style={{ borderBottom: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 4px' }}>
+                {editandoId === item.id ? (
+                  <>
+                    <input
+                      className="input input-sm"
+                      style={{ flex: 1 }}
+                      value={editandoNome}
+                      onChange={(e) => setEditandoNome(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && confirmarEdicao(item)}
+                      autoFocus
+                    />
+                    <button className="btn btn-ghost btn-xs" onClick={() => confirmarEdicao(item)} title="Salvar">✓</button>
+                    <button className="btn btn-ghost btn-xs" onClick={() => setEditandoId(null)} title="Cancelar">✕</button>
+                  </>
+                ) : (
+                  <>
+                    <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{item.nome}</span>
+                    <button className="btn btn-ghost btn-xs" onClick={() => iniciarEdicao(item)} title="Renomear">✏️</button>
+                    <button
+                      className="btn btn-ghost btn-xs"
+                      onClick={() => (mesclandoId === item.id ? setMesclandoId(null) : iniciarMesclagem(item))}
+                      title={`Mesclar com outra ${singular.toLowerCase()} duplicada`}
+                    >
+                      🔀
+                    </button>
+                    <button className="btn btn-ghost btn-xs" onClick={() => setExcluindo(item)} title="Excluir">🗑</button>
+                  </>
+                )}
+              </div>
+
+              {mesclandoId === item.id && (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '0 4px 10px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
+                    Mover todos os produtos de "{item.nome}" para:
+                  </span>
+                  <select
                     className="input input-sm"
-                    style={{ flex: 1 }}
-                    value={editandoNome}
-                    onChange={(e) => setEditandoNome(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && confirmarEdicao(item)}
-                    autoFocus
-                  />
-                  <button className="btn btn-ghost btn-xs" onClick={() => confirmarEdicao(item)} title="Salvar">✓</button>
-                  <button className="btn btn-ghost btn-xs" onClick={() => setEditandoId(null)} title="Cancelar">✕</button>
-                </>
-              ) : (
-                <>
-                  <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{item.nome}</span>
-                  <button className="btn btn-ghost btn-xs" onClick={() => iniciarEdicao(item)} title="Renomear">✏️</button>
-                  <button className="btn btn-ghost btn-xs" onClick={() => setExcluindo(item)} title="Excluir">🗑</button>
-                </>
+                    style={{ maxWidth: 200 }}
+                    value={destinoMesclagem}
+                    onChange={(e) => setDestinoMesclagem(e.target.value)}
+                  >
+                    <option value="">— Selecionar —</option>
+                    {itens.filter((i) => i.id !== item.id).map((i) => (
+                      <option key={i.id} value={i.id}>{i.nome}</option>
+                    ))}
+                  </select>
+                  <button
+                    className="btn btn-warning btn-xs"
+                    disabled={!destinoMesclagem || mesclando}
+                    onClick={() => confirmarMesclagem(item)}
+                  >
+                    {mesclando ? 'Mesclando...' : `Confirmar — apaga "${item.nome}"`}
+                  </button>
+                </div>
               )}
             </div>
           ))}
@@ -169,6 +217,7 @@ export function MarcasCategoriasPage() {
           onAdicionar={(nome) => executar(() => produtosService.criarMarca(nome), 'Marca criada.')}
           onRenomear={(id, nome) => executar(() => produtosService.renomearMarca(id, nome), 'Marca atualizada.')}
           onExcluir={(id) => executar(() => produtosService.excluirMarca(id), 'Marca excluída.')}
+          onMesclar={(origemId, destinoId) => executar(() => produtosService.mesclarMarca(origemId, destinoId), 'Marcas mescladas.')}
         />
         <LookupColumn
           titulo="Categorias"
@@ -178,6 +227,7 @@ export function MarcasCategoriasPage() {
           onAdicionar={(nome) => executar(() => produtosService.criarCategoria(nome), 'Categoria criada.')}
           onRenomear={(id, nome) => executar(() => produtosService.renomearCategoria(id, nome), 'Categoria atualizada.')}
           onExcluir={(id) => executar(() => produtosService.excluirCategoria(id), 'Categoria excluída.')}
+          onMesclar={(origemId, destinoId) => executar(() => produtosService.mesclarCategoria(origemId, destinoId), 'Categorias mescladas.')}
         />
       </div>
     </div>

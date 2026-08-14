@@ -326,8 +326,8 @@ export function CatalogPage() {
 
   const produtosFiltrados = busca
     ? produtos.filter((p) =>
-        p.nome.toLowerCase().includes(busca.toLowerCase()) ||
-        p.categoria.toLowerCase().includes(busca.toLowerCase()) ||
+        p.nome?.toLowerCase().includes(busca.toLowerCase()) ||
+        p.categoria?.toLowerCase().includes(busca.toLowerCase()) ||
         p.marca?.toLowerCase().includes(busca.toLowerCase()) ||
         p.sku?.toLowerCase().includes(busca.toLowerCase()) ||
         (p.aliases ?? []).some((a) => a.toLowerCase().includes(busca.toLowerCase()))

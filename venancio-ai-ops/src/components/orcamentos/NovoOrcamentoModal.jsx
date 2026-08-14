@@ -7,10 +7,13 @@ import { formatCurrency } from '@/utils/formatters'
 
 const ITEM_VAZIO = { descricao_livre: '', quantidade: 1, valor_unitario: '', produto_id: null }
 
-export function NovoOrcamentoModal({ onFechar, onCriado }) {
+export function NovoOrcamentoModal({ onFechar, onCriado, clienteInicial = null }) {
   const { toast } = useToast()
   const [salvando, setSalvando] = useState(false)
-  const [cliente, setCliente] = useState({ nome: '', telefone: '' })
+  const [cliente, setCliente] = useState({
+    nome: clienteInicial?.nome ?? '',
+    telefone: clienteInicial?.telefone ?? '',
+  })
   const [observacoes, setObservacoes] = useState('')
   const [status, setStatus] = useState('rascunho')
   const [itens, setItens] = useState([{ ...ITEM_VAZIO }])

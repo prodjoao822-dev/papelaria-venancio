@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { pedidosService } from '@/services/pedidos.service'
 import { clientesService } from '@/services/clientes.service'
 import { funcionariosService } from '@/services/funcionarios.service'
+import { separacaoService } from '@/services/separacao.service'
 import { ProdutoAutocompleteInput } from './ProdutoAutocompleteInput'
 import { useToast } from '@/contexts/AppContext'
 import { useAuth } from '@/contexts/AuthContext'
@@ -18,17 +19,29 @@ const ITEM_VAZIO = { descricao_livre: '', quantidade: 1, valor_unitario: '', pro
 // "Criar pedido manual" não insere direto em `pedidos` — orcamento_id é
 // NOT NULL (todo pedido nasce de um orçamento aceito). Cria um orçamento
 // tipo venda_geral e aceita na mesma chamada (ver pedidosService.criar()).
-export function NovoPedidoModal({ onFechar }) {
+export function NovoPedidoModal({ onFechar, clienteInicial = null }) {
   const { toast } = useToast()
   const { operador } = useAuth()
 
   const [salvando, setSalvando] = useState(false)
-  const [cliente, setCliente] = useState({ nome: '', telefone: '' })
+  const [cliente, setCliente] = useState({
+    nome: clienteInicial?.nome ?? '',
+    telefone: clienteInicial?.telefone ?? '',
+  })
   const [formaEntrega, setFormaEntrega] = useState('retirada')
+  const [enderecoEntrega, setEnderecoEntrega] = useState('')
   const [observacoes, setObservacoes] = useState('')
   const [itens, setItens] = useState([{ ...ITEM_VAZIO }])
   const [responsavelSeparacaoId, setResponsavelSeparacaoId] = useState('')
   const [funcionariosSeparacao, setFuncionariosSeparacao] = useState([])
+  // Delegação formal (nova) — distinta do "Responsável pela Separação" acima,
+  // que é a atribuição informal legada (Ficha de Separação, sem prioridade
+  // nem notificação). As duas convivem de propósito (decisão do dono do
+  // produto, 14/08/2026): não substituir uma pela outra ainda.
+  const [delegarFormalmente, setDelegarFormalmente] = useState(false)
+  const [separadorDelegadoId, setSeparadorDelegadoId] = useState('')
+  const [prioridadeDelegacao, setPrioridadeDelegacao] = useState('imediata')
+  const [horarioRetiradaDelegacao, setHorarioRetiradaDelegacao] = useState('')
 
   useEffect(() => {
     funcionariosService.listarPorPapel('separacao')
@@ -84,6 +97,15 @@ export function NovoPedidoModal({ onFechar }) {
     if (!cliente.telefone.trim()) { toast.aviso('Informe o telefone do cliente.'); return }
     const itensFiltrados = itens.filter((i) => i.descricao_livre.trim())
     if (itensFiltrados.length === 0) { toast.aviso('Adicione ao menos um item.'); return }
+    if (formaEntrega !== 'retirada' && !enderecoEntrega.trim()) {
+      toast.aviso('Informe o endereço de entrega.'); return
+    }
+    if (delegarFormalmente) {
+      if (!separadorDelegadoId) { toast.aviso('Escolha o separador para delegar.'); return }
+      if (prioridadeDelegacao === 'agendada' && !horarioRetiradaDelegacao) {
+        toast.aviso('Informe o horário de retirada para prioridade agendada.'); return
+      }
+    }
 
     setSalvando(true)
     try {
@@ -99,6 +121,7 @@ export function NovoPedidoModal({ onFechar }) {
       const pedido = await pedidosService.criar({
         cliente_id: clienteObj.id,
         forma_entrega: formaEntrega,
+        endereco_entrega: formaEntrega !== 'retirada' ? enderecoEntrega.trim() : null,
         observacoes: observacoes || null,
         itens: itensFiltrados.map((item) => ({
           produto_id: item.produto_id ?? null,
@@ -113,6 +136,19 @@ export function NovoPedidoModal({ onFechar }) {
           await pedidosService.atribuirResponsavel(pedido.id, 'separacao', responsavelSeparacaoId, operador?.id ?? null)
         } catch (err) {
           toast.aviso('Pedido criado, mas não consegui atribuir o responsável: ' + err.message)
+        }
+      }
+
+      if (delegarFormalmente) {
+        try {
+          await separacaoService.delegar({
+            pedidoId: pedido.id,
+            separadorId: separadorDelegadoId,
+            prioridade: prioridadeDelegacao,
+            horarioRetirada: prioridadeDelegacao === 'agendada' ? new Date(horarioRetiradaDelegacao).toISOString() : null,
+          })
+        } catch (err) {
+          toast.aviso('Pedido criado, mas não consegui delegar a separação: ' + err.message)
         }
       }
 
@@ -192,6 +228,17 @@ export function NovoPedidoModal({ onFechar }) {
                     onChange={(e) => setObservacoes(e.target.value)}
                   />
                 </div>
+                {formaEntrega !== 'retirada' && (
+                  <div className="form-grupo form-grupo--full">
+                    <label className="form-label">Endereço de Entrega *</label>
+                    <input
+                      className="input"
+                      placeholder="Rua, número, bairro, cidade"
+                      value={enderecoEntrega}
+                      onChange={(e) => setEnderecoEntrega(e.target.value)}
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
@@ -211,8 +258,62 @@ export function NovoPedidoModal({ onFechar }) {
                       <option key={f.id} value={f.id}>{f.nome}</option>
                     ))}
                   </select>
+                  <p className="form-hint">Atribuição simples (Ficha de Separação) — sem prioridade, sem notificação.</p>
                 </div>
               </div>
+
+              <div className="form-grupo form-grupo--full" style={{ marginTop: 12 }}>
+                <label className="form-label-check">
+                  <input
+                    type="checkbox"
+                    checked={delegarFormalmente}
+                    onChange={(e) => setDelegarFormalmente(e.target.checked)}
+                  />
+                  Delegar separação formalmente agora (solicitação rastreável, com prioridade e notificação ao separador)
+                </label>
+              </div>
+
+              {delegarFormalmente && (
+                <div className="form-grid form-grid--2" style={{ marginTop: 8 }}>
+                  <div className="form-grupo">
+                    <label className="form-label">Separador *</label>
+                    <select
+                      className="input"
+                      value={separadorDelegadoId}
+                      onChange={(e) => setSeparadorDelegadoId(e.target.value)}
+                    >
+                      <option value="">— Selecionar —</option>
+                      {funcionariosSeparacao.map((f) => (
+                        <option key={f.id} value={f.id}>{f.nome}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-grupo">
+                    <label className="form-label">Prioridade *</label>
+                    <div style={{ display: 'flex', gap: 16, marginTop: 4 }}>
+                      <label className="form-label-check">
+                        <input type="radio" name="prioridadeNovoPedido" checked={prioridadeDelegacao === 'imediata'} onChange={() => setPrioridadeDelegacao('imediata')} />
+                        ⚡ Imediata
+                      </label>
+                      <label className="form-label-check">
+                        <input type="radio" name="prioridadeNovoPedido" checked={prioridadeDelegacao === 'agendada'} onChange={() => setPrioridadeDelegacao('agendada')} />
+                        🗓️ Agendada
+                      </label>
+                    </div>
+                  </div>
+                  {prioridadeDelegacao === 'agendada' && (
+                    <div className="form-grupo form-grupo--full">
+                      <label className="form-label">Horário de retirada *</label>
+                      <input
+                        type="datetime-local"
+                        className="input"
+                        value={horarioRetiradaDelegacao}
+                        onChange={(e) => setHorarioRetiradaDelegacao(e.target.value)}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Itens */}

@@ -158,6 +158,15 @@ export const operationalQueriesService = {
     return normalizar(data)
   },
 
+  // A policy "admin_exclusao" (extensao_dashboard.sql) já cobre esta tabela
+  // — só admin consegue apagar de fato; um operador comum recebe erro do
+  // próprio RLS, sem precisar validar papel aqui no client.
+  async apagar(id) {
+    assertSupabase()
+    const { error } = await supabase.from('consultas_operacionais').delete().eq('id', id)
+    if (error) throw error
+  },
+
   async contarPendentes() {
     assertSupabase()
     const { count, error } = await supabase

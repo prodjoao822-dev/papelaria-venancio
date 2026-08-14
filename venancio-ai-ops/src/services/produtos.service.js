@@ -19,10 +19,13 @@ function achatarProduto(p) {
 
 async function resolverLookupId(tabela, nome) {
   if (!nome) return null
+  // .ilike (não .eq): "Faber-Castell" e "faber-castell" são a mesma marca —
+  // sem isso, cada variação de maiúscula/minúscula virava uma linha nova,
+  // fragmentando os filtros do Catálogo em duplicatas silenciosas.
   const { data: existente, error: errBusca } = await supabase
     .from(tabela)
     .select('id')
-    .eq('nome', nome)
+    .ilike('nome', nome)
     .maybeSingle()
   if (errBusca) throw errBusca
   if (existente) return existente.id
@@ -79,6 +82,22 @@ async function excluirLookup(tabela, id, labelSingular) {
   }
 }
 
+// Resolve duplicatas (ex.: "Faber-Castell" x "faber castell" criadas antes do
+// match ficar case-insensitive em resolverLookupId): reatribui todo produto
+// da origem pro destino, depois apaga a origem. Nunca perde produto — o
+// update roda antes do delete, e se o update falhar o delete não acontece.
+async function mesclarLookup(tabela, colunaFk, origemId, destinoId) {
+  if (origemId === destinoId) throw new Error('Escolha um destino diferente da origem.')
+  const { error: errUpdate } = await supabase
+    .from('produtos')
+    .update({ [colunaFk]: destinoId })
+    .eq(colunaFk, origemId)
+  if (errUpdate) throw errUpdate
+
+  const { error: errDelete } = await supabase.from(tabela).delete().eq('id', origemId)
+  if (errDelete) throw errDelete
+}
+
 export const produtosService = {
   async listar(filtros = {}) {
     let query = supabase
@@ -127,11 +146,13 @@ export const produtosService = {
   async criarCategoria(nome) { return criarLookup('categorias', nome) },
   async renomearCategoria(id, novoNome) { return renomearLookup('categorias', id, novoNome) },
   async excluirCategoria(id) { return excluirLookup('categorias', id, 'Categoria') },
+  async mesclarCategoria(origemId, destinoId) { return mesclarLookup('categorias', 'categoria_id', origemId, destinoId) },
 
   async listarMarcasDetalhado() { return listarNomes('marcas') },
   async criarMarca(nome) { return criarLookup('marcas', nome) },
   async renomearMarca(id, novoNome) { return renomearLookup('marcas', id, novoNome) },
   async excluirMarca(id) { return excluirLookup('marcas', id, 'Marca') },
+  async mesclarMarca(origemId, destinoId) { return mesclarLookup('marcas', 'marca_id', origemId, destinoId) },
 
   async criar(dados) {
     const { categoria, marca, ...resto } = dados

@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useClientes } from '@/hooks/useClientes'
 import { useAtendimentoAtivo } from '@/hooks/useAtendimentoAtivo'
+import { clientesService } from '@/services/clientes.service'
 import { ClienteModal } from '@/components/clientes/ClienteModal'
 import { EtiquetaAtendimento } from '@/components/atendimento/EtiquetaAtendimento'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
@@ -51,17 +52,39 @@ export function ClientesPage() {
   const [pagina, setPagina] = useState(1)
   const [clienteSelecionado, setClienteSelecionado] = useState(null)
 
-  const clientesFiltrados = useMemo(() => {
-    let lista = [...clientes]
+  // `clientes` (do useClientes) é limitado aos 200 de maior gasto — ótimo
+  // pros KPIs do topo (não deve mudar com busca), péssimo pra busca (cliente
+  // fora do top 200 "não existia" pra quem procurava). Busca com termo ativo
+  // vai direto no servidor (view v_clientes_crm), sem esse teto.
+  const [resultadosBusca, setResultadosBusca] = useState(null)
+  const [buscandoServidor, setBuscandoServidor] = useState(false)
+  const debounceRef = useRef(null)
 
-    if (busca) {
-      const b = busca.toLowerCase()
-      lista = lista.filter(
-        (c) => c.nome?.toLowerCase().includes(b) || c.telefone?.includes(busca)
-      )
+  useEffect(() => {
+    clearTimeout(debounceRef.current)
+    if (!busca.trim()) {
+      setResultadosBusca(null)
+      setBuscandoServidor(false)
+      return
     }
+    setBuscandoServidor(true)
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const data = await clientesService.listarCrm({ busca: busca.trim(), status: filtroStatus || undefined })
+        setResultadosBusca(data)
+      } catch {
+        setResultadosBusca([])
+      } finally {
+        setBuscandoServidor(false)
+      }
+    }, 300)
+    return () => clearTimeout(debounceRef.current)
+  }, [busca, filtroStatus])
 
-    if (filtroStatus) {
+  const clientesFiltrados = useMemo(() => {
+    let lista = resultadosBusca !== null ? [...resultadosBusca] : [...clientes]
+
+    if (resultadosBusca === null && filtroStatus) {
       lista = lista.filter((c) => c.status === filtroStatus)
     }
 
@@ -76,7 +99,7 @@ export function ClientesPage() {
     })
 
     return lista
-  }, [clientes, busca, filtroStatus, ordenacao])
+  }, [clientes, resultadosBusca, filtroStatus, ordenacao])
 
   const totalPaginas = Math.max(1, Math.ceil(clientesFiltrados.length / POR_PAGINA))
   const paginaAtual = Math.min(pagina, totalPaginas)

@@ -39,9 +39,30 @@ export const pedidosService = {
       query = aplicarFiltroStatusDashboard(query, filtros.status)
     }
     if (filtros.busca) {
+      // PostgREST só aceita filtrar coluna de tabela embutida dentro de um
+      // .or() quando o embed é !inner — sem isso a query falha (silenciosamente
+      // pro usuário, porque quem chama engole o erro e mostra lista vazia).
+      // cliente_id é NOT NULL em pedidos, então !inner nunca descarta linha.
+      query = supabase
+        .from('pedidos')
+        .select(SELECT_PEDIDO_COMPLETO.replace('clientes (', 'clientes!inner ('))
+        .order('criado_em', { ascending: false })
+        .limit(PEDIDOS_POR_PAGINA)
+      if (filtros.status && filtros.status !== 'TODOS') {
+        query = aplicarFiltroStatusDashboard(query, filtros.status)
+      }
       query = query.or(
         `clientes.nome.ilike.%${filtros.busca}%,clientes.telefone.ilike.%${filtros.busca}%`
       )
+      if (filtros.dataInicio) query = query.gte('criado_em', filtros.dataInicio)
+      if (filtros.dataFim) {
+        const fim = new Date(filtros.dataFim)
+        fim.setDate(fim.getDate() + 1)
+        query = query.lt('criado_em', fim.toISOString())
+      }
+      const { data, error } = await query
+      if (error) throw error
+      return (data ?? []).map(normalizarPedido)
     }
     if (filtros.dataInicio) {
       query = query.gte('criado_em', filtros.dataInicio)
@@ -62,12 +83,18 @@ export const pedidosService = {
     if (!termo || termo.trim().length < 2) return []
 
     const t = termo.trim()
+    // clientes!inner (não clientes) — PostgREST exige embed !inner pra aceitar
+    // filtrar coluna de tabela embutida dentro de um .or() (aqui, misturado
+    // com "protocolo" da tabela base). Sem isso a query falhava sempre, e
+    // usePedidoBuscaRapida engolia o erro mostrando lista vazia (parecia
+    // "busca não funciona"). cliente_id é NOT NULL em pedidos, então !inner
+    // nunca descarta um pedido de verdade.
     const { data, error } = await supabase
       .from('pedidos')
       .select(`
         id, protocolo, valor_total, criado_em, status, forma_entrega,
         pronto_para_retirada_em, saiu_para_entrega_em,
-        clientes (nome, telefone)
+        clientes!inner (nome, telefone)
       `)
       .or(`protocolo.ilike.%${t}%,clientes.nome.ilike.%${t}%,clientes.telefone.ilike.%${t}%`)
       .order('criado_em', { ascending: false })

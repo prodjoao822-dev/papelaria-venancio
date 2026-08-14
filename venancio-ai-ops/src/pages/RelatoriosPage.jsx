@@ -202,6 +202,24 @@ export function RelatoriosPage() {
     },
   ]
 
+  function handleExportarCsv() {
+    const linhas = [
+      ['Métrica', 'Valor'],
+      ...kpiCards.map((c) => [c.titulo, c.tipo === 'moeda' ? formatCurrency(c.valor) : String(c.valor)]),
+      [],
+      ['Dia', 'Faturamento'],
+      ...(historico ?? []).map((d) => [d.label, formatCurrency(d.valor)]),
+    ]
+    const csv = linhas.map((linha) => linha.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `relatorio-venancio-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="page">
 
@@ -212,8 +230,8 @@ export function RelatoriosPage() {
           <p className="page-descricao">{hoje}</p>
         </div>
         <div className="page-header-acoes">
-          <button className="btn btn-ghost btn-sm">📤 Exportar CSV</button>
-          <button className="btn btn-ghost btn-sm">🖨️ Imprimir</button>
+          <button className="btn btn-ghost btn-sm" onClick={handleExportarCsv}>📤 Exportar CSV</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => window.print()}>🖨️ Imprimir</button>
         </div>
       </div>
 

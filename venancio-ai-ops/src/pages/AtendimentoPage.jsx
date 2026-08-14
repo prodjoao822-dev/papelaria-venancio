@@ -5,6 +5,8 @@ import { useConversas, useMensagens } from '@/hooks/useAtendimento'
 import { RealtimeIndicator } from '@/components/dashboard/RealtimeIndicator'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import { NovoPedidoModal } from '@/components/pedidos/NovoPedidoModal'
+import { NovoOrcamentoModal } from '@/components/orcamentos/NovoOrcamentoModal'
 import { useToast } from '@/contexts/AppContext'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -234,6 +236,8 @@ export function AtendimentoPage() {
   const [busca, setBusca] = useState('')
   const [input, setInput] = useState('')
   const [tagInput, setTagInput] = useState('')
+  const [modalPedido, setModalPedido] = useState(false)
+  const [modalOrcamento, setModalOrcamento] = useState(false)
   const msgsEndRef = useRef(null)
 
   const mensagensReal = useMensagens(DEMO_MODE ? null : conversaId)
@@ -748,16 +752,16 @@ export function AtendimentoPage() {
               <div className="atend-painel-secao">
                 <p className="atend-painel-titulo">Ações Rápidas</p>
                 <div className="atend-acoes-rapidas">
-                  <button className="atend-acao-btn" onClick={() => toast.info('Criar pedido — em breve')}>
+                  <button className="atend-acao-btn" onClick={() => setModalPedido(true)}>
                     📦 Criar Pedido
                   </button>
-                  <button className="atend-acao-btn" onClick={() => toast.info('Criar orçamento — em breve')}>
+                  <button className="atend-acao-btn" onClick={() => setModalOrcamento(true)}>
                     📋 Gerar Orçamento
                   </button>
-                  <button className="atend-acao-btn" onClick={() => toast.info('Follow-up agendado')}>
+                  <button className="atend-acao-btn" onClick={() => toast.info('Agendar Follow-up ainda não foi implementado — precisa de decisão de produto sobre o fluxo.')}>
                     🔁 Agendar Follow-up
                   </button>
-                  <button className="atend-acao-btn atend-acao-btn--danger" onClick={() => toast.info('Cancelar conversa — em breve')}>
+                  <button className="atend-acao-btn atend-acao-btn--danger" onClick={() => toast.info('Encerrar Conversa ainda não foi implementado — precisa de decisão de produto sobre o que "encerrada" significa.')}>
                     ✕ Encerrar Conversa
                   </button>
                 </div>
@@ -793,6 +797,19 @@ export function AtendimentoPage() {
         </div>
 
       </div>
+      )}
+
+      {modalPedido && (
+        <NovoPedidoModal
+          clienteInicial={{ nome: conversa?.nome_cliente ?? '', telefone: conversa?.telefone ?? '' }}
+          onFechar={() => setModalPedido(false)}
+        />
+      )}
+      {modalOrcamento && (
+        <NovoOrcamentoModal
+          clienteInicial={{ nome: conversa?.nome_cliente ?? '', telefone: conversa?.telefone ?? '' }}
+          onFechar={() => setModalOrcamento(false)}
+        />
       )}
     </div>
   )

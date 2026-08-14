@@ -137,13 +137,14 @@ const FILTROS_STATUS = [
 
 // ── Card de consulta ──────────────────────────────────────────────────────────
 
-function ConsultaCard({ consulta, onResponder }) {
+function ConsultaCard({ consulta, onResponder, onApagar }) {
   const [expandido, setExpandido]       = useState(false)
   const [respondendo, setRespondendo]   = useState(false)
   const [resposta, setResposta]         = useState('')
   const [aprender, setAprender]         = useState(true)
   const [loading, setLoading]           = useState(false)
   const [aprendeuOk, setAprendeuOk]     = useState(false)
+  const [apagando, setApagando]         = useState(false)
   const textareaRef = useRef(null)
 
   const prioridadeCfg = PRIORIDADE_CONFIG[consulta.priority] ?? PRIORIDADE_CONFIG.normal
@@ -179,6 +180,16 @@ function ConsultaCard({ consulta, onResponder }) {
   function handleKey(e) {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) enviarResposta()
     if (e.key === 'Escape') { setRespondendo(false); setResposta('') }
+  }
+
+  async function handleApagar() {
+    if (!window.confirm('Apagar esta consulta já respondida? Não pode ser desfeito.')) return
+    setApagando(true)
+    try {
+      await onApagar(consulta.id)
+    } finally {
+      setApagando(false)
+    }
   }
 
   return (
@@ -285,6 +296,13 @@ function ConsultaCard({ consulta, onResponder }) {
           </button>
           <button className="btn btn-sm btn-primary" onClick={abrirResposta}>
             💬 Responder
+          </button>
+        </div>
+      )}
+      {isRespondida && (
+        <div className="consulta-card-actions">
+          <button className="btn btn-sm btn-ghost" onClick={handleApagar} disabled={apagando}>
+            {apagando ? 'Apagando...' : '🗑️ Apagar'}
           </button>
         </div>
       )}
@@ -400,6 +418,20 @@ export function ConsultasPage() {
       }
     } catch (err) {
       toast.erro(err.message ?? 'Erro ao responder consulta.')
+    }
+  }
+
+  async function handleApagar(id) {
+    try {
+      if (!DEMO_MODE) {
+        await operationalQueriesService.apagar(id)
+        await carregarConsultas()
+      } else {
+        setConsultas((prev) => prev.filter((c) => c.id !== id))
+      }
+      toast.sucesso('Consulta apagada.')
+    } catch (err) {
+      toast.erro('Erro ao apagar: ' + err.message)
     }
   }
 
@@ -528,6 +560,7 @@ export function ConsultasPage() {
               key={consulta.id}
               consulta={consulta}
               onResponder={handleResponder}
+              onApagar={handleApagar}
             />
           ))
         )}
