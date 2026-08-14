@@ -1,0 +1,794 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 1 · Trigger + Validação\nRecebe payload já limpo do JS Bot.",
+        "height": 432,
+        "width": 992,
+        "color": "#162D15"
+      },
+      "id": "72da1ffb-be31-4b37-93e3-7a14990acfd6",
+      "name": "Nota · Trigger",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-1152, 1616]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "venancio/agente-vendas",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e410b838-5a7f-4682-ac95-918d0e0e8245",
+      "name": "Webhook · Agente Vendas",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-1088, 1760],
+      "webhookId": "venancio-agente-vendas-webhook",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Token Webhook Agente Vendas (JS Bot)"
+        }
+      },
+      "notes": "AUTENTICAÇÃO ADICIONADA em 27/07/2026 (AUDITORIA_INTEGRACAO.md, item 4): este webhook estava totalmente aberto (sem token/origem). AÇÃO MANUAL AO IMPORTAR: crie uma credential do tipo 'Header Auth' no n8n (nome do header sugerido: x-n8n-webhook-token; valor: um segredo novo) e selecione-a aqui. Configure o MESMO valor em N8N_VENDAS_WEBHOOK_TOKEN no .env do JS Bot (chatbot/papelaria-bot) — é ele quem chama este webhook (n8nClient.js) e agora envia esse header."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [
+            { "id": "v1", "leftValue": "={{ $json.body.cliente_id }}", "rightValue": "", "operator": { "type": "string", "operation": "notEmpty" } },
+            { "id": "v2", "leftValue": "={{ $json.body.conversa_id }}", "rightValue": "", "operator": { "type": "string", "operation": "notEmpty" } },
+            { "id": "v3", "leftValue": "={{ $json.body.telefone }}", "rightValue": "", "operator": { "type": "string", "operation": "notEmpty" } },
+            { "id": "v4", "leftValue": "={{ $json.body.texto }}", "rightValue": "", "operator": { "type": "string", "operation": "notEmpty" } }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "51c7700f-c388-40f9-80b7-04eefd457e51",
+      "name": "Payload Válido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-848, 1760]
+    },
+    {
+      "parameters": {},
+      "id": "5e54144d-6ab4-4638-a3dd-cac24997cf91",
+      "name": "Payload Inválido (Ignorado)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [-512, 1840]
+    },
+    {
+      "parameters": {
+        "content": "## 2 · Buffer com Lock de Concorrência\nMantido igual ao Agente 1 — só troca a origem da chave (telefone vem do novo webhook).",
+        "height": 416,
+        "width": 1800,
+        "color": 5
+      },
+      "id": "0166760c-ce68-4885-93ef-c6a5fe8c1190",
+      "name": "Nota · Buffer",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-144, 1632]
+    },
+    {
+      "parameters": {
+        "operation": "push",
+        "list": "=buffer:{{ $('Webhook · Agente Vendas').item.json.body.telefone }}",
+        "messageData": "={{ $('Webhook · Agente Vendas').item.json.body.texto }}"
+      },
+      "id": "8ed8db81-e3c9-442e-938c-fce388c416dd",
+      "name": "Redis Push Message",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [-112, 1744],
+      "credentials": { "redis": { "id": "PAJ7SH2OeREFj8iA", "name": "Redis account" } }
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "=burst:{{ $('Webhook · Agente Vendas').item.json.body.telefone }}",
+        "value": "={{ $execution.id }}",
+        "expire": true,
+        "ttl": 15
+      },
+      "id": "f72e6ec7-943c-45e0-9b38-252e99723e7c",
+      "name": "Grava Execution ID",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [64, 1744],
+      "credentials": { "redis": { "id": "PAJ7SH2OeREFj8iA", "name": "Redis account" } }
+    },
+    {
+      "parameters": { "amount": 7 },
+      "id": "a6065a66-c859-4d8e-bdf7-3e627c815fef",
+      "name": "PAUSA DE 7 SEGUNDOS",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [256, 1744],
+      "webhookId": "venancio-buffer-wait-vendas"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "propertyName": "value",
+        "key": "=burst:{{ $('Webhook · Agente Vendas').item.json.body.telefone }}",
+        "options": {}
+      },
+      "id": "a2bc72d8-3a59-40c9-9461-9e566ca85006",
+      "name": "Verifica Execution ID",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [448, 1744],
+      "credentials": { "redis": { "id": "PAJ7SH2OeREFj8iA", "name": "Redis account" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            { "id": "c1", "leftValue": "={{ $json.value }}", "rightValue": "={{ $execution.id }}", "operator": { "type": "string", "operation": "equals" } }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "6a13b36a-cc95-4b9e-b44d-22098aed7fd6",
+      "name": "É a última msg?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [640, 1744]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "key": "=buffer:{{ $('Webhook · Agente Vendas').item.json.body.telefone }}",
+        "keyType": "list",
+        "options": {}
+      },
+      "id": "1fa78086-7ef2-4486-9456-376e3e7c4da2",
+      "name": "Get Memory List",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [848, 1728],
+      "credentials": { "redis": { "id": "PAJ7SH2OeREFj8iA", "name": "Redis account" } }
+    },
+    {
+      "parameters": {
+        "fieldsToSummarize": {
+          "values": [
+            { "aggregation": "concatenate", "field": "propertyName", "separateBy": "\\n" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "388737bd-c028-4543-8be3-a00f2aedd654",
+      "name": "AGRUPA MENSAGENS",
+      "type": "n8n-nodes-base.summarize",
+      "typeVersion": 1.1,
+      "position": [1024, 1728]
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "key": "=buffer:{{ $('Webhook · Agente Vendas').item.json.body.telefone }}"
+      },
+      "id": "41514aa3-19b0-42bf-942b-0a72493fe7ce",
+      "name": "Limpa Buffer",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [1248, 1728],
+      "credentials": { "redis": { "id": "PAJ7SH2OeREFj8iA", "name": "Redis account" } }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "1", "name": "cliente_id", "value": "={{ $('Webhook · Agente Vendas').item.json.body.cliente_id }}", "type": "string" },
+            { "id": "2", "name": "conversa_id", "value": "={{ $('Webhook · Agente Vendas').item.json.body.conversa_id }}", "type": "string" },
+            { "id": "3", "name": "telefone", "value": "={{ $('Webhook · Agente Vendas').item.json.body.telefone }}", "type": "string" },
+            { "id": "4", "name": "mensagem_consolidada", "value": "={{ $('AGRUPA MENSAGENS').item.json.concatenated_propertyName }}", "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6bd91c55-3dcc-435d-a6ab-92a7f0a59e4d",
+      "name": "Prepara Sessão",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1472, 1728]
+    },
+    {
+      "parameters": {
+        "content": "## 3 · Persistência da Mensagem do Cliente",
+        "height": 464,
+        "width": 768,
+        "color": 3
+      },
+      "id": "ad567191-1eee-4a28-a660-cec610ef346e",
+      "name": "Nota · Persistência",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1712, 1584]
+    },
+    {
+      "parameters": {
+        "tableId": "mensagens",
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldId": "conversa_id", "fieldValue": "={{ $('Prepara Sessão').item.json.conversa_id }}" },
+            { "fieldId": "remetente", "fieldValue": "cliente" },
+            { "fieldId": "conteudo", "fieldValue": "={{ $('Prepara Sessão').item.json.mensagem_consolidada }}" }
+          ]
+        }
+      },
+      "id": "9dcd7d5e-5404-4a47-8dd4-8102f839f4a2",
+      "name": "Grava Msg Cliente",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1888, 1728],
+      "credentials": { "supabaseApi": { "id": "IlPIhLKj72bLR8RD", "name": "Supabase account" } }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "conversas",
+        "filters": {
+          "conditions": [
+            { "keyName": "id", "condition": "eq", "keyValue": "={{ $('Prepara Sessão').item.json.conversa_id }}" }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldId": "ultima_interacao_em", "fieldValue": "={{ $now.toISO() }}" }
+          ]
+        }
+      },
+      "id": "aae84a15-9ce6-4b54-a881-b04dbd05adfd",
+      "name": "Atualiza Tempo Conversa",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2192, 1728],
+      "credentials": { "supabaseApi": { "id": "IlPIhLKj72bLR8RD", "name": "Supabase account" } }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "1", "name": "_inicio_agente_ms", "value": "={{ $now.toMillis() }}", "type": "number" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d1e2f3a4-0001-4a00-8000-000000000001",
+      "name": "Marca Início Agente",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [2380, 1728],
+      "notes": "INSTRUMENTAÇÃO (análise de instabilidade, 29/07/2026): carimba o horário logo antes do Agente de Vendas começar, pra medir quanto do tempo total é IA/ferramentas vs. o resto do fluxo (Redis, Supabase, espera de 7s). Ver 'Marca Fim Agente' e o campo _debug_tempo_agente_ms no Respond to Webhook."
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "conversas",
+        "returnAll": false,
+        "limit": 1,
+        "alwaysOutputData": true,
+        "filters": {
+          "conditions": [
+            { "keyName": "id", "condition": "eq", "keyValue": "={{ $('Prepara Sessão').item.json.conversa_id }}" }
+          ]
+        }
+      },
+      "id": "7764c3a7-3778-4ba7-8c90-497d1ce58994",
+      "name": "Verifica Validade da Conversa",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2528, 1728],
+      "credentials": { "supabaseApi": { "id": "IlPIhLKj72bLR8RD", "name": "Supabase account" } },
+      "notes": "Correção C1 lado-n8n (DIAGNOSTICO_VENANCIO.md): o timeout de 12s do JS Bot (n8nClient.js) aborta o fetch do lado do bot mas NÃO cancela esta execução n8n — que antes seguia direto pro Agente de Vendas e podia gravar orçamento/pedido depois que o bot já tinha acionado pausarBot()/rede de segurança. Lê o estado MAIS RECENTE de 'conversas' (bot_ativo, estado_atual) imediatamente antes de deixar a IA escrever no banco. alwaysOutputData:true evita que a execução trave se por algum motivo a conversa não for encontrada (nesse caso 'Conversa Ainda Ativa?' vai pro ramo false por falta de bot_ativo/estado_atual)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [
+            { "id": "c1", "leftValue": "={{ $json.bot_ativo }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } },
+            { "id": "c2", "leftValue": "={{ $json.estado_atual }}", "rightValue": "AGENTE_VENDAS_ATIVO", "operator": { "type": "string", "operation": "equals" } }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c6e452a8-3e90-4b7b-9e5e-74ea7b405fee",
+      "name": "Conversa Ainda Ativa?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [2680, 1728],
+      "notes": "true = bot_ativo=true E estado_atual='AGENTE_VENDAS_ATIVO' -> segue normalmente pro Agente de Vendas. false = a conversa foi pausada (humano assumiu / pausarBot) ou mudou de estado enquanto esta execução estava em andamento -> NÃO chama o agente (que tem as tool calls de escrita) e encerra sem responder ao JS Bot."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "1", "name": "execucao_cancelada", "value": "={{ true }}", "type": "boolean" },
+            { "id": "2", "name": "motivo", "value": "conversa_pausada_ou_estado_invalido", "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3e2dd828-7c95-4ad3-b91b-2cc6a63dfbc6",
+      "name": "Set · Execução Cancelada (Conversa Inválida)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [2680, 1888],
+      "notes": "Ramo false de 'Conversa Ainda Ativa?'. Fim de linha DE PROPÓSITO — sem conexão de saída, igual ao node 'Payload Inválido (Ignorado)' mais acima no mesmo workflow. Não chama 'Respond to Webhook': o JS Bot já considerou essa chamada perdida (ou o operador humano já assumiu), então uma resposta tardia da IA nesse ponto só arriscaria concorrer com quem já está atendendo a conversa."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "1", "name": "_duracao_agente_ms", "value": "={{ $now.toMillis() - $('Marca Início Agente').item.json._inicio_agente_ms }}", "type": "number" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d1e2f3a4-0002-4a00-8000-000000000002",
+      "name": "Marca Fim Agente",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [3670, 1648],
+      "notes": "INSTRUMENTAÇÃO (análise de instabilidade, 29/07/2026): calcula quanto tempo o Agente de Vendas + suas ferramentas levaram. Não remove o campo 'output' do Agente de Vendas (Set em modo assignments só adiciona campos) — Respond to Webhook e o resto do fluxo continuam lendo normalmente via $('Agente de Vendas')."
+    },
+    {
+      "parameters": {
+        "content": "## 4 · Agente de Vendas + Ferramentas\nConsulta catálogo, monta orçamento, fecha e devolve controle ao JS Bot.",
+        "height": 740,
+        "width": 1512,
+        "color": 6
+      },
+      "id": "aaaa6241-7bce-4c11-905c-946baeb27112",
+      "name": "Nota · Agente de Vendas",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [2496, 1584]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Prepara Sessão').item.json.mensagem_consolidada }}",
+        "options": {
+          "systemMessage": "=# PAPEL\nVocê é o Agente de Vendas da Papelaria Venâncio — um vendedor de verdade, não um formulário nem um buscador de preços. Você acabou de assumir o atendimento deste cliente. Cumprimente com naturalidade nesta primeira resposta (ex.: \"Perfeito! Vamos lá\" / \"Show, bora achar o que você precisa\") — não pule direto pra uma pergunta seca. Seu objetivo é conversar, entender o que o cliente precisa, e conduzir ele até fechar a compra, sempre com simpatia.\nNunca diga espontaneamente que é uma IA, robô ou assistente virtual.\n\n---\n# REGRA INQUEBRÁVEL SOBRE PREÇOS E PRODUTOS (a mais importante deste prompt)\nVocê NUNCA, em hipótese alguma, cita nome de produto ou preço que não veio literalmente de um retorno da ferramenta \"Consultar Produtos\" NESTA mesma conversa — mesmo que o produto pareça óbvio, comum, ou que você \"tenha certeza\" do preço de memória. Preço de memória é sempre proibido, sem exceção.\n\nSe o cliente pedir algo GENÉRICO (ex.: \"o que vocês têm de material escolar\", \"quais produtos vocês têm\", sem citar um item específico), você NÃO responde com uma lista de exemplos da sua cabeça. Em vez disso, escolha um destes caminhos, sempre com um tom convidativo (nunca seco/instrucional):\n  a. Chame \"Consultar Categorias\" e responda com as categorias reais; ou\n  b. Pergunte de forma leve o que o cliente precisa (ex.: \"Claro! Me conta o que você tá procurando que eu já te passo certinho\" — nunca \"Para otimizar sua busca, preciso que você me diga...\", isso soa de robô).\n\nQUANDO CHAMAR \"Consultar Produtos\": extraia SÓ a palavra-chave principal do pedido do cliente (ver instrução da própria ferramenta). Se a primeira busca não retornar nada, NÃO desista na hora — tente de novo com um termo ainda mais genérico (ex.: cliente pediu \"papel report 500 folhas\" → tente \"report\"; se nada, tente \"papel\") antes de dizer que não tem. Só depois de pelo menos 2 tentativas de termo diferentes é que você diz que não encontrou.\n\nSe a busca não retornar nada mesmo após tentar termos diferentes, diga claramente que não encontrou esse item no catálogo. NUNCA ofereça um preço estimado, aproximado ou \"de mercado\" nesse caso — melhor dizer que vai verificar do que inventar.\n\nSe a busca retornar mais de um produto que pode corresponder ao pedido (ex.: vários tipos/marcas do mesmo item), NÃO escolha um sozinho e informe um preço — apresente as opções encontradas (nome + preço de cada, exatamente como vieram da ferramenta) e pergunte qual o cliente quer.\n\n---\n# REGRA INQUEBRÁVEL SOBRE CONFIRMAR AÇÕES (nunca fabricar sucesso)\nVocê só pode dizer que um item foi adicionado ao pedido, ou que o pedido foi fechado/confirmado, DEPOIS que a ferramenta correspondente (\"Adicionar Item ao Orçamento\" / \"Fechar Orçamento\") retornar de volta um resultado de sucesso de verdade — nunca antes, nunca supondo que funcionou.\n\nSe a ferramenta retornar erro (ou qualquer coisa diferente do resultado esperado), você NUNCA inventa uma explicação nem finge que deu certo \"por outro caminho\". Nesse caso, avise o cliente com sinceridade que teve um problema técnico nessa hora e que a equipe vai finalizar manualmente em instantes — e NÃO diga \"já confirmei\"/\"já está a caminho\"/\"equipe já está separando\" a menos que a ferramenta realmente tenha te devolvido essa confirmação. Um cliente ouvir \"deu um problema técnico, peço desculpa, nossa equipe já vai resolver\" é sempre melhor do que ouvir uma confirmação inventada — mesmo que pareça mais chato na hora.\n\n---\n# DIRETRIZES DE ESTILO DA MARCA\n- Depois da sua primeira mensagem nesta conversa, não repita saudações formais (\"Olá\", \"Boa tarde\" etc.) a cada resposta — mas isso não significa ficar seco: continue conversando com calor humano, usando frases de transição naturais (\"Boa escolha!\", \"Show\", \"Perfeito\"), não só respostas instrucionais.\n- NUNCA use markdown com duplo asterisco (**). Para destacar, use um único asterisco (*palavra*).\n- Tom profissional, caloroso, direto — como um vendedor bom de loja física, não um sistema de busca. Evite ser subserviente, e evite soar clínico/técnico (nunca diga \"otimizar\", \"catálogo\" pro cliente de forma fria, \"processar\", etc. — fale como gente).\n- Depois de informar um preço, sempre convide o próximo passo (\"Quer que eu já vá adicionando?\", \"Precisa de mais alguma coisa?\") — não deixe a conversa morrer numa resposta seca.\n\n---\n# O QUE VOCÊ PODE FAZER\n1. Consultar o catálogo (produtos e categorias) para informar preço e disponibilidade.\n2. Montar uma lista de itens que o cliente quer comprar, criando um orçamento e adicionando itens a ele (reaproveitando o mesmo orçamento em aberto desta conversa, se já existir). Só confirme ao cliente que um item foi adicionado depois que \"Adicionar Item ao Orçamento\" confirmar sucesso — ver regra de confirmar ações acima.\n3. Quando o cliente confirmar que quer FECHAR a compra:\n   a. Você NÃO pede CPF/CNPJ nem dados fiscais — isso não é necessário para venda geral.\n   b. Confirme com o cliente, num resumo curto, os itens e quantidades antes de fechar.\n   c. IMEDIATAMENTE ANTES de fechar, chame de novo a ferramenta \"Criar Orçamento\" — ela reaproveita o rascunho já aberto desta conversa (não cria um novo) e devolve o orcamento_id atualizado. Use SEMPRE o orcamento_id dessa chamada mais recente, nunca um id que você tenha memorizado de mais cedo na conversa — sua memória tende a guardar o protocolo (o código que você fala pro cliente), não o id interno, e usar o protocolo em \"Fechar Orçamento\" sempre falha.\n   d. Só então chame a ferramenta \"Fechar Orçamento\" com esse orcamento_id recém-confirmado — ela fecha a venda e já cria o pedido, que aparece direto no painel da loja pronto pra separação e pagamento.\n   e. SÓ avise o cliente, com entusiasmo, que o pedido foi confirmado e que a equipe já vai preparar tudo (sem mencionar sistemas internos, protocolos técnicos ou o termo \"orçamento\" — pro cliente, é \"seu pedido\") DEPOIS que a ferramenta \"Fechar Orçamento\" confirmar sucesso de verdade. Se ela falhar, siga a regra de confirmar ações acima — nunca fabrique uma confirmação de pedido que não aconteceu.\n\n# RESTRIÇÕES\n- Nunca invente preços ou produtos que não vieram das ferramentas de consulta (ver regra logo após o PAPEL, acima — é a mais importante deste prompt).\n- Nunca crie mais de um orçamento em rascunho para a mesma conversa sem necessidade — se já existe um orçamento em aberto nesta conversa, reutilize-o.\n- Nunca mencione tags, códigos internos, JSON, nomes de tabelas ou o termo \"orçamento\"/\"RPC\"/\"banco de dados\" ao cliente.\n- Não existe mais classificação de intenção por tags — responda apenas com texto natural.\n- Nunca chame \"Fechar Orçamento\" sem o cliente ter confirmado explicitamente que quer finalizar a compra."
+        }
+      },
+      "id": "b186d71a-3e02-4a18-9370-ef223fc007bf",
+      "name": "Agente de Vendas",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [3136, 1632]
+    },
+    {
+      "parameters": { "model": "google/gemini-2.5-flash", "options": {} },
+      "id": "e525e41f-cec2-487e-a671-f3fb67a7076d",
+      "name": "OpenRouter Chat",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [2576, 1904],
+      "credentials": { "openRouterApi": { "id": "dTNCl0a58GFaDINq", "name": "openrouter_cloudfy" } }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Prepara Sessão').item.json.conversa_id }}"
+      },
+      "id": "6fb92691-b8e9-4903-b432-af45c73bc4df",
+      "name": "Simple Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [2704, 1984]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Consulta produtos do catálogo por nome. Use sempre que o cliente perguntar por um produto, preço ou disponibilidade. IMPORTANTE: a busca é por substring exata contra o nome completo do produto no catálogo (ex.: \"PAPEL REPORT A4 PREMIUM 500FL\"), então passe SÓ a palavra-chave mais específica do pedido do cliente (ex.: \"report\", \"fotografico\", \"borracha\") — nunca a frase inteira com quantidade/gramatura/medida (ex.: NÃO busque \"papel report 500 folhas\", busque só \"report\"). Se a primeira busca não retornar nada, tente de novo com um termo ainda mais genérico (ex.: só \"papel\") antes de dizer que não tem — só assim para de fato descartar que existe.",
+        "operation": "getAll",
+        "tableId": "produtos",
+        "limit": 20,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "nome",
+              "condition": "ilike",
+              "keyValue": "={{ '%' + $fromAI('termo_busca', 'APENAS a palavra-chave principal do produto (uma palavra, sem quantidade/gramatura/medida/marca) — ex.: \"report\", \"fotografico\", \"lapis\"', 'string') + '%' }}"
+            }
+          ]
+        }
+      },
+      "id": "dc2c77db-be0d-4d1e-9ff0-ca0933507f7e",
+      "name": "Consultar Produtos",
+      "type": "n8n-nodes-base.supabaseTool",
+      "typeVersion": 1,
+      "position": [2864, 1952],
+      "credentials": { "supabaseApi": { "id": "IlPIhLKj72bLR8RD", "name": "Supabase account" } }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Lista as categorias de produtos disponíveis na loja.",
+        "operation": "getAll",
+        "tableId": "categorias"
+      },
+      "id": "518224cb-ce7b-4779-b5d9-1bfeda4f499c",
+      "name": "Consultar Categorias",
+      "type": "n8n-nodes-base.supabaseTool",
+      "typeVersion": 1,
+      "position": [3008, 1952],
+      "credentials": { "supabaseApi": { "id": "IlPIhLKj72bLR8RD", "name": "Supabase account" } }
+    },
+    {
+      "parameters": {
+        "content": "## \"Criar Orçamento\" — implementado em 27/07/2026, consolidado no mesmo dia\nVer AUDITORIA_INTEGRACAO.md, item 2: antes deste node, o Agente de Vendas de produção não tinha NENHUMA ferramenta pra abrir orçamento novo — bloqueava toda venda nova via IA nesta versão exportada.\n\nO node \"Criar Orçamento\" (Call n8n Workflow Tool) já está conectado, apontando pro workflow único \"Orçamento (Sub-workflow).json\" (mesma pasta, acao='buscar_ou_criar'), com conversa_id/cliente_id vindos de 'Prepara Sessão' (contexto do sistema, não $fromAI). Esse workflow único também resolve as ferramentas \"Adicionar Item ao Orçamento\" (acao='adicionar_item') e \"Fechar Orçamento\" (acao='fechar') — as 3 ferramentas continuam distintas pra IA, só compartilham o mesmo workflow por trás, pra caber no limite de workflows do plano n8n do dono do projeto.\n\nAÇÃO MANUAL AINDA NECESSÁRIA ao importar no n8n: importe \"Orçamento (Sub-workflow).json\" como workflow novo, e selecione-o no campo 'Source' deste node — o ID ficou vazio de propósito neste JSON porque só existe depois do import.",
+        "height": 460,
+        "width": 950,
+        "color": 2
+      },
+      "id": "4f20b2d1-69b3-482c-9cda-3bfe43a65234",
+      "name": "Nota · Criar Orçamento",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [3152, 2032]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "RVwx3aBcDcQBohpg",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/RVwx3aBcDcQBohpg",
+          "cachedResultName": "Orçamento (Sub-workflow)"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "acao": "buscar_ou_criar",
+            "conversa_id": "={{ $('Prepara Sessão').item.json.conversa_id }}",
+            "cliente_id": "={{ $('Prepara Sessão').item.json.cliente_id }}"
+          },
+          "matchingColumns": ["acao", "conversa_id", "cliente_id"],
+          "schema": [
+            { "id": "acao", "displayName": "acao", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "conversa_id", "displayName": "conversa_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "cliente_id", "displayName": "cliente_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "descriptionType": "manual",
+        "toolDescription": "Garante que existe um orçamento em rascunho pra esta conversa — reaproveita um já aberto ou cria um novo. Chame antes de adicionar o primeiro item, ou quando precisar confirmar o orcamento_id atual da conversa. Retorna { orcamento_id, protocolo, novo }."
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [3152, 1760],
+      "id": "b7f31c9a-4b3f-4a12-9c9e-1f2a3b4c5d6e",
+      "name": "Criar Orçamento",
+      "notes": "IMPLEMENTADO em 27/07/2026 (AUDITORIA_INTEGRACAO.md, item 2), CONSOLIDADO no mesmo dia pra caber no limite de workflows do plano n8n: aponta agora pro workflow único 'Orçamento (Sub-workflow).json' (acao='buscar_ou_criar'), que substitui os 3 sub-workflows separados de orçamento. AÇÃO MANUAL AO IMPORTAR: importe 'Orçamento (Sub-workflow).json' e selecione-o aqui no campo Source — o workflowId.value foi deixado vazio de propósito."
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "RVwx3aBcDcQBohpg",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/RVwx3aBcDcQBohpg",
+          "cachedResultName": "Orçamento (Sub-workflow)"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "acao": "adicionar_item",
+            "orcamento_id": "={{ $fromAI('orcamento_id', 'ID interno (uuid) do orçamento, devolvido pela ferramenta Criar Orçamento — NUNCA o protocolo (ex: ORC-2026-0034) que você informa ao cliente', 'string') }}",
+            "produto_id": "={{ $fromAI('produto_id', 'ID do produto consultado', 'string') }}",
+            "quantidade": "={{ $fromAI('quantidade', 'Quantidade do produto', 'number') }}",
+            "conversa_id": "={{ $('Prepara Sessão').item.json.conversa_id }}"
+          },
+          "matchingColumns": ["acao", "orcamento_id", "produto_id", "quantidade", "conversa_id"],
+          "schema": [
+            { "id": "acao", "displayName": "acao", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "orcamento_id", "displayName": "orcamento_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "produto_id", "displayName": "produto_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "quantidade", "displayName": "quantidade", "required": false, "defaultMatch": false, "display": true, "type": "number", "canBeUsedToMatch": true, "removed": false },
+            { "id": "conversa_id", "displayName": "conversa_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "descriptionType": "manual",
+        "toolDescription": "Adiciona um item (produto + quantidade) a um orçamento já criado. Informe o ID do orçamento retornado por 'Criar Orçamento', o ID do produto consultado e a quantidade. Não é preciso informar o preço — o valor é sempre buscado no catálogo no momento da adição."
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [3312, 1936],
+      "id": "e8308f94-de10-42e0-a781-d8ac01665b5a",
+      "name": "Adicionar Item ao Orçamento",
+      "notes": "TROCADO em 27/07/2026 (AUDITORIA_INTEGRACAO.md, item 5): era um INSERT direto com orcamento_id E valor_unitario vindos de $fromAI() sem nenhuma validação. CONSOLIDADO no mesmo dia: aponta agora pro workflow único 'Orçamento (Sub-workflow).json' (acao='adicionar_item'), que valida UUID, posse (conversa_id) e status 'rascunho' antes de inserir, e busca o preço real em produtos.preco (a IA não controla mais o valor_unitario). AÇÃO MANUAL AO IMPORTAR: importe 'Orçamento (Sub-workflow).json' e selecione-o no campo 'Source'."
+    },
+    {
+      "parameters": {
+        "content": "## \"Fechar Orçamento\" — resolvido em 24/07/2026, consolidado em 27/07/2026\nO node HTTP original deu erro e foi trocado por este \"Call n8n Workflow Tool\". Nome do node precisa continuar EXATAMENTE 'Fechar Orçamento' — a expressão '$('Fechar Orçamento').isExecuted' no node 'Respond to Webhook' depende disso.\n\nCONSOLIDAÇÃO (27/07/2026): antes apontava pro workflow separado \"Fechar Orçamento (Sub-workflow).json\" (já estava importado e ativo no n8n). Agora aponta pro workflow único \"Orçamento (Sub-workflow).json\" (acao='fechar'), que reproduz a MESMA lógica sem mudança de comportamento — feito pra caber no limite de workflows do plano n8n. Ver notas do node pra sequência de migração recomendada (importar o novo antes de apagar o antigo).",
+        "height": 260,
+        "width": 900,
+        "color": 2
+      },
+      "id": "8f6e0b42-2493-4e56-ba28-6cc0858aaee2",
+      "name": "Nota · Fechar Orçamento",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [3424, 2352]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Use logo após fechar o orçamento, para sinalizar ao sistema que a conversa deve retomar o fluxo de cadastro fiscal.",
+        "operation": "update",
+        "tableId": "conversas",
+        "filters": {
+          "conditions": [
+            { "keyName": "id", "condition": "eq", "keyValue": "={{ $('Prepara Sessão').item.json.conversa_id }}" }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldId": "estado_atual", "fieldValue": "AGUARDANDO_CADASTRO_FISCAL" }
+          ]
+        }
+      },
+      "id": "7a59d18f-7a93-4056-b5be-c2ddd67d08ee",
+      "name": "Atualizar Estado da Conversa",
+      "type": "n8n-nodes-base.supabaseTool",
+      "typeVersion": 1,
+      "position": [3728, 1888],
+      "credentials": { "supabaseApi": { "id": "IlPIhLKj72bLR8RD", "name": "Supabase account" } },
+      "notes": "DESCONECTADO DE PROPÓSITO em 24/07/2026: escrevia 'AGUARDANDO_CADASTRO_FISCAL' em conversas.estado_atual, um estado que não existe na stateMachine.js do JS Bot (conflito já apontado antes). Além disso, pra 'venda_geral' (o tipo de orçamento que este agente cria) o JS Bot nunca exigiu cadastro fiscal — só 'cotacao_empresa'/'lista_escolar' exigem (ver ESTADOS_QUE_PODEM_PRECISAR_DE_CADASTRO_COMPLETO em webhookController.js). Como 'Fechar Orçamento' (aceitar_orcamento) já fecha a venda sozinho sem depender de dado fiscal, este passo intermediário ficou desnecessário pro fluxo autônomo. Nó preservado no canvas, sem receber input — não apagar, só não reconectar, a menos que volte a existir um tipo de orçamento que precise retomar cadastro fiscal."
+    },
+    {
+      "parameters": {
+        "content": "## 5 · Resposta + Logs",
+        "height": 704,
+        "width": 1200,
+        "color": 4
+      },
+      "id": "c36b67d4-bb5f-4bd6-92ac-b0d400975289",
+      "name": "Nota · Resposta",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [4080, 1552]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.output }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEmpty", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "71fcc5cd-701f-4c29-85a9-9c2f3d754040",
+      "name": "Resposta Válida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [4208, 1648]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "1", "name": "resposta", "value": "Desculpe, não consegui processar sua mensagem agora. Estamos verificando o problema.", "type": "string" },
+            { "id": "2", "name": "encerrar_atendimento_ia", "value": "={{ false }}", "type": "boolean" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f4b551ea-3529-4a2c-8e5b-119386fd0584",
+      "name": "Fallback Resposta Inválida",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [4208, 1840],
+      "notes": "Correção M8 (DIAGNOSTICO_VENANCIO.md): ramo false de 'Resposta Válida?', que antes não tinha nenhum destino — se 'output' do Agente de Vendas viesse vazio/null, a execução simplesmente parava aqui e o JS Bot ficava esperando até estourar o timeout de 12s (AGENTE_VENDAS_TIMEOUT_MS) sem nenhuma resposta. Agora conecta em 'Respond to Webhook' (mesmo destino do ramo true) pra responder na hora com uma mensagem de fallback. A expressão de 'Respond to Webhook' foi ajustada para preferir estes campos (resposta/encerrar_atendimento_ia) quando presentes no item de entrada, em vez de sempre reler direto de 'Agente de Vendas'."
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "VENANCIO",
+        "remoteJid": "={{ $('Prepara Sessão').item.json.telefone }}@s.whatsapp.net",
+        "messageText": "={{ $('Agente de Vendas').item.json.output }}",
+        "options_message": {}
+      },
+      "id": "0c7b03c9-44d2-4fee-8528-07040bc8f401",
+      "name": "Envia Resposta Evolution",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [4880, 1632],
+      "credentials": { "evolutionApi": { "id": "6i9g6VgRlbuCwWCq", "name": "evolution_cloudfy" } },
+      "notes": "DESCONECTADO DE PROPÓSITO: quem manda a mensagem final pro cliente agora é sempre o JS Bot, a partir do campo 'resposta' devolvido pelo node 'Respond to Webhook'. Este node fica no canvas sem receber input, preservado caso seja reaproveitado noutro fluxo — não apagar, só não reconectar no caminho principal."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"resposta\": $json.resposta !== undefined ? $json.resposta : $('Agente de Vendas').first().json.output, \"encerrar_atendimento_ia\": $json.encerrar_atendimento_ia !== undefined ? $json.encerrar_atendimento_ia : ($('Fechar Orçamento').isExecuted && $('Fechar Orçamento').first().json.sucesso === true), \"_debug_tempo_agente_ms\": $('Marca Fim Agente').first().json._duracao_agente_ms } }}",
+        "options": {}
+      },
+      "id": "7ebea607-e04b-45ab-bd84-5572a57d3a40",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [4640, 1632],
+      "notes": "Fecha o contrato síncrono com o JS Bot (POST /webhook, ver n8nClient.js consultarAgenteVendas). Contrato de resposta esperado: { resposta: string, encerrar_atendimento_ia: boolean }. BUG CORRIGIDO em 25/07/2026: 'encerrar_atendimento_ia' checava só '.isExecuted' (a ferramenta RODOU), mas desde que 'Fechar Orçamento' passou a devolver {sucesso:false,...} de forma limpa em vez de estourar erro, ela sempre 'roda' mesmo quando falha (orçamento não encontrado, sem itens, etc.) — isso tirava o JS Bot do modo IA (AGENTE_VENDAS_ATIVO -> SUBMENU_VENDAS) mesmo quando o pedido NÃO foi fechado de verdade (visto em teste real: conversa caiu pra SUBMENU_VENDAS com o pedido nunca criado). Agora checa também '.first().json.sucesso === true' — só sai do modo IA quando o fechamento realmente deu certo. O node da ferramenta precisa se chamar EXATAMENTE 'Fechar Orçamento' pra essa expressão funcionar — se renomear, atualizar aqui também."
+    },
+    {
+      "parameters": {
+        "tableId": "mensagens",
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldId": "conversa_id", "fieldValue": "={{ $('Prepara Sessão').item.json.conversa_id }}" },
+            { "fieldId": "remetente", "fieldValue": "bot" },
+            { "fieldId": "conteudo", "fieldValue": "={{ $('Agente de Vendas').item.json.output }}" }
+          ]
+        }
+      },
+      "id": "f0c570a8-1733-4b81-b4d4-8f593bcbb600",
+      "name": "Supabase · Grava Resposta",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [5088, 1632],
+      "alwaysOutputData": true,
+      "credentials": { "supabaseApi": { "id": "IlPIhLKj72bLR8RD", "name": "Supabase account" } },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "RVwx3aBcDcQBohpg",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/RVwx3aBcDcQBohpg",
+          "cachedResultName": "Orçamento (Sub-workflow)"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "acao": "fechar",
+            "orcamento_id": "={{ $fromAI('orcamento_id', 'ID interno (uuid) do orçamento, devolvido pela ferramenta Criar Orçamento — NUNCA o protocolo (ex: ORC-2026-0034) que você informa ao cliente', 'string') }}",
+            "conversa_id": "={{ $('Prepara Sessão').item.json.conversa_id }}"
+          },
+          "matchingColumns": ["acao", "orcamento_id", "conversa_id"],
+          "schema": [
+            { "id": "acao", "displayName": "acao", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "orcamento_id", "displayName": "orcamento_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "conversa_id", "displayName": "conversa_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "descriptionType": "manual",
+        "toolDescription": "Fecha o orçamento em aberto desta conversa e cria automaticamente o pedido correspondente, que passa a aparecer no dashboard da loja para separação/pagamento. Chame esta ferramenta SOMENTE depois que o cliente confirmar explicitamente que quer finalizar a compra E você já tiver certeza de todos os itens e quantidades já adicionados ao orçamento (via 'Adicionar Item ao Orçamento'). ATENÇÃO — 'orcamento_id' é o campo 'id' (um uuid, ex.: 58c13ff6-1da5-4380-bcab-393f2df19185) que a ferramenta 'Criar Orçamento' devolveu quando você a chamou — NUNCA é o 'protocolo' (ex.: ORC-2026-0034) que você fala pro cliente. São coisas diferentes: o protocolo é só um código amigável pro cliente, o id é o identificador interno. Se você não tiver mais o id em memória (só lembra do protocolo), NÃO tente usar o protocolo aqui nem invente um id — avise o cliente que precisa verificar manualmente."
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [3504, 1904],
+      "id": "a4e2c6e5-5bd3-4d32-8588-532bd320b979",
+      "name": "Fechar Orçamento",
+      "notes": "CONSOLIDADO em 27/07/2026: este node apontava pro workflow JÁ IMPORTADO 'Fechar Orçamento (Sub-workflow)' (id real 2pVfiBupHlPPL6cG, referenciado antes desta mudança). Agora aponta pro workflow único 'Orçamento (Sub-workflow).json' (acao='fechar'), que reproduz a MESMA lógica dessa raia sem nenhuma mudança de comportamento. SEQUÊNCIA DE MIGRAÇÃO recomendada pra zero downtime: (1) importe 'Orçamento (Sub-workflow).json'; (2) selecione-o aqui no campo Source; (3) teste um fechamento de orçamento de verdade; (4) só depois de confirmar que funciona, pode excluir o workflow antigo 'Fechar Orçamento (Sub-workflow)' do seu n8n pra liberar o slot. BUG CORRIGIDO em 07/08/2026 (auditoria técnica): este node nunca enviava 'conversa_id', então a guarda de posse 'Pertence a Esta Conversa? · Fechar' no sub-workflow (comparando contra $('Normaliza Entrada').item.json.conversa_id, sempre undefined) rejeitava TODA tentativa de fechamento, mesmo da conversa dona do orçamento — a IA nunca conseguia fechar pedido sozinha. Adicionado 'conversa_id' ao workflowInputs igual ao node irmão 'Adicionar Item ao Orçamento' já fazia."
+    }
+  ],
+  "connections": {
+    "Webhook · Agente Vendas": {
+      "main": [[{ "node": "Payload Válido?", "type": "main", "index": 0 }]]
+    },
+    "Payload Válido?": {
+      "main": [
+        [{ "node": "Redis Push Message", "type": "main", "index": 0 }],
+        [{ "node": "Payload Inválido (Ignorado)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Redis Push Message": {
+      "main": [[{ "node": "Grava Execution ID", "type": "main", "index": 0 }]]
+    },
+    "Grava Execution ID": {
+      "main": [[{ "node": "PAUSA DE 7 SEGUNDOS", "type": "main", "index": 0 }]]
+    },
+    "PAUSA DE 7 SEGUNDOS": {
+      "main": [[{ "node": "Verifica Execution ID", "type": "main", "index": 0 }]]
+    },
+    "Verifica Execution ID": {
+      "main": [[{ "node": "É a última msg?", "type": "main", "index": 0 }]]
+    },
+    "É a última msg?": {
+      "main": [[{ "node": "Get Memory List", "type": "main", "index": 0 }]]
+    },
+    "Get Memory List": {
+      "main": [[{ "node": "AGRUPA MENSAGENS", "type": "main", "index": 0 }]]
+    },
+    "AGRUPA MENSAGENS": {
+      "main": [[{ "node": "Limpa Buffer", "type": "main", "index": 0 }]]
+    },
+    "Limpa Buffer": {
+      "main": [[{ "node": "Prepara Sessão", "type": "main", "index": 0 }]]
+    },
+    "Prepara Sessão": {
+      "main": [[{ "node": "Grava Msg Cliente", "type": "main", "index": 0 }]]
+    },
+    "Grava Msg Cliente": {
+      "main": [[{ "node": "Atualiza Tempo Conversa", "type": "main", "index": 0 }]]
+    },
+    "Atualiza Tempo Conversa": {
+      "main": [[{ "node": "Marca Início Agente", "type": "main", "index": 0 }]]
+    },
+    "Marca Início Agente": {
+      "main": [[{ "node": "Verifica Validade da Conversa", "type": "main", "index": 0 }]]
+    },
+    "Verifica Validade da Conversa": {
+      "main": [[{ "node": "Conversa Ainda Ativa?", "type": "main", "index": 0 }]]
+    },
+    "Conversa Ainda Ativa?": {
+      "main": [
+        [{ "node": "Agente de Vendas", "type": "main", "index": 0 }],
+        [{ "node": "Set · Execução Cancelada (Conversa Inválida)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Agente de Vendas": {
+      "main": [[{ "node": "Marca Fim Agente", "type": "main", "index": 0 }]]
+    },
+    "Marca Fim Agente": {
+      "main": [[{ "node": "Resposta Válida?", "type": "main", "index": 0 }]]
+    },
+    "OpenRouter Chat": {
+      "ai_languageModel": [[{ "node": "Agente de Vendas", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Simple Memory": {
+      "ai_memory": [[{ "node": "Agente de Vendas", "type": "ai_memory", "index": 0 }]]
+    },
+    "Consultar Produtos": {
+      "ai_tool": [[{ "node": "Agente de Vendas", "type": "ai_tool", "index": 0 }]]
+    },
+    "Consultar Categorias": {
+      "ai_tool": [[{ "node": "Agente de Vendas", "type": "ai_tool", "index": 0 }]]
+    },
+    "Criar Orçamento": {
+      "ai_tool": [[{ "node": "Agente de Vendas", "type": "ai_tool", "index": 0 }]]
+    },
+    "Adicionar Item ao Orçamento": {
+      "ai_tool": [[{ "node": "Agente de Vendas", "type": "ai_tool", "index": 0 }]]
+    },
+    "Fechar Orçamento": {
+      "ai_tool": [[{ "node": "Agente de Vendas", "type": "ai_tool", "index": 0 }]]
+    },
+    "Resposta Válida?": {
+      "main": [
+        [{ "node": "Respond to Webhook", "type": "main", "index": 0 }],
+        [{ "node": "Fallback Resposta Inválida", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fallback Resposta Inválida": {
+      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
+    },
+    "Respond to Webhook": {
+      "main": [[{ "node": "Supabase · Grava Resposta", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "09304f7ddfc01635a9120999ac264bbfa4eb4005b5f25bf3d517f6739c27a5a7"
+  }
+}

@@ -1,37 +1,32 @@
 {
-  "name": "Agente 1 (Gateway + FAQ + Roteador - Supabase)",
+  "name": "Agente de Vendas (Webhook Síncrono - Supabase)",
   "nodes": [
     {
       "parameters": {
-        "content": "## 1 · Gateway + Normalização",
-        "height": 800,
-        "width": 992,
+        "content": "## 1 · Webhook Síncrono do JS Bot\nRecebe { cliente_id, conversa_id, telefone, texto } já roteado pelo stateMachine.js (estado AGENTE_VENDAS_ATIVO). responseMode = responseNode: a resposta HTTP só sai quando um node \"Responde ...\" for alcançado. Se a execução falhar antes disso, o n8n devolve erro HTTP automaticamente (nunca 200 vazio).",
+        "height": 620,
+        "width": 940,
         "color": "#162D15"
       },
-      "id": "5b8966d3-0526-4d58-8416-327fd559e4e5",
-      "name": "Nota · Gateway",
+      "id": "nota-webhook",
+      "name": "Nota · Webhook",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [
-        2544,
-        96
-      ]
+      "position": [2544, 96]
     },
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "venancio/evolution",
+        "path": "venancio/agente-vendas",
+        "responseMode": "responseNode",
         "options": {}
       },
       "id": "0b59727c-3249-42fd-abbe-941ffdbe2da3",
-      "name": "Gateway · Evolution API",
+      "name": "Webhook · Agente de Vendas",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [
-        2704,
-        336
-      ],
-      "webhookId": "venancio-evolution-webhook"
+      "position": [2704, 336],
+      "webhookId": "venancio-agente-vendas-webhook"
     },
     {
       "parameters": {
@@ -39,39 +34,33 @@
           "assignments": [
             {
               "id": "1",
-              "name": "texto",
-              "value": "={{ $json.body?.data?.message?.conversation || $json.body?.data?.message?.extendedTextMessage?.text || $json.body?.data?.message?.imageMessage?.caption || '' }}",
+              "name": "cliente_id",
+              "value": "={{ $json.body?.cliente_id || '' }}",
               "type": "string"
             },
             {
               "id": "2",
-              "name": "telefone",
-              "value": "={{ ($json.body?.data?.key?.remoteJid || '').split('@')[0] }}",
+              "name": "conversa_id",
+              "value": "={{ $json.body?.conversa_id || '' }}",
               "type": "string"
             },
             {
               "id": "3",
-              "name": "nome",
-              "value": "={{ $json.body?.data?.pushName || '' }}",
+              "name": "telefone",
+              "value": "={{ $json.body?.telefone || '' }}",
               "type": "string"
             },
             {
               "id": "4",
-              "name": "fromMe",
-              "value": "={{ $json.body?.data?.key?.fromMe || false }}",
-              "type": "boolean"
+              "name": "texto",
+              "value": "={{ $json.body?.texto || '' }}",
+              "type": "string"
             },
             {
               "id": "5",
               "name": "valida",
-              "value": "={{ $json.body?.event === 'messages.upsert' && ($json.body?.data?.message?.conversation || $json.body?.data?.message?.extendedTextMessage?.text || $json.body?.data?.message?.imageMessage?.caption || '').trim().length > 0 }}",
+              "value": "={{ !!($json.body?.cliente_id) && !!($json.body?.conversa_id) && !!($json.body?.telefone) && typeof $json.body?.texto === 'string' && $json.body.texto.trim().length > 0 }}",
               "type": "boolean"
-            },
-            {
-              "id": "6",
-              "name": "empresa_id",
-              "value": "056faf4b-2ab1-43db-a5c4-a67ba0f7a9d8",
-              "type": "string"
             }
           ]
         },
@@ -81,10 +70,7 @@
       "name": "Normaliza Payload",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [
-        2992,
-        336
-      ]
+      "position": [2992, 336]
     },
     {
       "parameters": {
@@ -111,255 +97,37 @@
         "options": {}
       },
       "id": "e4e7328a-d8f8-4ab2-b7a3-bc71e00f96cb",
-      "name": "Mensagem válida?",
+      "name": "Payload válido?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [
-        3280,
-        336
-      ]
+      "position": [3280, 336]
     },
     {
       "parameters": {
-        "content": "## 2 · Intervenção Humana\nRegras de bloqueio e liberação via comando.",
-        "height": 800,
-        "width": 1088
-      },
-      "id": "ff6d31c2-649e-42c1-bbf2-cbd309c6a1c4",
-      "name": "Nota · Intervenção",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        3552,
-        96
-      ]
-    },
-    {
-      "parameters": {
-        "rules": {
-          "values": [
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict",
-                  "version": 2
-                },
-                "conditions": [
-                  {
-                    "id": "cond-fromme-true",
-                    "leftValue": "={{ $('Normaliza Payload').item.json.fromMe }}",
-                    "rightValue": true,
-                    "operator": {
-                      "type": "boolean",
-                      "operation": "true",
-                      "singleValue": true
-                    }
-                  },
-                  {
-                    "id": "cond-delete-cmd",
-                    "leftValue": "={{ $('Normaliza Payload').item.json.texto.trim() }}",
-                    "rightValue": "/deletar",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "Loja removeu pausa"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict",
-                  "version": 2
-                },
-                "conditions": [
-                  {
-                    "id": "cond-fromme-only",
-                    "leftValue": "={{ $('Normaliza Payload').item.json.fromMe }}",
-                    "rightValue": true,
-                    "operator": {
-                      "type": "boolean",
-                      "operation": "true",
-                      "singleValue": true
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "Loja assumiu (Pausa IA)"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict",
-                  "version": 2
-                },
-                "conditions": [
-                  {
-                    "id": "cond-cliente",
-                    "leftValue": "={{ $('Normaliza Payload').item.json.fromMe }}",
-                    "rightValue": false,
-                    "operator": {
-                      "type": "boolean",
-                      "operation": "false",
-                      "singleValue": true
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "Cliente enviou"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "9fb86e90-15fc-4f4e-b16b-8c8e0346e2d1",
-      "name": "Quem enviou? (fromMe)",
-      "type": "n8n-nodes-base.switch",
-      "typeVersion": 3.2,
-      "position": [
-        3632,
-        304
-      ]
-    },
-    {
-      "parameters": {
-        "operation": "delete",
-        "key": "={{ $('Normaliza Payload').item.json.telefone }}_block"
-      },
-      "id": "a4348af9-3054-424d-906d-f6f78ad96b96",
-      "name": "Remove Bloqueio",
-      "type": "n8n-nodes-base.redis",
-      "typeVersion": 1,
-      "position": [
-        4032,
-        128
-      ],
-      "credentials": {
-        "redis": {
-          "id": "PAJ7SH2OeREFj8iA",
-          "name": "Redis account"
+        "respondWith": "json",
+        "responseBody": "={{ { erro: \"Payload inválido: cliente_id, conversa_id, telefone e texto são obrigatórios.\" } }}",
+        "options": {
+          "responseCode": 400
         }
-      }
-    },
-    {
-      "parameters": {
-        "operation": "set",
-        "key": "={{ $('Normaliza Payload').item.json.telefone }}_block",
-        "value": "true",
-        "expire": true,
-        "ttl": 30
       },
-      "id": "f68241f2-0c57-4fc3-a3f1-f5e11623b9a1",
-      "name": "Ativa Bloqueio Humano",
-      "type": "n8n-nodes-base.redis",
-      "typeVersion": 1,
-      "position": [
-        4032,
-        320
-      ],
-      "credentials": {
-        "redis": {
-          "id": "PAJ7SH2OeREFj8iA",
-          "name": "Redis account"
-        }
-      }
+      "id": "resp-payload-invalido",
+      "name": "Responde Payload Inválido",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [3280, 640]
     },
     {
       "parameters": {
-        "operation": "get",
-        "propertyName": "bloqueio",
-        "key": "={{ $('Normaliza Payload').item.json.telefone }}_block",
-        "options": {}
-      },
-      "id": "149ba346-97b8-4ea5-a52e-32bc810740cc",
-      "name": "Verifica Bloqueio",
-      "type": "n8n-nodes-base.redis",
-      "typeVersion": 1,
-      "position": [
-        4032,
-        512
-      ],
-      "alwaysOutputData": true,
-      "credentials": {
-        "redis": {
-          "id": "PAJ7SH2OeREFj8iA",
-          "name": "Redis account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "c1",
-              "leftValue": "={{$json.bloqueio}}",
-              "rightValue": "true",
-              "operator": {
-                "type": "string",
-                "operation": "exists"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "93610351-798d-4c01-a0eb-e84fb28721ef",
-      "name": "IA Bloqueada?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        4272,
-        512
-      ]
-    },
-    {
-      "parameters": {},
-      "id": "b1130f9e-d2ab-48a3-b4d5-25489e4767ee",
-      "name": "IA Pausada",
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [
-        4432,
-        336
-      ]
-    },
-    {
-      "parameters": {
-        "content": "## 3 · Buffer com Lock de Concorrência\nGarante que N mensagens na mesma janela acionem o LLM apenas 1 vez.",
-        "height": 800,
+        "content": "## 2 · Buffer com Lock de Concorrência\nMantido sem alterações de lógica: garante que um burst de mensagens na mesma janela aciona o LLM apenas 1 vez. Chave continua em `telefone` (não `conversa_id`) — instrução explícita de não mexer aqui. Execuções que perdem a corrida (não são a última) respondem 409 em vez de ficar penduradas — antes disso não importava porque a Evolution API respondia sozinha; agora é o próprio webhook quem precisa responder ao JS Bot.",
+        "height": 620,
         "width": 1704,
         "color": 5
       },
-      "id": "3380c202-07f2-4c7d-8428-24a8ce22ab80",
+      "id": "nota-buffer",
       "name": "Nota · Buffer",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [
-        4656,
-        96
-      ]
+      "position": [3552, 96]
     },
     {
       "parameters": {
@@ -371,10 +139,7 @@
       "name": "Redis Push Message",
       "type": "n8n-nodes-base.redis",
       "typeVersion": 1,
-      "position": [
-        4704,
-        528
-      ],
+      "position": [3632, 336],
       "credentials": {
         "redis": {
           "id": "PAJ7SH2OeREFj8iA",
@@ -394,10 +159,7 @@
       "name": "Grava Execution ID",
       "type": "n8n-nodes-base.redis",
       "typeVersion": 1,
-      "position": [
-        4880,
-        528
-      ],
+      "position": [3872, 336],
       "credentials": {
         "redis": {
           "id": "PAJ7SH2OeREFj8iA",
@@ -413,11 +175,8 @@
       "name": "PAUSA DE 7 SEGUNDOS",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [
-        5056,
-        528
-      ],
-      "webhookId": "venancio-buffer-wait"
+      "position": [4112, 336],
+      "webhookId": "venancio-vendas-buffer-wait"
     },
     {
       "parameters": {
@@ -430,10 +189,7 @@
       "name": "Verifica Execution ID",
       "type": "n8n-nodes-base.redis",
       "typeVersion": 1,
-      "position": [
-        5248,
-        528
-      ],
+      "position": [4352, 336],
       "credentials": {
         "redis": {
           "id": "PAJ7SH2OeREFj8iA",
@@ -468,10 +224,21 @@
       "name": "É a última msg?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [
-        5424,
-        528
-      ]
+      "position": [4592, 336]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { erro: \"Mensagem absorvida pelo buffer de outra execução em andamento para esta conversa.\" } }}",
+        "options": {
+          "responseCode": 409
+        }
+      },
+      "id": "resp-buffer-absorvido",
+      "name": "Responde Buffer Absorvido",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [4592, 640]
     },
     {
       "parameters": {
@@ -484,10 +251,7 @@
       "name": "Get Memory List",
       "type": "n8n-nodes-base.redis",
       "typeVersion": 1,
-      "position": [
-        5664,
-        512
-      ],
+      "position": [4832, 336],
       "credentials": {
         "redis": {
           "id": "PAJ7SH2OeREFj8iA",
@@ -512,10 +276,7 @@
       "name": "AGRUPA MENSAGENS",
       "type": "n8n-nodes-base.summarize",
       "typeVersion": 1.1,
-      "position": [
-        5856,
-        512
-      ]
+      "position": [5072, 336]
     },
     {
       "parameters": {
@@ -526,10 +287,7 @@
       "name": "Limpa Buffer",
       "type": "n8n-nodes-base.redis",
       "typeVersion": 1,
-      "position": [
-        6032,
-        512
-      ],
+      "position": [5312, 336],
       "credentials": {
         "redis": {
           "id": "PAJ7SH2OeREFj8iA",
@@ -543,26 +301,26 @@
           "assignments": [
             {
               "id": "1",
+              "name": "conversa_id",
+              "value": "={{ $('Normaliza Payload').item.json.conversa_id }}",
+              "type": "string"
+            },
+            {
+              "id": "2",
+              "name": "cliente_id",
+              "value": "={{ $('Normaliza Payload').item.json.cliente_id }}",
+              "type": "string"
+            },
+            {
+              "id": "3",
               "name": "telefone",
               "value": "={{ $('Normaliza Payload').item.json.telefone }}",
               "type": "string"
             },
             {
-              "id": "2",
+              "id": "4",
               "name": "mensagem_consolidada",
               "value": "={{ $('AGRUPA MENSAGENS').item.json.concatenated_propertyName }}",
-              "type": "string"
-            },
-            {
-              "id": "3",
-              "name": "nome_cliente",
-              "value": "={{ $('Normaliza Payload').item.json.nome }}",
-              "type": "string"
-            },
-            {
-              "id": "4",
-              "name": "empresa_id",
-              "value": "={{ $('Normaliza Payload').item.json.empresa_id }}",
               "type": "string"
             }
           ]
@@ -570,665 +328,37 @@
         "options": {}
       },
       "id": "e1970a96-a16e-44b1-88d4-707e4e040b8a",
-      "name": "Prepara Sessão",
+      "name": "Prepara Contexto",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [
-        6208,
-        512
-      ]
+      "position": [5552, 336]
     },
     {
       "parameters": {
-        "content": "## 4 · Identificar Cliente",
-        "height": 800,
-        "width": 2400,
-        "color": 3
-      },
-      "id": "e84ea11d-afb5-4306-bbd7-67c66b56dd91",
-      "name": "Nota · Identificar Cliente",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        6368,
-        96
-      ]
-    },
-    {
-      "parameters": {
-        "operation": "getAll",
-        "tableId": "clientes",
-        "limit": 1,
-        "matchType": "allFilters",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "telefone",
-              "condition": "eq",
-              "keyValue": "={{ $('Prepara Sessão').item.json.telefone }}"
-            }
-          ]
-        }
-      },
-      "id": "a74b9301-4b0b-4a93-8dce-760e289aa171",
-      "name": "Supabase · Busca Cliente",
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
-      "position": [
-        6464,
-        512
-      ],
-      "alwaysOutputData": true,
-      "credentials": {
-        "supabaseApi": {
-          "id": "IlPIhLKj72bLR8RD",
-          "name": "Supabase account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose"
-          },
-          "conditions": [
-            {
-              "id": "c_exists",
-              "leftValue": "={{$json.id}}",
-              "rightValue": {},
-              "operator": {
-                "type": "string",
-                "operation": "exists"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "d0c1d349-d57c-42d3-b980-c6ada1ef6a31",
-      "name": "Cliente Existe?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        6656,
-        512
-      ]
-    },
-    {
-      "parameters": {
-        "operation": "update",
-        "tableId": "clientes",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "id",
-              "condition": "eq",
-              "keyValue": "={{ $json.id }}"
-            }
-          ]
-        },
-        "fieldsUi": {
-          "fieldValues": [
-            {
-              "fieldId": "ultima_interacao_em",
-              "fieldValue": "={{ $now.toISO() }}"
-            }
-          ]
-        }
-      },
-      "id": "49acf892-f287-438d-aab8-96c0dbd8bc93",
-      "name": "Supabase · Atualiza Interação",
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
-      "position": [
-        6896,
-        416
-      ],
-      "credentials": {
-        "supabaseApi": {
-          "id": "IlPIhLKj72bLR8RD",
-          "name": "Supabase account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "tableId": "clientes",
-        "fieldsUi": {
-          "fieldValues": [
-            {
-              "fieldId": "empresa_id",
-              "fieldValue": "={{ $('Prepara Sessão').item.json.empresa_id }}"
-            },
-            {
-              "fieldId": "telefone",
-              "fieldValue": "={{ $('Prepara Sessão').item.json.telefone }}"
-            },
-            {
-              "fieldId": "nome",
-              "fieldValue": "={{ $('Prepara Sessão').item.json.nome_cliente }}"
-            },
-            {
-              "fieldId": "status",
-              "fieldValue": "ativo"
-            },
-            {
-              "fieldId": "ultima_interacao_em",
-              "fieldValue": "={{ $now.toISO() }}"
-            }
-          ]
-        }
-      },
-      "id": "7559ab1d-8bc2-4a56-82d4-0aacb5d15df3",
-      "name": "Supabase · Cria Cliente",
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
-      "position": [
-        6880,
-        656
-      ],
-      "credentials": {
-        "supabaseApi": {
-          "id": "IlPIhLKj72bLR8RD",
-          "name": "Supabase account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "1",
-              "name": "cliente_id",
-              "value": "={{ $json.id }}",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "c39304b2-572f-4d97-986f-6fc8b03439e3",
-      "name": "Define Cliente ID",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        7104,
-        528
-      ]
-    },
-    {
-      "parameters": {
-        "content": "## 5 · DB State, AI Agent + Gateway Router\nConsulta o state no Supabase para bypass. Se nulo, o Agente atende FAQs e classifica as intenções para roteamento.",
-        "height": 800,
-        "width": 2400,
+        "content": "## 3 · Agente de Vendas (FAQ + Produto)\nSem classificação de intenção, sem Switch Roteador. `cliente_id`/`conversa_id` já vêm prontos do JS Bot — nada de buscar/criar cliente ou conversa aqui. Ferramentas só de leitura (Consultar Produtos, Consultar Categorias). Memória usa `conversa_id` como sessionKey (antes era telefone).\n\nO agente sinaliza o fim do próprio atendimento com uma tag técnica `[ENCERRAR_IA: sim|nao]` no fim da resposta — isso NÃO é classificação/roteamento (não decide para qual workflow ir), é só o booleano que o contrato do webhook exige (`encerrar_atendimento_ia`). Um node Set (nativo, sem Code) extrai a tag e monta o corpo final.",
+        "height": 620,
+        "width": 1650,
         "color": 6
       },
-      "id": "13e544b5-ca74-494e-884b-74088b788ba9",
-      "name": "Nota · Histórico/Agente",
+      "id": "nota-agente",
+      "name": "Nota · Agente",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [
-        8784,
-        96
-      ]
-    },
-    {
-      "parameters": {
-        "operation": "getAll",
-        "tableId": "conversas",
-        "limit": 1,
-        "matchType": "allFilters",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "cliente_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Define Cliente ID').item.json.cliente_id }}"
-            },
-            {
-              "keyName": "status",
-              "condition": "neq",
-              "keyValue": "encerrada"
-            }
-          ]
-        }
-      },
-      "id": "9eedbd0d-0c98-408e-b723-a6ca799dcc08",
-      "name": "Supabase · Busca Conversa",
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
-      "position": [
-        7296,
-        528
-      ],
-      "alwaysOutputData": true,
-      "credentials": {
-        "supabaseApi": {
-          "id": "IlPIhLKj72bLR8RD",
-          "name": "Supabase account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose"
-          },
-          "conditions": [
-            {
-              "id": "c4",
-              "leftValue": "={{$json.id}}",
-              "rightValue": {},
-              "operator": {
-                "type": "string",
-                "operation": "exists"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "9b0c5f3b-7bb2-4c72-a74c-898baeef6e25",
-      "name": "Tem Conversa?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        7472,
-        528
-      ]
-    },
-    {
-      "parameters": {
-        "tableId": "conversas",
-        "fieldsUi": {
-          "fieldValues": [
-            {
-              "fieldId": "cliente_id",
-              "fieldValue": "={{ $('Define Cliente ID').item.json.cliente_id }}"
-            },
-            {
-              "fieldId": "canal",
-              "fieldValue": "whatsapp"
-            },
-            {
-              "fieldId": "status",
-              "fieldValue": "novo_lead"
-            }
-          ]
-        }
-      },
-      "id": "0ccc97b4-c95c-4d59-8892-b7bcfaaf4eba",
-      "name": "Supabase · Cria Conversa",
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
-      "position": [
-        7664,
-        656
-      ],
-      "credentials": {
-        "supabaseApi": {
-          "id": "IlPIhLKj72bLR8RD",
-          "name": "Supabase account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "1",
-              "name": "conversa_id",
-              "value": "={{ $json.id }}",
-              "type": "string"
-            },
-            {
-              "id": "2",
-              "name": "conversa_status",
-              "value": "={{ $json.status }}",
-              "type": "string"
-            },
-            {
-              "id": "3",
-              "name": "ia_ativa",
-              "value": "={{ $json.ia_ativa }}",
-              "type": "boolean"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "b3ccc36e-ae58-43f3-becd-6e6e3aca687e",
-      "name": "Define ID Conversa",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        7840,
-        512
-      ]
-    },
-    {
-      "parameters": {
-        "tableId": "mensagens",
-        "fieldsUi": {
-          "fieldValues": [
-            {
-              "fieldId": "conversa_id",
-              "fieldValue": "={{ $('Define ID Conversa').item.json.conversa_id }}"
-            },
-            {
-              "fieldId": "remetente",
-              "fieldValue": "cliente"
-            },
-            {
-              "fieldId": "direcao",
-              "fieldValue": "entrada"
-            },
-            {
-              "fieldId": "tipo",
-              "fieldValue": "texto"
-            },
-            {
-              "fieldId": "conteudo",
-              "fieldValue": "={{ $('Prepara Sessão').item.json.mensagem_consolidada }}"
-            },
-            {
-              "fieldId": "metadata",
-              "fieldValue": "{}"
-            }
-          ]
-        }
-      },
-      "id": "1e27c203-67fd-47c6-ae69-e8a91c70bb0b",
-      "name": "Grava Msg Cliente",
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
-      "position": [
-        8016,
-        512
-      ],
-      "credentials": {
-        "supabaseApi": {
-          "id": "IlPIhLKj72bLR8RD",
-          "name": "Supabase account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "operation": "update",
-        "tableId": "conversas",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "id",
-              "condition": "eq",
-              "keyValue": "={{ $('Define ID Conversa').item.json.conversa_id }}"
-            }
-          ]
-        },
-        "fieldsUi": {
-          "fieldValues": [
-            {
-              "fieldId": "atualizada_em",
-              "fieldValue": "={{ $now.toISO() }}"
-            }
-          ]
-        }
-      },
-      "id": "65d3a7f9-bed1-4e74-a50b-fe2cc1c3cb0d",
-      "name": "Atualiza Tempo Conversa",
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
-      "position": [
-        8192,
-        512
-      ],
-      "credentials": {
-        "supabaseApi": {
-          "id": "IlPIhLKj72bLR8RD",
-          "name": "Supabase account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "c5",
-              "leftValue": "={{ $('Define ID Conversa').item.json.ia_ativa }}",
-              "rightValue": false,
-              "operator": {
-                "type": "boolean",
-                "operation": "false",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "7cf729b5-22f3-4d64-a524-63dba3a85a5a",
-      "name": "Conversa em humano?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        8384,
-        512
-      ]
-    },
-    {
-      "parameters": {},
-      "id": "2684996e-0d01-4efe-8db5-eb5639b9a6fc",
-      "name": "Silêncio (Handoff)",
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [
-        8544,
-        384
-      ]
-    },
-    {
-      "parameters": {
-        "operation": "getAll",
-        "tableId": "conversation_state",
-        "limit": 1,
-        "matchType": "allFilters",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "phone",
-              "condition": "eq",
-              "keyValue": "={{ $('Prepara Sessão').item.json.telefone }}"
-            }
-          ]
-        }
-      },
-      "id": "5220073c-913e-4e11-94d5-d33fede72bf5",
-      "name": "Busca Conversation State",
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
-      "position": [
-        8864,
-        528
-      ],
-      "alwaysOutputData": true,
-      "credentials": {
-        "supabaseApi": {
-          "id": "IlPIhLKj72bLR8RD",
-          "name": "Supabase account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose"
-          },
-          "conditions": [
-            {
-              "id": "c_state_exists",
-              "leftValue": "={{$json.id}}",
-              "rightValue": {},
-              "operator": {
-                "type": "string",
-                "operation": "exists"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "9a1f0d3e-2b3a-4e6a-9a6a-2b6f9a1c7d10",
-      "name": "Existe Conversation State?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        8864,
-        720
-      ]
-    },
-    {
-      "parameters": {
-        "tableId": "conversation_state",
-        "fieldsUi": {
-          "fieldValues": [
-            {
-              "fieldId": "phone",
-              "fieldValue": "={{ $('Prepara Sessão').item.json.telefone }}"
-            },
-            {
-              "fieldId": "empresa_id",
-              "fieldValue": "={{ $('Prepara Sessão').item.json.empresa_id }}"
-            }
-          ]
-        }
-      },
-      "id": "6f9c8b2a-4d5e-4a1b-9c3d-7e8f9a0b1c2d",
-      "name": "Cria Conversation State",
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
-      "position": [
-        9024,
-        800
-      ],
-      "credentials": {
-        "supabaseApi": {
-          "id": "IlPIhLKj72bLR8RD",
-          "name": "Supabase account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "cond1",
-              "leftValue": "={{ $json.workflow_ativo }}",
-              "rightValue": "",
-              "operator": {
-                "type": "string",
-                "operation": "notEmpty"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "0a419677-8b9e-47f4-8cc0-0bdfa5a590f9",
-      "name": "Tem Workflow Ativo?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        9104,
-        528
-      ]
-    },
-    {
-      "parameters": {
-        "rules": {
-          "values": [
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": false,
-                  "leftValue": "",
-                  "typeValidation": "strict"
-                },
-                "conditions": [
-                  {
-                    "id": "c_com",
-                    "leftValue": "={{ $json.workflow_ativo }}",
-                    "rightValue": "comercial",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "Comercial"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "0144b36b-38a3-4c6a-990d-c82d113c272c",
-      "name": "Switch Workflow Ativo",
-      "type": "n8n-nodes-base.switch",
-      "typeVersion": 3.2,
-      "position": [
-        9552,
-        272
-      ]
+      "position": [5792, 96]
     },
     {
       "parameters": {
         "promptType": "define",
-        "text": "={{ $('Prepara Sessão').item.json.mensagem_consolidada }}",
+        "text": "={{ $('Prepara Contexto').item.json.mensagem_consolidada }}",
         "options": {
-          "systemMessage": "=# PAPEL\nVocê atua EXCLUSIVAMENTE como Recepcionista Inteligente e Agente FAQ da Papelaria Venâncio.\nSua missão é: receber o cliente, responder APENAS dúvidas gerais institucionais (FAQ) e identificar a intenção para encaminhar ao setor correto.\nVocê NÃO deve tentar controlar vendas, NÃO deve manter carrinho de compras e NÃO deve lembrar produtos (essas tarefas são do Workflow Comercial).\nSeu comportamento deve ser indistinguível de um atendente humano.\nNunca diga espontaneamente que é uma IA, robô ou assistente virtual.\n\n---\n# DIRETRIZES DE ESTILO DA MARCA E SAUDAÇÃO (CRÍTICO)\n- Saudação: Se for o primeiro contato absoluto do cliente ou se ele estiver cumprimentando, inicie com \"Olá 💛\".\n- EVITE SAUDAÇÕES REPETIDAS: Se a conversa já estiver em andamento, NÃO repita saudações (não diga \"Olá\", \"Boa tarde\" ou \"Tudo bem\" novamente). Apenas responda de forma natural e direta.\n- NUNCA use markdown com duplo asterisco (**). Se precisar destacar algo em negrito, utilize sempre um único asterisco (*palavra*).\n- Tom de voz: Seja profissional, caloroso e simpático, mantendo um tom natural. Evite ser excessivamente subserviente ou bajulador.\n\n---\n# CLASSIFICAÇÃO DE INTENÇÃO E ROTEAMENTO\nVocê atua como a linha de frente. Ao final de TODA resposta, você DEVE adicionar UMA das seguintes tags de intenção em uma linha isolada:\n\n[INTENT: faq] -> Dúvidas institucionais, horários, endereço, ou conversa fiada.\n[INTENT: produto] -> Busca de produtos no estoque, comprar materiais, brinquedos ou saber disponibilidade.\n[INTENT: orcamento] -> Orçamento formal ou compras em atacado.\n[INTENT: pedido] -> Status de entrega ou pedido já feito.\n[INTENT: followup] -> Retomando contato ou retomando venda anterior.\n[INTENT: humano] -> Expressou irritação ou pediu para falar com humano.\n\n# IMPORTANTE PARA ROTEAMENTO\nSe a intenção NÃO FOR \"faq\", você NÃO deve tentar resolver o problema (pois não tem acesso a banco de dados de vendas ou carrinho). Apenas responda gentilmente avisando que irá transferir para o especialista responsável e inclua a respectiva tag."
+          "systemMessage": "=# PAPEL\nVocê é o Agente de Vendas da Papelaria Venâncio, atendendo direto pelo WhatsApp.\nVocê cuida de FAQ institucional, dúvidas sobre produtos e conversa livre de vendas.\nO cliente já foi direcionado até você porque a conversa foi classificada como Venda Geral — essa decisão já foi tomada antes de você ser acionado. Você NÃO decide roteamento, NÃO classifica intenção e NÃO precisa (nem deve) mencionar isso ao cliente.\nO cliente nunca deve perceber que está falando com uma IA.\n\n# REGRAS DE CONSULTA (CRÍTICO)\n- Você possui duas ferramentas conectadas ao banco de dados: \"Consultar Produtos\" e \"Consultar Categorias\".\n- SEMPRE que o cliente mencionar um produto, perguntar sobre disponibilidade, preço ou categoria, você DEVE OBRIGATORIAMENTE usar essas ferramentas para buscar a informação real antes de responder.\n- NUNCA invente preços, marcas, características, categorias ou disponibilidade. Use apenas os dados que as ferramentas retornarem.\n- Se a ferramenta não encontrar o produto, informe educadamente que está em falta no momento e, se fizer sentido, sugira algo parecido que você tenha encontrado de fato.\n- Você é somente consultivo: nunca cria, fecha, registra ou altera orçamentos e pedidos. Isso é feito por um especialista humano/outro agente depois que o cliente confirma que quer prosseguir.\n\n# PERSONALIDADE E FORMATO\n- Seja educado, caloroso e objetivo, como um atendente humano de loja.\n- Frases curtas, direto ao ponto. No máximo 3 mensagens curtas por resposta.\n- NUNCA utilize markdown com asteriscos duplos (**). Se quiser destacar algo, use um único asterisco (*palavra*).\n- Evite saudações repetidas: se a conversa já está em andamento, não repita \"Olá\"/\"Bom dia\" a cada mensagem.\n- Nunca diga espontaneamente que é uma IA, robô ou assistente virtual.\n\n# QUANDO ENCERRAR SEU ATENDIMENTO\nAo final de TODA resposta, adicione, em uma linha isolada, exatamente uma destas tags técnicas (o cliente nunca vê essa linha, ela é removida antes do envio):\n[ENCERRAR_IA: nao] -> Use na maioria das vezes: você respondeu a dúvida ou seguiu a conversa normalmente e pode continuar atendendo a próxima mensagem do cliente.\n[ENCERRAR_IA: sim] -> Use quando o cliente disser que quer fechar/confirmar uma compra, pedir um orçamento formal, ou perguntar algo fora do que você consegue resolver (reclamação, status de pedido, falar com um humano). Nesses casos, avise gentilmente que vai encaminhar para o setor certo e finalize a resposta com essa tag.\n\n# CONTINUIDADE\nVocê pode estar dando continuidade a uma conversa que já começou. Nunca se apresente de novo nem diga que foi transferido. Responda com base na mensagem mais recente do cliente, usando o histórico só como contexto silencioso."
         }
       },
       "id": "d7f85b33-1c30-445b-b4b0-7b0986cad2da",
-      "name": "Agente Principal",
+      "name": "Agente de Vendas",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 1.7,
-      "position": [
-        9392,
-        544
-      ]
+      "position": [5872, 336]
     },
     {
       "parameters": {
@@ -1237,10 +367,7 @@
       },
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
       "typeVersion": 1,
-      "position": [
-        9248,
-        720
-      ],
+      "position": [5728, 592],
       "id": "a17dd81d-41e4-44a7-bf39-d3240ac3da08",
       "name": "OpenRouter Chat",
       "credentials": {
@@ -1253,32 +380,27 @@
     {
       "parameters": {
         "sessionIdType": "customKey",
-        "sessionKey": "={{ $('Gateway · Evolution API').item.json.body.data.key.remoteJid }}"
+        "sessionKey": "={{ $('Prepara Contexto').item.json.conversa_id }}"
       },
       "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
       "typeVersion": 1.3,
-      "position": [
-        9424,
-        752
-      ],
+      "position": [5904, 592],
       "id": "61dba421-5095-43da-ab11-9b3296127543",
       "name": "Simple Memory"
     },
     {
       "parameters": {
         "descriptionType": "manual",
-        "toolDescription": "Utilize esta ferramenta sempre que o cliente perguntar informações institucionais, horários, entrega, endereço ou políticas da Papelaria Venâncio.",
+        "toolDescription": "Busca produtos no catálogo por nome/descrição. Use sempre que o cliente perguntar sobre um produto específico, preço ou disponibilidade.",
         "operation": "getAll",
-        "tableId": "empresa_config"
+        "tableId": "produtos",
+        "returnAll": true
       },
       "type": "n8n-nodes-base.supabaseTool",
       "typeVersion": 1,
-      "position": [
-        9632,
-        720
-      ],
+      "position": [6112, 592],
       "id": "2441705e-44a5-4fe9-87ef-b5d60ea36d05",
-      "name": "Consultar informações da loja",
+      "name": "Consultar Produtos",
       "credentials": {
         "supabaseApi": {
           "id": "IlPIhLKj72bLR8RD",
@@ -1288,16 +410,23 @@
     },
     {
       "parameters": {
-        "jsCode": "const output = $input.item.json.output || \"\";\nlet intent = \"faq\";\nlet cleanMessage = output;\n\n// Procura pela tag gerada pelo Agente\nconst regex = /\\[INTENT:\\s*(faq|produto|orcamento|pedido|followup|humano)\\]/i;\nconst match = output.match(regex);\n\nif (match) {\n  intent = match[1].toLowerCase();\n  // Remove a tag do texto para não aparecer para o cliente\n  cleanMessage = output.replace(regex, \"\").trim();\n}\n\nreturn {\n  intent: intent,\n  cleanMessage: cleanMessage\n};"
+        "descriptionType": "manual",
+        "toolDescription": "Lista as categorias de produtos que a papelaria vende. Use quando o cliente perguntar o que vocês vendem ou quais categorias/seções existem.",
+        "operation": "getAll",
+        "tableId": "categorias",
+        "returnAll": true
       },
-      "id": "7c68468e-db53-4f44-996a-6ff67fa3957d",
-      "name": "Extrai Intenção",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        9712,
-        544
-      ]
+      "type": "n8n-nodes-base.supabaseTool",
+      "typeVersion": 1,
+      "position": [6320, 592],
+      "id": "consultar-categorias",
+      "name": "Consultar Categorias",
+      "credentials": {
+        "supabaseApi": {
+          "id": "IlPIhLKj72bLR8RD",
+          "name": "Supabase account"
+        }
+      }
     },
     {
       "parameters": {
@@ -1305,295 +434,25 @@
           "assignments": [
             {
               "id": "1",
-              "name": "conversationId",
-              "value": "={{ $('Define ID Conversa').item.json.conversa_id }}",
+              "name": "resposta",
+              "value": "={{ ($json.output || '').replace(/\\[ENCERRAR_IA:\\s*(sim|nao)\\]/i, '').trim() }}",
               "type": "string"
             },
             {
               "id": "2",
-              "name": "phone",
-              "value": "={{ $('Prepara Sessão').item.json.telefone }}",
-              "type": "string"
-            },
-            {
-              "id": "3",
-              "name": "customerName",
-              "value": "={{ $('Prepara Sessão').item.json.nome_cliente }}",
-              "type": "string"
-            },
-            {
-              "id": "4",
-              "name": "message",
-              "value": "={{ $('Normaliza Payload').item.json.texto }}",
-              "type": "string"
-            },
-            {
-              "id": "5",
-              "name": "intent",
-              "value": "={{ $('Extrai Intenção').item.json.intent }}",
-              "type": "string"
-            },
-            {
-              "id": "6",
-              "name": "timestamp",
-              "value": "={{ $now.toISO() }}",
-              "type": "string"
-            },
-            {
-              "id": "7",
-              "name": "context.empresa_id",
-              "value": "={{ $('Prepara Sessão').item.json.empresa_id }}",
-              "type": "string"
-            },
-            {
-              "id": "8",
-              "name": "workflow_ativo",
-              "value": "={{ ['produto', 'orcamento'].includes($('Extrai Intenção').item.json.intent) ? 'comercial' : ($('Extrai Intenção').item.json.intent === 'pedido' ? 'crm' : '') }}",
-              "type": "string"
-            },
-            {
-              "id": "9",
-              "name": "clienteId",
-              "value": "={{ $('Define Cliente ID').item.json.cliente_id }}",
-              "type": "string"
+              "name": "encerrar_atendimento_ia",
+              "value": "={{ /\\[ENCERRAR_IA:\\s*sim\\]/i.test($json.output || '') }}",
+              "type": "boolean"
             }
           ]
         },
         "options": {}
       },
-      "id": "2160a708-09fb-464e-8780-18e43270fef4",
-      "name": "Prepara Payload Multi-Agent",
+      "id": "monta-resposta-webhook",
+      "name": "Monta Resposta Webhook",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [
-        9904,
-        544
-      ]
-    },
-    {
-      "parameters": {
-        "operation": "update",
-        "tableId": "conversation_state",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "phone",
-              "condition": "eq",
-              "keyValue": "={{ $json.phone }}"
-            }
-          ]
-        },
-        "fieldsUi": {
-          "fieldValues": [
-            {
-              "fieldId": "workflow_ativo",
-              "fieldValue": "={{ $json.workflow_ativo }}"
-            },
-            {
-              "fieldId": "customer_name",
-              "fieldValue": "={{ $json.customerName }}"
-            },
-            {
-              "fieldId": "last_message",
-              "fieldValue": "={{ $json.message }}"
-            },
-            {
-              "fieldId": "intent",
-              "fieldValue": "={{ $json.intent }}"
-            },
-            {
-              "fieldId": "conversation_id",
-              "fieldValue": "={{ $json.conversationId }}"
-            },
-            {
-              "fieldId": "empresa_id",
-              "fieldValue": "={{ $json.context.empresa_id }}"
-            },
-            {
-              "fieldId": "updated_at",
-              "fieldValue": "={{ $now.toISO() }}"
-            }
-          ]
-        }
-      },
-      "id": "d0f5cc5d-d534-4cfa-9ac2-ea68e506c12c",
-      "name": "Atualiza Conversation State",
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
-      "position": [
-        10096,
-        704
-      ],
-      "credentials": {
-        "supabaseApi": {
-          "id": "IlPIhLKj72bLR8RD",
-          "name": "Supabase account"
-        }
-      },
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "rules": {
-          "values": [
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict",
-                  "version": 2
-                },
-                "conditions": [
-                  {
-                    "id": "c_faq",
-                    "leftValue": "={{ $json.intent }}",
-                    "rightValue": "faq",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "FAQ"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict",
-                  "version": 2
-                },
-                "conditions": [
-                  {
-                    "id": "c_prod",
-                    "leftValue": "={{ $json.intent }}",
-                    "rightValue": "produto",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "Produto"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict",
-                  "version": 2
-                },
-                "conditions": [
-                  {
-                    "id": "c_orc",
-                    "leftValue": "={{ $json.intent }}",
-                    "rightValue": "orcamento",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "Orçamento"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict",
-                  "version": 2
-                },
-                "conditions": [
-                  {
-                    "id": "c_ped",
-                    "leftValue": "={{ $json.intent }}",
-                    "rightValue": "pedido",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "Pedido"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict",
-                  "version": 2
-                },
-                "conditions": [
-                  {
-                    "id": "c_fup",
-                    "leftValue": "={{ $json.intent }}",
-                    "rightValue": "followup",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "Follow-up"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict",
-                  "version": 2
-                },
-                "conditions": [
-                  {
-                    "id": "c_hum",
-                    "leftValue": "={{ $json.intent }}",
-                    "rightValue": "humano",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "Humano"
-            }
-          ]
-        },
-        "options": {
-          "fallbackOutput": "0"
-        }
-      },
-      "id": "3b50aa9f-7293-4a72-bd20-da5be26a77d1",
-      "name": "Switch Roteador",
-      "type": "n8n-nodes-base.switch",
-      "typeVersion": 3.2,
-      "position": [
-        10272,
-        480
-      ]
+      "position": [6192, 336]
     },
     {
       "parameters": {
@@ -1606,7 +465,7 @@
           "conditions": [
             {
               "id": "c1",
-              "leftValue": "={{ $json.message }}",
+              "leftValue": "={{ $json.resposta }}",
               "rightValue": "",
               "operator": {
                 "type": "string",
@@ -1623,33 +482,48 @@
       "name": "Resposta Válida?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [
-        10560,
-        464
-      ]
+      "position": [6432, 336]
     },
     {
       "parameters": {
-        "resource": "messages-api",
-        "instanceName": "VENANCIO",
-        "remoteJid": "={{ $('Gateway · Evolution API').item.json.body.data.key.remoteJid }}",
-        "messageText": "={{ $('Agente Principal').item.json.output }}",
-        "options_message": {}
-      },
-      "id": "2c8195d1-9e31-477a-8d81-0cf5de0034cf",
-      "name": "Envia Resposta Evolution",
-      "type": "n8n-nodes-evolution-api.evolutionApi",
-      "typeVersion": 1,
-      "position": [
-        10800,
-        448
-      ],
-      "credentials": {
-        "evolutionApi": {
-          "id": "6i9g6VgRlbuCwWCq",
-          "name": "evolution_cloudfy"
+        "respondWith": "json",
+        "responseBody": "={{ { erro: \"Agente de Vendas não retornou uma resposta válida.\" } }}",
+        "options": {
+          "responseCode": 500
         }
-      }
+      },
+      "id": "resp-falha-agente",
+      "name": "Responde Falha Agente",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [6432, 640]
+    },
+    {
+      "parameters": {
+        "content": "## 4 · Resposta ao JS Bot\nContrato: { resposta: string, encerrar_atendimento_ia: boolean } com HTTP 200. O n8n nunca fala com a Evolution API — quem manda a mensagem pro WhatsApp é sempre o JS Bot. Responder primeiro e só depois gravar o histórico evita gastar o timeout do JS Bot (AGENTE_VENDAS_TIMEOUT_MS) com uma escrita que é só para o dashboard.",
+        "height": 400,
+        "width": 900,
+        "color": 3
+      },
+      "id": "nota-resposta",
+      "name": "Nota · Resposta",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [6672, 96]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { resposta: $json.resposta, encerrar_atendimento_ia: $json.encerrar_atendimento_ia } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "resp-sucesso",
+      "name": "Responde Sucesso",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [6672, 336]
     },
     {
       "parameters": {
@@ -1658,27 +532,15 @@
           "fieldValues": [
             {
               "fieldId": "conversa_id",
-              "fieldValue": "={{ $('Define ID Conversa').item.json.conversa_id }}"
+              "fieldValue": "={{ $('Prepara Contexto').item.json.conversa_id }}"
             },
             {
               "fieldId": "remetente",
-              "fieldValue": "ia"
-            },
-            {
-              "fieldId": "direcao",
-              "fieldValue": "saida"
-            },
-            {
-              "fieldId": "tipo",
-              "fieldValue": "texto"
+              "fieldValue": "bot"
             },
             {
               "fieldId": "conteudo",
-              "fieldValue": "={{ $('Extrai Intenção').item.json.cleanMessage }}"
-            },
-            {
-              "fieldId": "metadata",
-              "fieldValue": "{}"
+              "fieldValue": "={{ $('Monta Resposta Webhook').item.json.resposta }}"
             }
           ]
         }
@@ -1687,11 +549,7 @@
       "name": "Supabase · Grava Resposta",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [
-        10992,
-        448
-      ],
-      "alwaysOutputData": true,
+      "position": [6912, 336],
       "credentials": {
         "supabaseApi": {
           "id": "IlPIhLKj72bLR8RD",
@@ -1699,713 +557,155 @@
         }
       },
       "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "workflowId": {
-          "__rl": true,
-          "value": "ftSTjZ6ZzIhw5NpC",
-          "mode": "list",
-          "cachedResultUrl": "/workflow/ftSTjZ6ZzIhw5NpC",
-          "cachedResultName": "Agente 2 (Comercial - v2 · State + PG Memory)"
-        },
-        "options": {}
-      },
-      "id": "94cf0ac5-f417-4a3b-96af-846d65dc0071",
-      "name": "Agente Comercial",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.1,
-      "position": [
-        10672,
-        704
-      ],
-      "notesInFlow": true,
-      "notes": "Workflow Comercial será conectado aqui."
     }
   ],
-  "pinData": {
-    "Gateway · Evolution API": [
-      {
-        "json": {
-          "headers": {
-            "host": "bloodybarracuda-n8n.cloudfy.live",
-            "user-agent": "axios/1.13.2",
-            "content-length": "1786",
-            "accept": "application/json, text/plain, */*",
-            "accept-encoding": "gzip, br",
-            "cdn-loop": "cloudflare; loops=1",
-            "cf-connecting-ip": "89.167.27.156",
-            "cf-ipcountry": "FI",
-            "cf-ray": "a18068184a069a02-HEL",
-            "cf-visitor": "{\"scheme\":\"https\"}",
-            "content-type": "application/json",
-            "x-forwarded-for": "172.64.223.71",
-            "x-forwarded-host": "bloodybarracuda-n8n.cloudfy.live",
-            "x-forwarded-port": "443",
-            "x-forwarded-proto": "https",
-            "x-forwarded-server": "e56a8d8ca60e",
-            "x-real-ip": "172.64.223.71"
-          },
-          "params": {},
-          "query": {},
-          "body": {
-            "event": "messages.upsert",
-            "instance": "VENANCIO",
-            "data": {
-              "key": {
-                "remoteJid": "5527998489094@s.whatsapp.net",
-                "remoteJidAlt": "5527998489094@s.whatsapp.net",
-                "fromMe": false,
-                "id": "3EB0AEA2858C9B36A34F9C",
-                "participant": "",
-                "addressingMode": "lid"
-              },
-              "pushName": "João Victor",
-              "status": "DELIVERY_ACK",
-              "message": {
-                "messageContextInfo": {
-                  "threadId": [],
-                  "deviceListMetadata": {
-                    "senderKeyIndexes": [],
-                    "recipientKeyIndexes": [],
-                    "senderKeyHash": {
-                      "0": 3,
-                      "1": 132,
-                      "2": 2,
-                      "3": 92,
-                      "4": 118,
-                      "5": 8,
-                      "6": 30,
-                      "7": 88,
-                      "8": 77,
-                      "9": 203
-                    },
-                    "senderTimestamp": {
-                      "low": 1783448678,
-                      "high": 0,
-                      "unsigned": true
-                    },
-                    "senderAccountType": 0,
-                    "receiverAccountType": 0,
-                    "recipientKeyHash": {
-                      "0": 59,
-                      "1": 19,
-                      "2": 255,
-                      "3": 77,
-                      "4": 196,
-                      "5": 225,
-                      "6": 187,
-                      "7": 40,
-                      "8": 194,
-                      "9": 50
-                    },
-                    "recipientTimestamp": {
-                      "low": 1782998686,
-                      "high": 0,
-                      "unsigned": true
-                    }
-                  },
-                  "deviceListMetadataVersion": 2,
-                  "messageSecret": {
-                    "0": 255,
-                    "1": 108,
-                    "2": 65,
-                    "3": 66,
-                    "4": 204,
-                    "5": 52,
-                    "6": 191,
-                    "7": 5,
-                    "8": 128,
-                    "9": 196,
-                    "10": 102,
-                    "11": 124,
-                    "12": 18,
-                    "13": 195,
-                    "14": 252,
-                    "15": 213,
-                    "16": 65,
-                    "17": 70,
-                    "18": 43,
-                    "19": 255,
-                    "20": 61,
-                    "21": 104,
-                    "22": 194,
-                    "23": 193,
-                    "24": 157,
-                    "25": 194,
-                    "26": 27,
-                    "27": 112,
-                    "28": 184,
-                    "29": 24,
-                    "30": 179,
-                    "31": 63
-                  },
-                  "limitSharingV2": {
-                    "trigger": 0,
-                    "initiatedByMe": false
-                  }
-                },
-                "conversation": "Boa tarde tudo bem?"
-              },
-              "contextInfo": {
-                "mentionedJid": [],
-                "groupMentions": [],
-                "statusAttributions": [],
-                "ephemeralSettingTimestamp": {
-                  "low": 1783353949,
-                  "high": 0,
-                  "unsigned": false
-                },
-                "disappearingMode": {
-                  "initiator": 0,
-                  "trigger": 1,
-                  "initiatedByMe": false
-                }
-              },
-              "messageType": "conversation",
-              "messageTimestamp": 1783527525,
-              "instanceId": "fd974335-3982-4e7a-8128-d5d4359cb5e9",
-              "source": "web"
-            },
-            "destination": "https://bloodybarracuda-n8n.cloudfy.live/webhook/venancio/evolution",
-            "date_time": "2026-07-08T13:18:45.135Z",
-            "sender": "5527996649227@s.whatsapp.net",
-            "server_url": "https://bloodybarracuda-evolution.cloudfy.live",
-            "apikey": "07FAFEC2BA5A-4D34-82EA-F6BD67011776"
-          },
-          "webhookUrl": "https://bloodybarracuda-n8n.cloudfy.live/webhook/venancio/evolution",
-          "executionMode": "production"
-        },
-        "pairedItem": {
-          "item": 0
-        }
-      }
-    ]
-  },
   "connections": {
-    "Gateway · Evolution API": {
+    "Webhook · Agente de Vendas": {
       "main": [
         [
-          {
-            "node": "Normaliza Payload",
-            "type": "main",
-            "index": 0
-          }
+          { "node": "Normaliza Payload", "type": "main", "index": 0 }
         ]
       ]
     },
     "Normaliza Payload": {
       "main": [
         [
-          {
-            "node": "Mensagem válida?",
-            "type": "main",
-            "index": 0
-          }
+          { "node": "Payload válido?", "type": "main", "index": 0 }
         ]
       ]
     },
-    "Mensagem válida?": {
+    "Payload válido?": {
       "main": [
         [
-          {
-            "node": "Quem enviou? (fromMe)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Quem enviou? (fromMe)": {
-      "main": [
-        [
-          {
-            "node": "Remove Bloqueio",
-            "type": "main",
-            "index": 0
-          }
+          { "node": "Redis Push Message", "type": "main", "index": 0 }
         ],
         [
-          {
-            "node": "Ativa Bloqueio Humano",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Verifica Bloqueio",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Verifica Bloqueio": {
-      "main": [
-        [
-          {
-            "node": "IA Bloqueada?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "IA Bloqueada?": {
-      "main": [
-        [
-          {
-            "node": "IA Pausada",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Redis Push Message",
-            "type": "main",
-            "index": 0
-          }
+          { "node": "Responde Payload Inválido", "type": "main", "index": 0 }
         ]
       ]
     },
     "Redis Push Message": {
       "main": [
         [
-          {
-            "node": "Grava Execution ID",
-            "type": "main",
-            "index": 0
-          }
+          { "node": "Grava Execution ID", "type": "main", "index": 0 }
         ]
       ]
     },
     "Grava Execution ID": {
       "main": [
         [
-          {
-            "node": "PAUSA DE 7 SEGUNDOS",
-            "type": "main",
-            "index": 0
-          }
+          { "node": "PAUSA DE 7 SEGUNDOS", "type": "main", "index": 0 }
         ]
       ]
     },
     "PAUSA DE 7 SEGUNDOS": {
       "main": [
         [
-          {
-            "node": "Verifica Execution ID",
-            "type": "main",
-            "index": 0
-          }
+          { "node": "Verifica Execution ID", "type": "main", "index": 0 }
         ]
       ]
     },
     "Verifica Execution ID": {
       "main": [
         [
-          {
-            "node": "É a última msg?",
-            "type": "main",
-            "index": 0
-          }
+          { "node": "É a última msg?", "type": "main", "index": 0 }
         ]
       ]
     },
     "É a última msg?": {
       "main": [
         [
-          {
-            "node": "Get Memory List",
-            "type": "main",
-            "index": 0
-          }
+          { "node": "Get Memory List", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Responde Buffer Absorvido", "type": "main", "index": 0 }
         ]
       ]
     },
     "Get Memory List": {
       "main": [
         [
-          {
-            "node": "AGRUPA MENSAGENS",
-            "type": "main",
-            "index": 0
-          }
+          { "node": "AGRUPA MENSAGENS", "type": "main", "index": 0 }
         ]
       ]
     },
     "AGRUPA MENSAGENS": {
       "main": [
         [
-          {
-            "node": "Limpa Buffer",
-            "type": "main",
-            "index": 0
-          }
+          { "node": "Limpa Buffer", "type": "main", "index": 0 }
         ]
       ]
     },
     "Limpa Buffer": {
       "main": [
         [
-          {
-            "node": "Prepara Sessão",
-            "type": "main",
-            "index": 0
-          }
+          { "node": "Prepara Contexto", "type": "main", "index": 0 }
         ]
       ]
     },
-    "Prepara Sessão": {
+    "Prepara Contexto": {
       "main": [
         [
-          {
-            "node": "Supabase · Busca Cliente",
-            "type": "main",
-            "index": 0
-          }
+          { "node": "Agente de Vendas", "type": "main", "index": 0 }
         ]
       ]
     },
-    "Supabase · Busca Cliente": {
+    "Agente de Vendas": {
       "main": [
         [
-          {
-            "node": "Cliente Existe?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Cliente Existe?": {
-      "main": [
-        [
-          {
-            "node": "Supabase · Atualiza Interação",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Supabase · Cria Cliente",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Supabase · Atualiza Interação": {
-      "main": [
-        [
-          {
-            "node": "Define Cliente ID",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Supabase · Cria Cliente": {
-      "main": [
-        [
-          {
-            "node": "Define Cliente ID",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Define Cliente ID": {
-      "main": [
-        [
-          {
-            "node": "Supabase · Busca Conversa",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Supabase · Busca Conversa": {
-      "main": [
-        [
-          {
-            "node": "Tem Conversa?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Tem Conversa?": {
-      "main": [
-        [
-          {
-            "node": "Define ID Conversa",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Supabase · Cria Conversa",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Supabase · Cria Conversa": {
-      "main": [
-        [
-          {
-            "node": "Define ID Conversa",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Define ID Conversa": {
-      "main": [
-        [
-          {
-            "node": "Grava Msg Cliente",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Grava Msg Cliente": {
-      "main": [
-        [
-          {
-            "node": "Atualiza Tempo Conversa",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Atualiza Tempo Conversa": {
-      "main": [
-        [
-          {
-            "node": "Conversa em humano?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Conversa em humano?": {
-      "main": [
-        [
-          {
-            "node": "Silêncio (Handoff)",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Busca Conversation State",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Busca Conversation State": {
-      "main": [
-        [
-          {
-            "node": "Existe Conversation State?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Existe Conversation State?": {
-      "main": [
-        [
-          {
-            "node": "Tem Workflow Ativo?",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Cria Conversation State",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Cria Conversation State": {
-      "main": [
-        [
-          {
-            "node": "Tem Workflow Ativo?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Tem Workflow Ativo?": {
-      "main": [
-        [
-          {
-            "node": "Switch Workflow Ativo",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Agente Principal",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Switch Workflow Ativo": {
-      "main": [
-        [
-          {
-            "node": "Agente Comercial",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Agente Principal": {
-      "main": [
-        [
-          {
-            "node": "Extrai Intenção",
-            "type": "main",
-            "index": 0
-          }
+          { "node": "Monta Resposta Webhook", "type": "main", "index": 0 }
         ]
       ]
     },
     "OpenRouter Chat": {
       "ai_languageModel": [
         [
-          {
-            "node": "Agente Principal",
-            "type": "ai_languageModel",
-            "index": 0
-          }
+          { "node": "Agente de Vendas", "type": "ai_languageModel", "index": 0 }
         ]
       ]
     },
     "Simple Memory": {
       "ai_memory": [
         [
-          {
-            "node": "Agente Principal",
-            "type": "ai_memory",
-            "index": 0
-          }
+          { "node": "Agente de Vendas", "type": "ai_memory", "index": 0 }
         ]
       ]
     },
-    "Consultar informações da loja": {
+    "Consultar Produtos": {
       "ai_tool": [
         [
-          {
-            "node": "Agente Principal",
-            "type": "ai_tool",
-            "index": 0
-          }
+          { "node": "Agente de Vendas", "type": "ai_tool", "index": 0 }
         ]
       ]
     },
-    "Extrai Intenção": {
-      "main": [
+    "Consultar Categorias": {
+      "ai_tool": [
         [
-          {
-            "node": "Prepara Payload Multi-Agent",
-            "type": "main",
-            "index": 0
-          }
+          { "node": "Agente de Vendas", "type": "ai_tool", "index": 0 }
         ]
       ]
     },
-    "Prepara Payload Multi-Agent": {
+    "Monta Resposta Webhook": {
       "main": [
         [
-          {
-            "node": "Switch Roteador",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Atualiza Conversation State",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Switch Roteador": {
-      "main": [
-        [
-          {
-            "node": "Resposta Válida?",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Agente Comercial",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Agente Comercial",
-            "type": "main",
-            "index": 0
-          }
+          { "node": "Resposta Válida?", "type": "main", "index": 0 }
         ]
       ]
     },
     "Resposta Válida?": {
       "main": [
         [
-          {
-            "node": "Envia Resposta Evolution",
-            "type": "main",
-            "index": 0
-          }
+          { "node": "Responde Sucesso", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Responde Falha Agente", "type": "main", "index": 0 }
         ]
       ]
     },
-    "Envia Resposta Evolution": {
+    "Responde Sucesso": {
       "main": [
         [
-          {
-            "node": "Supabase · Grava Resposta",
-            "type": "main",
-            "index": 0
-          }
+          { "node": "Supabase · Grava Resposta", "type": "main", "index": 0 }
         ]
       ]
     }
@@ -2415,7 +715,7 @@
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "versionId": "0d678a31-d14b-496a-9791-402c164a2312",
+  "versionId": "b2f6b9c1-3f8a-4c2d-9e4e-7a1d5c6f0e21",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "09304f7ddfc01635a9120999ac264bbfa4eb4005b5f25bf3d517f6739c27a5a7"

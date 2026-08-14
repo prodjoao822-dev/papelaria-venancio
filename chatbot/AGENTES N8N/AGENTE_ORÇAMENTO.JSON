@@ -1,0 +1,532 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 1 · Trigger + Validação\nRecebe o POST fire-and-forget do dashboard (venancio-ai-ops/src/services/pedidos.service.js → notificarN8n('STATUS_ATUALIZADO', ...)) quando o operador muda o status de um pedido.\n\nBody: { evento:'STATUS_ATUALIZADO', pedidoId, novoStatus, observacao, timestamp }. `novoStatus` é um dos rótulos de vitrine do dashboard (NOVO_PEDIDO, EM_SEPARACAO, SEPARADO, PRONTO_RETIRADA, SAIU_ENTREGA, FINALIZADO, CANCELADO — AGUARDANDO_CONFIRMACAO nunca chega, o dashboard retorna antes de notificar).\n\nPath = `status-atualizado` (SEM prefixo venancio/): o dashboard posta em `${VITE_N8N_WEBHOOK_BASE}/status-atualizado`, e VITE_N8N_WEBHOOK_BASE já termina em /webhook. responseMode = onReceived: responde 200 na hora (o dashboard nem lê a resposta).",
+        "height": 628,
+        "width": 832,
+        "color": "#162D15"
+      },
+      "id": "961d4056-0c50-47df-ac12-19e60e2bb8ba",
+      "name": "Nota · Trigger",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "status-atualizado",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "a004b2a1-df91-4e04-8e26-476db48ef50e",
+      "name": "Webhook · Status Atualizado",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -16,
+        208
+      ],
+      "webhookId": "venancio-status-atualizado-webhook",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Token Webhook Status Atualizado (Dashboard)"
+        }
+      },
+      "notes": "AUTENTICAÇÃO ADICIONADA em 27/07/2026 (AUDITORIA_INTEGRACAO.md, item 4): este webhook estava totalmente aberto. AÇÃO MANUAL AO IMPORTAR: crie uma credential 'Header Auth' no n8n (header sugerido: x-n8n-webhook-token) e selecione aqui. AVISO IMPORTANTE: quem chama este webhook é o FRONTEND do dashboard (navegador, venancio-ai-ops/src/services/pedidos.service.js), então o valor configurado em VITE_N8N_STATUS_WEBHOOK_TOKEN fica visível no bundle público (qualquer variável VITE_* é pública) — isto barra flood/scan automatizado, mas NÃO é segredo forte contra alguém que inspecione o bundle. Não reaproveite aqui o mesmo valor do token do Agente de Vendas (esse sim é servidor-a-servidor e deve continuar confidencial)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "v1",
+              "leftValue": "={{ $json.body.pedidoId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            },
+            {
+              "id": "v2",
+              "leftValue": "={{ $json.body.novoStatus }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "af6eac39-a7ba-4908-be11-e91901efd7a2",
+      "name": "Payload Válido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        256,
+        208
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "5d191c34-0bf9-4671-aeae-4bbb62a5ce60",
+      "name": "Payload Inválido (Ignorado)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        512,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 2 · Config + Busca Pedido/Cliente/Template\nSet · Config: esvaziado em 27/07/2026 (AUDITORIA_INTEGRACAO.md, item 3) — tinha a API key da Evolution API em texto plano. Mantido como passthrough vazio (não precisou reconectar o grafo); o envio agora usa credential por ID direto no node 'HTTP Request · Envia WhatsApp' (que apesar do nome já é o node nativo evolutionApi). Buscamos `pedidos` (protocolo, cliente_id, forma_entrega, endereco_entrega) e depois `clientes` (telefone) — o telefone não vem no payload. O template vem de `templates_mensagem` (status = novoStatus AND ativo = true): se não achar (ou ativo=false), a busca volta vazia e o fluxo encerra sem erro — é o jeito de desligar uma notificação editando só o banco.",
+        "height": 420,
+        "width": 1040,
+        "color": 3
+      },
+      "id": "474dfa93-34f0-4189-9148-f6984570068a",
+      "name": "Nota · Config e Busca",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        800,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": []
+        },
+        "options": {}
+      },
+      "id": "35640c91-622a-4834-9063-a024dff7b134",
+      "name": "Set · Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        832,
+        80
+      ],
+      "notes": "ESVAZIADO em 27/07/2026 (AUDITORIA_INTEGRACAO.md, item 3): tinha evolution_api_url/key/instance como valores literais em texto plano, incluindo a API key real — segredo exposto em qualquer export deste workflow. 'HTTP Request · Envia WhatsApp' foi trocado pelo node nativo 'n8n-nodes-evolution-api.evolutionApi' com credential por ID (mesma credential 'evolution_cloudfy' já usada no Agente de Vendas), então esses campos deixaram de ser necessários. Nó mantido como passthrough vazio só pra não precisar reconectar o grafo."
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "pedidos",
+        "limit": 1,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Webhook · Status Atualizado').item.json.body.pedidoId }}"
+            }
+          ]
+        }
+      },
+      "id": "bc31cbd1-b9ba-4025-b01e-91bdf45bbb14",
+      "name": "Supabase · Buscar Pedido",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        80
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "IlPIhLKj72bLR8RD",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "clientes",
+        "limit": 1,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Supabase · Buscar Pedido').item.json.cliente_id }}"
+            }
+          ]
+        }
+      },
+      "id": "bb67c286-d35d-4577-9494-b9af4a598dd7",
+      "name": "Supabase · Buscar Cliente",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1248,
+        80
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "IlPIhLKj72bLR8RD",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "templates_mensagem",
+        "limit": 1,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "status",
+              "condition": "eq",
+              "keyValue": "={{ $('Webhook · Status Atualizado').item.json.body.novoStatus }}"
+            },
+            {
+              "keyName": "ativo",
+              "condition": "eq",
+              "keyValue": "true"
+            }
+          ]
+        }
+      },
+      "id": "0da9e98e-ce11-476b-bc66-3570a82d4242",
+      "name": "Supabase · Buscar Template",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1456,
+        80
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "IlPIhLKj72bLR8RD",
+          "name": "Supabase account"
+        }
+      },
+      "notes": "Sem linha (status inexistente OU ativo=false) → saída vazia → o fluxo encerra sozinho, sem erro e sem enviar nada."
+    },
+    {
+      "parameters": {
+        "content": "## 3 · Renderiza + Idempotência + Envio\nRenderiza: troca {numero} pelo protocolo e {entrega_info} por um texto derivado de forma_entrega/endereco_entrega (vazio quando não aplicável).\n\nIdempotência: o insert em `notificacoes` bate na unique (pedido_id, tipo, canal). tipo = novoStatus, então há no máximo UMA notificação por (pedido, status). Se já existe (operador clicou 2x, ou retry do fetch do dashboard), o insert dá conflito → sai pela saída de erro → Duplicado (Ignorado), sem reenviar. Só depois do insert OK é que manda o WhatsApp e marca enviado=true.",
+        "height": 452,
+        "width": 1040,
+        "color": 4
+      },
+      "id": "2f898eb2-6499-4ed0-89ba-2ad570fd6baf",
+      "name": "Nota · Envio",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1856,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "mensagem",
+              "value": "={{ (function(){ var tpl = String($('Supabase · Buscar Template').first().json.mensagem || ''); var pedido = $('Supabase · Buscar Pedido').first().json; var protocolo = String(pedido.protocolo || ''); var entregaInfo = ''; if (pedido.forma_entrega === 'entrega') { entregaInfo = pedido.endereco_entrega ? ('Endereço de entrega: ' + pedido.endereco_entrega + '.') : ''; } return tpl.split('{numero}').join(protocolo).split('{entrega_info}').join(entregaInfo).replace(/\\s+/g, ' ').trim(); })() }}",
+              "type": "string"
+            },
+            {
+              "id": "2",
+              "name": "telefone",
+              "value": "={{ $('Supabase · Buscar Cliente').first().json.telefone }}",
+              "type": "string"
+            },
+            {
+              "id": "3",
+              "name": "pedido_id",
+              "value": "={{ $('Webhook · Status Atualizado').first().json.body.pedidoId }}",
+              "type": "string"
+            },
+            {
+              "id": "4",
+              "name": "cliente_id",
+              "value": "={{ $('Supabase · Buscar Pedido').first().json.cliente_id }}",
+              "type": "string"
+            },
+            {
+              "id": "5",
+              "name": "tipo",
+              "value": "={{ $('Webhook · Status Atualizado').first().json.body.novoStatus }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d784a762-6de0-4fd1-ad9d-ec724fe1e2ff",
+      "name": "Renderiza Mensagem",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1744,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "tableId": "notificacoes",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "pedido_id",
+              "fieldValue": "={{ $json.pedido_id }}"
+            },
+            {
+              "fieldId": "cliente_id",
+              "fieldValue": "={{ $json.cliente_id }}"
+            },
+            {
+              "fieldId": "tipo",
+              "fieldValue": "={{ $json.tipo }}"
+            },
+            {
+              "fieldId": "canal",
+              "fieldValue": "whatsapp"
+            },
+            {
+              "fieldId": "mensagem",
+              "fieldValue": "={{ $json.mensagem }}"
+            }
+          ]
+        }
+      },
+      "id": "96af9476-7427-4b40-bef1-2d2d9fed79e2",
+      "name": "Supabase · Registra Notificação",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1952,
+        80
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "IlPIhLKj72bLR8RD",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "onError=continueErrorOutput: o conflito na unique (pedido_id, tipo, canal) sai pela 2ª saída (duplicado). A idempotência é garantida pela constraint do banco, não por um check-then-insert (que teria corrida no clique duplo)."
+    },
+    {
+      "parameters": {},
+      "id": "afce9a68-45b4-45f5-a90e-e83df961b70f",
+      "name": "Duplicado (Ignorado)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2112,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "VENANCIO",
+        "remoteJid": "={{ $('Renderiza Mensagem').first().json.telefone }}@s.whatsapp.net",
+        "messageText": "={{ $('Renderiza Mensagem').first().json.mensagem }}",
+        "options_message": {}
+      },
+      "id": "0b23bc4d-af3e-4351-83dd-1fd0339d8506",
+      "name": "HTTP Request · Envia WhatsApp",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        2160,
+        80
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "6i9g6VgRlbuCwWCq",
+          "name": "evolution_cloudfy"
+        }
+      },
+      "notes": "TROCADO em 27/07/2026 (AUDITORIA_INTEGRACAO.md, item 3): era um HTTP Request cru lendo apikey em texto plano de 'Set · Config' (segredo real exposto no JSON exportado). Agora usa o node nativo da Evolution API com credential por ID — mesma credential 'evolution_cloudfy' já usada (desconectada) no Agente de Vendas. A chave real nunca mais aparece neste arquivo."
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "notificacoes",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Supabase · Registra Notificação').first().json.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "enviado",
+              "fieldValue": "={{ true }}"
+            },
+            {
+              "fieldId": "enviado_em",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      },
+      "id": "5be7f714-25a2-41a3-965e-cffd47cede2a",
+      "name": "Supabase · Marca Enviado",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2368,
+        80
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "IlPIhLKj72bLR8RD",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Best-effort: a mensagem já foi enviada acima; uma falha só em marcar enviado=true não deve derrubar a execução."
+    }
+  ],
+  "connections": {
+    "Webhook · Status Atualizado": {
+      "main": [
+        [
+          {
+            "node": "Payload Válido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payload Válido?": {
+      "main": [
+        [
+          {
+            "node": "Set · Config",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Payload Inválido (Ignorado)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set · Config": {
+      "main": [
+        [
+          {
+            "node": "Supabase · Buscar Pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase · Buscar Pedido": {
+      "main": [
+        [
+          {
+            "node": "Supabase · Buscar Cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase · Buscar Cliente": {
+      "main": [
+        [
+          {
+            "node": "Supabase · Buscar Template",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase · Buscar Template": {
+      "main": [
+        [
+          {
+            "node": "Renderiza Mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Renderiza Mensagem": {
+      "main": [
+        [
+          {
+            "node": "Supabase · Registra Notificação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase · Registra Notificação": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request · Envia WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Duplicado (Ignorado)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request · Envia WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Supabase · Marca Enviado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "09304f7ddfc01635a9120999ac264bbfa4eb4005b5f25bf3d517f6739c27a5a7"
+  }
+}
