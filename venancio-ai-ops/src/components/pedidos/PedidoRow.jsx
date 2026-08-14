@@ -69,6 +69,13 @@ export function PedidoRow({ pedido, onClick, atrasado = false, nomeAtendente = n
         >
           Ficha
         </button>
+        <button
+          className="btn btn-sm btn-ghost"
+          title="Delegar separação a um funcionário"
+          onClick={(e) => { e.stopPropagation(); navigate('/separacao', { state: { pedidoId: pedido.id } }) }}
+        >
+          Delegar
+        </button>
       </td>
     </tr>
   )

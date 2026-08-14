@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { funcionariosService } from '@/services/funcionarios.service'
+import { separadorAdminService } from '@/services/separadorAdmin.service'
 import { useFuncionarios } from '@/hooks/useFuncionarios'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -13,7 +14,10 @@ function FuncionarioModal({ funcionario, onSalvar, onFechar }) {
   const [nome, setNome] = useState(funcionario?.nome ?? '')
   const [papeis, setPapeis] = useState(funcionario?.papeis ?? [])
   const [ativo, setAtivo] = useState(funcionario?.ativo ?? true)
+  const [codigoFuncionario, setCodigoFuncionario] = useState(funcionario?.codigo_funcionario ?? '')
   const [salvando, setSalvando] = useState(false)
+  const [gerandoPin, setGerandoPin] = useState(false)
+  const [pinGerado, setPinGerado] = useState(null)
   const { toast } = useToast()
 
   function togglePapel(valor) {
@@ -24,16 +28,44 @@ function FuncionarioModal({ funcionario, onSalvar, onFechar }) {
     e.preventDefault()
     if (!nome.trim()) return toast.aviso('Nome é obrigatório.')
     if (papeis.length === 0) return toast.aviso('Selecione ao menos um papel.')
+    if (papeis.includes('separacao') && codigoFuncionario && codigoFuncionario.trim().length < 2) {
+      return toast.aviso('Código de funcionário precisa ter ao menos 2 caracteres.')
+    }
 
     setSalvando(true)
     try {
-      await onSalvar({ nome: nome.trim(), papeis, ...(isEdicao ? { ativo } : {}) })
+      await onSalvar({
+        nome: nome.trim(),
+        papeis,
+        ...(isEdicao ? { ativo } : {}),
+        ...(papeis.includes('separacao') ? { codigo_funcionario: codigoFuncionario.trim() || null } : {}),
+      })
       toast.sucesso(isEdicao ? 'Funcionário atualizado.' : 'Funcionário criado.')
       onFechar()
     } catch (err) {
       toast.erro(err.message ?? 'Erro ao salvar funcionário.')
     } finally {
       setSalvando(false)
+    }
+  }
+
+  async function handleGerarPin() {
+    if (!codigoFuncionario.trim()) {
+      return toast.aviso('Defina e salve um código de funcionário antes de gerar o PIN.')
+    }
+    if (codigoFuncionario.trim() !== (funcionario?.codigo_funcionario ?? '')) {
+      return toast.aviso('Salve o código de funcionário primeiro (clique em "Salvar Alterações").')
+    }
+    setGerandoPin(true)
+    try {
+      const novoPin = separadorAdminService.gerarPin()
+      await separadorAdminService.resetarPin(funcionario.id, novoPin)
+      setPinGerado(novoPin)
+      toast.sucesso('PIN gerado — anote e entregue ao separador. Não será mostrado de novo.')
+    } catch (err) {
+      toast.erro('Erro ao gerar PIN: ' + err.message)
+    } finally {
+      setGerandoPin(false)
     }
   }
 
@@ -84,6 +116,39 @@ function FuncionarioModal({ funcionario, onSalvar, onFechar }) {
                   />
                   Funcionário ativo (aparece nos dropdowns de atribuição)
                 </label>
+              </div>
+            )}
+
+            {isEdicao && papeis.includes('separacao') && (
+              <div className="form-grupo form-grupo--full">
+                <label className="form-label">Login do Separador (código + PIN)</label>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input
+                    className="input"
+                    style={{ maxWidth: 200 }}
+                    placeholder="Código (ex: sep01)"
+                    value={codigoFuncionario}
+                    onChange={(e) => setCodigoFuncionario(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={handleGerarPin}
+                    disabled={gerandoPin}
+                  >
+                    {gerandoPin ? 'Gerando...' : '🔑 Gerar/Resetar PIN'}
+                  </button>
+                </div>
+                <p className="form-hint">
+                  Código de login que o separador digita no app/tela dele. O PIN é gerado por aqui
+                  (nunca pelo próprio separador) e só é mostrado uma vez.
+                </p>
+                {pinGerado && (
+                  <div className="estado-erro estado-erro--compacto" style={{ borderColor: 'var(--success)', background: 'rgba(47,168,90,0.1)', marginTop: 8 }}>
+                    <strong>PIN gerado: {pinGerado}</strong>
+                    <div style={{ fontSize: 12, marginTop: 4 }}>Anote e entregue ao separador agora — não será exibido de novo.</div>
+                  </div>
+                )}
               </div>
             )}
           </div>
