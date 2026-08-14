@@ -7,6 +7,7 @@
 // Mesmo formato de dois passos em sequência que listaEscolar.js (por isso
 // exporta `estados: [...]` em vez de um único `{ STATE, mensagem, processar }`).
 
+const fallback = require('./fallback');
 const cadastroFiscal = require('./cadastroFiscal');
 
 const ESTADO_LISTA = 'COTACAO_EMPRESA_LISTA';
@@ -21,6 +22,14 @@ function mensagemLista() {
 
 function processarLista(textoRecebido, sessao) {
   const itens = textoRecebido.trim();
+
+  // Sem isso, uma mensagem vazia/só espaço virava um orçamento com 0 itens
+  // (achado M1 do diagnóstico de 30/07/2026) — mesmo padrão de validação já
+  // usado em listaEscolar.js (ESTADO_ESCOLA_OUTRA_LISTA_MATERIAL).
+  if (!itens) {
+    return { estado: ESTADO_LISTA, resposta: fallback.mensagemOpcaoInvalida(mensagemLista()) };
+  }
+
   return {
     estado: ESTADO_OBSERVACAO,
     dados: { ...sessao.dados, itensCotacaoEmpresa: itens },

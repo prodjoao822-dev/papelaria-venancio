@@ -18,34 +18,22 @@ const logger = require('../utils/logger');
 // eliminando essa classe de erro em vez de só reduzir a tentativa de reenvio.
 const agenteSemConexaoOciosa = new Agent({ keepAliveTimeout: 1, keepAliveMaxTimeout: 1 });
 
-// A Evolution API (Baileys por baixo) reenvia pelo webhook, como
-// `messages.upsert` com `fromMe: true`, tanto uma mensagem que um humano
-// digitou manualmente no WhatsApp da loja quanto uma mensagem que o próprio
-// bot acabou de mandar por aqui (as duas saem da mesma sessão autenticada, o
-// WhatsApp não distingue origem). Sem isso, o bot pausava a si mesmo a cada
-// resposta seguida (ver ARCHITECTURE_REVIEW.md) — guardamos por alguns
-// minutos o id de toda mensagem que nós mandamos pra `webhookController`
-// conseguir ignorar o eco e só pausar de verdade quando o fromMe for de um
-// humano.
-const idsEnviadosPeloBot = new Set();
-const TEMPO_DE_VIDA_DO_ID_MS = 5 * 60 * 1000;
+// O reconhecimento do eco (`fromMe` que na verdade é mensagem nossa) mora em
+// services/registroDeEcos.js — inclusive o porquê de cada casamento e dos
+// prazos. Aqui ficam só os dois pontos de registro, no caminho do envio.
+const registroDeEcos = require('./registroDeEcos');
 
-function registrarIdEnviadoPeloBot(resultadoEnvio) {
-  const id = resultadoEnvio?.key?.id;
-  if (!id) return;
-
-  idsEnviadosPeloBot.add(id);
-  // Expira sozinho caso o eco nunca chegue (ex.: webhook de saída desabilitado
-  // nessa instância) — evita o Set crescer pra sempre.
-  setTimeout(() => idsEnviadosPeloBot.delete(id), TEMPO_DE_VIDA_DO_ID_MS).unref();
+function registrarConteudoEnviadoPeloBot(telefoneDestino, texto) {
+  registroDeEcos.registrarConteudoEnviado(telefoneDestino, texto);
 }
 
-// Chamado pelo webhookController ao receber um `fromMe: true`. Retorna true
-// (e "consome" o id) quando é o eco de uma mensagem que o próprio bot mandou.
-function foiEnviadaPeloBot(mensagemId) {
-  if (!mensagemId || !idsEnviadosPeloBot.has(mensagemId)) return false;
-  idsEnviadosPeloBot.delete(mensagemId);
-  return true;
+function registrarIdEnviadoPeloBot(resultadoEnvio) {
+  registroDeEcos.registrarIdEnviado(resultadoEnvio?.key?.id);
+}
+
+// Chamado pelo webhookController ao receber um `fromMe: true`.
+function foiEnviadaPeloBot(mensagemId, telefoneDestino, texto) {
+  return registroDeEcos.consumirEcoDoBot(mensagemId, telefoneDestino, texto);
 }
 
 // `webhookController` já marca a mensagem como processada (`ultima_mensagem_id`)
@@ -57,26 +45,36 @@ function foiEnviadaPeloBot(mensagemId) {
 // sem precisar de fila/infra nova.
 const MAX_TENTATIVAS_ENVIO = 3;
 
-// Códigos de erro seguros pra reenviar até MAX_TENTATIVAS_ENVIO inteiras:
-// - ECONNREFUSED/ENOTFOUND/EAI_AGAIN/UND_ERR_CONNECT_TIMEOUT: a conexão nunca
-//   chegou a se estabelecer, o Evolution API nunca recebeu nada.
-// - ECONNRESET: quase sempre é o pool de conexões (keep-alive) do fetch
-//   reaproveitando um socket que o servidor remoto já fechou por inatividade
-//   — o reset acontece na hora de reusar a conexão, antes do corpo da
-//   requisição sair de verdade (padrão confirmado em teste real em 22/07:
-//   resets se repetindo a cada ~10-50s, batendo com timeout de conexão ociosa
-//   do lado do servidor, não com "resposta perdida no meio do envio").
-// Qualquer OUTRO erro é tratado como ambíguo (reenvia só mais 1x, não as
-// MAX_TENTATIVAS_ENVIO inteiras) — pode ter saído e sido entregue mesmo com o
-// fetch() lançando erro no cliente, e reenviar às cegas várias vezes arrisca
-// duplicar pro cliente.
+// Códigos de erro seguros pra reenviar até MAX_TENTATIVAS_ENVIO inteiras: a
+// conexão nunca chegou a se estabelecer, então a Evolution API não recebeu nada
+// e reenviar não duplica.
 const ERROS_SEGUROS_PARA_RETENTAR_INTEGRALMENTE = new Set([
-  'ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'UND_ERR_CONNECT_TIMEOUT', 'ECONNRESET',
+  'ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'UND_ERR_CONNECT_TIMEOUT',
 ]);
 
-function erroSeguroParaRetentarIntegralmente(erro) {
-  const codigo = erro?.cause?.code || erro?.code;
-  return ERROS_SEGUROS_PARA_RETENTAR_INTEGRALMENTE.has(codigo);
+// ECONNRESET era tratado como seguro, na hipótese de que sempre vinha do pool
+// de keep-alive reusando socket morto (antes do corpo sair). O `Agent` acima
+// eliminou essa classe — e o que sobrou, medido em 08/08/2026, é ECONNRESET com
+// `syscall: 'read'`: a requisição SAIU, a mensagem foi entregue, e o que se
+// perdeu foi a resposta. Reenviar aí duplica pro cliente, e foi o que produziu
+// o "Qual o ano?" três vezes seguidas no WhatsApp.
+//
+// Então o desempate é pelo syscall, não pelo código:
+//   connect  -> nunca saiu          -> retentar à vontade
+//   read     -> saiu e foi entregue -> NÃO retentar
+//   write/outros -> ambíguo         -> uma segunda tentativa, no máximo
+function mensagemProvavelmenteEntregue(erro) {
+  return (erro?.cause ?? erro)?.syscall === 'read';
+}
+
+function tentativasMaximasPara(erro) {
+  const causa = erro?.cause ?? erro;
+  const codigo = causa?.code;
+
+  if (mensagemProvavelmenteEntregue(erro)) return 1;
+  if (ERROS_SEGUROS_PARA_RETENTAR_INTEGRALMENTE.has(codigo)) return MAX_TENTATIVAS_ENVIO;
+  if (codigo === 'ECONNRESET' && causa?.syscall === 'connect') return MAX_TENTATIVAS_ENVIO;
+  return 2;
 }
 
 function aguardar(ms) {
@@ -89,15 +87,15 @@ async function fetchComRetentativa(url, opcoes, descricaoErro) {
       // eslint-disable-next-line no-await-in-loop -- retentativas são sequenciais por natureza
       return await fetch(url, { ...opcoes, dispatcher: agenteSemConexaoOciosa });
     } catch (erroDeRede) {
-      // Erro genuinamente ambíguo (não está na lista de seguros): ainda vale
-      // tentar mais uma vez (não deixar o cliente sem resposta nenhuma por
-      // causa de um blip), mas não as MAX_TENTATIVAS_ENVIO inteiras — reduz a
-      // janela de duplicar sem eliminar a rede de segurança contra silêncio total.
-      const tentativasMaximasParaEsteErro = erroSeguroParaRetentarIntegralmente(erroDeRede) ? MAX_TENTATIVAS_ENVIO : 2;
+      const tentativasMaximasParaEsteErro = tentativasMaximasPara(erroDeRede);
 
       if (tentativa >= tentativasMaximasParaEsteErro) {
-        logger.erro(descricaoErro, erroDeRede);
-        throw new Error(`${descricaoErro}: ${erroDeRede.message}`);
+        const erro = new Error(`${descricaoErro}: ${erroDeRede.message}`);
+        // Quem chama decide o que fazer: perder a resposta de um envio que
+        // chegou não é a mesma coisa que não conseguir enviar (ver enviarTexto).
+        erro.provavelmenteEntregue = mensagemProvavelmenteEntregue(erroDeRede);
+        if (!erro.provavelmenteEntregue) logger.erro(descricaoErro, erroDeRede);
+        throw erro;
       }
       logger.aviso(
         `${descricaoErro} (tentativa ${tentativa}/${tentativasMaximasParaEsteErro}) — tentando de novo`,
@@ -110,21 +108,59 @@ async function fetchComRetentativa(url, opcoes, descricaoErro) {
   return undefined; // inalcançável: o loop sempre retorna ou lança na última tentativa
 }
 
+// Perder a resposta de um envio que CHEGOU não é falha de envio. Tratar como
+// falha fazia o webhookController devolver 500 pra Evolution API, que reentrega
+// o webhook — reentrega inútil, porque o estado já foi persistido e o dedup por
+// `ultima_mensagem_id` descarta tudo (o log de 08/08/2026 está cheio de
+// "Webhook duplicado ignorado" logo depois de cada 500). Pior: nos caminhos em
+// que o estado ainda NÃO foi persistido (consulta ao Agente de Vendas), a
+// reentrega refazia a chamada ao n8n — resposta duplicada e custo de LLM à toa.
+//
+// Devolve `null` quando a mensagem saiu mas a resposta se perdeu. Nenhum ponto
+// do código usa o retorno de enviarTexto/enviarArquivo — ele só alimenta o
+// registro de id pro filtro de eco, que nesse caso já foi coberto pelo registro
+// por conteúdo feito antes do envio.
+async function fetchTolerandoRespostaPerdida(executarEnvio, telefoneDestino) {
+  try {
+    return await executarEnvio();
+  } catch (erro) {
+    if (!erro.provavelmenteEntregue) throw erro;
+
+    logger.aviso(
+      `Resposta da Evolution API se perdeu no envio para ${telefoneDestino}; `
+      + 'a mensagem foi entregue, seguindo sem tratar como erro',
+      erro.message
+    );
+    return null;
+  }
+}
+
 async function enviarTexto(telefoneDestino, mensagem) {
   const url = `${env.EVOLUTION_API_URL}/message/sendText/${env.EVOLUTION_INSTANCE}`;
 
-  const resposta = await fetchComRetentativa(
-    url,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: env.EVOLUTION_API_KEY,
+  // Antes do fetch, de propósito: se o envio falhar na leitura da resposta a
+  // mensagem ainda assim foi entregue e vai ecoar de volta — sem este registro,
+  // o eco chega sem id conhecido e o bot trata a própria fala como se fosse do
+  // cliente (ver comentário em conteudosEnviadosPeloBot).
+  registrarConteudoEnviadoPeloBot(telefoneDestino, mensagem);
+
+  const resposta = await fetchTolerandoRespostaPerdida(
+    () => fetchComRetentativa(
+      url,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: env.EVOLUTION_API_KEY,
+        },
+        body: JSON.stringify({ number: telefoneDestino, text: mensagem }),
       },
-      body: JSON.stringify({ number: telefoneDestino, text: mensagem }),
-    },
-    `Falha de rede ao enviar mensagem para ${telefoneDestino}`
+      `Falha de rede ao enviar mensagem para ${telefoneDestino}`
+    ),
+    telefoneDestino
   );
+
+  if (!resposta) return null;
 
   if (!resposta.ok) {
     const corpoErro = await resposta.text().catch(() => '');
@@ -149,24 +185,35 @@ async function enviarTexto(telefoneDestino, mensagem) {
 async function enviarMedia(telefoneDestino, { nomeArquivo, legenda, conteudoBase64 }) {
   const url = `${env.EVOLUTION_API_URL}/message/sendMedia/${env.EVOLUTION_INSTANCE}`;
 
-  const resposta = await fetchComRetentativa(
-    url,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: env.EVOLUTION_API_KEY,
+  // Mesmo motivo do enviarTexto: se a resposta se perder, o id não é registrado
+  // e o eco do documento chega como `fromMe` desconhecido. Aqui o estrago é
+  // menor (o bot se pausa sozinho, não corrompe pedido), e só dá pra casar pela
+  // legenda — documento sem legenda continua sem essa rede.
+  registrarConteudoEnviadoPeloBot(telefoneDestino, legenda);
+
+  const resposta = await fetchTolerandoRespostaPerdida(
+    () => fetchComRetentativa(
+      url,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: env.EVOLUTION_API_KEY,
+        },
+        body: JSON.stringify({
+          number: telefoneDestino,
+          mediatype: 'document',
+          fileName: nomeArquivo,
+          caption: legenda,
+          media: conteudoBase64,
+        }),
       },
-      body: JSON.stringify({
-        number: telefoneDestino,
-        mediatype: 'document',
-        fileName: nomeArquivo,
-        caption: legenda,
-        media: conteudoBase64,
-      }),
-    },
-    `Falha de rede ao enviar arquivo para ${telefoneDestino}`
+      `Falha de rede ao enviar arquivo para ${telefoneDestino}`
+    ),
+    telefoneDestino
   );
+
+  if (!resposta) return null;
 
   if (!resposta.ok) {
     const corpoErro = await resposta.text().catch(() => '');

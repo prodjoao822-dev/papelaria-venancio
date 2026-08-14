@@ -24,6 +24,7 @@ const ESTADO_ESCOLA = 'LISTA_ESCOLAR_ESCOLA';
 const ESTADO_ESCOLA_OUTRA_NOME = 'LISTA_ESCOLAR_ESCOLA_OUTRA_NOME';
 const ESTADO_ESCOLA_OUTRA_LISTA_MATERIAL = 'LISTA_ESCOLAR_ESCOLA_OUTRA_LISTA_MATERIAL';
 const ESTADO_ANO = 'LISTA_ESCOLAR_ANO';
+const ESTADO_ANO_OUTRO = 'LISTA_ESCOLAR_ANO_OUTRO';
 const ESTADO_PERIODO = 'LISTA_ESCOLAR_PERIODO';
 const ESTADO_OBSERVACAO = 'LISTA_ESCOLAR_OBSERVACAO';
 // Depois de notificar, volta pro submenu de Vendas (não pro menu principal):
@@ -39,17 +40,18 @@ const ROTULO_OUTRA_ESCOLA = 'Não encontrei minha escola / outra escola';
 // lista real (escolasService.listarEscolasAtivas(), ordenada por nome) em
 // sessao.dados.escolas antes de renderizar esta mensagem.
 //
-// Os nomes aqui precisam bater exatamente com as chaves usadas em
-// src/config/materiaisEscolares.js — são as 4 escolas de teste que já têm
-// PDF de lista de material cadastrado.
-const ESCOLAS_EXEMPLO = [
-  { id: 'cec', nome: 'CEC' },
-  { id: 'multipla', nome: 'Múltipla' },
-  { id: 'linus-pauling', nome: 'Linus Pauling' },
-  { id: 'mundo-livre', nome: 'Mundo Livre' },
-];
+// O catálogo vem de escolas.json, gerado junto com o mapeamento de materiais
+// por scripts/importarListasEscolares.js — assim a lista offline não sai de
+// sincronia com os PDFs importados. Nem toda escola daqui tem lista cadastrada:
+// as que não têm caem no fallback de notificar a Vanessa, que é o comportamento
+// esperado (ver src/config/materiaisEscolares.js).
+const ESCOLAS_EXEMPLO = require('../../config/escolas.json');
 
-// Lista de séries confirmada com o dono do projeto.
+const ROTULO_OUTRO_ANO = 'Não encontrei a turma do meu filho';
+
+// Lista genérica de séries, usada só quando não dá pra montar o menu a partir do
+// material da escola: na rota "outra escola" e em escolas sem nenhuma lista
+// cadastrada. Quando a escola tem catálogo, o menu vem dele (ver opcoesDeAno).
 const ANOS_DISPONIVEIS = [
   'Maternal',
   'Jardim',
@@ -120,18 +122,45 @@ function processarEscolaOutraNome(textoRecebido, sessao) {
 
 // --- Passo 2: qual o ano/série ---
 
-function mensagemAno() {
-  return `Qual o ano?\n\n${numerarOpcoes(ANOS_DISPONIVEIS)}`;
+// Opções do "Qual o ano?", na ordem em que o cliente vê.
+//
+// Quando a escola tem material cadastrado, o menu mostra só as turmas DELA, com
+// o nome que ELA usa — "Grupo 4", "Infantil 3", "Nível 2", "Creche 1". Isso
+// resolve dois problemas de uma vez: (1) Educação Infantil, onde cada escola tem
+// um sistema de nomes e não existe conversão confiável pra "Maternal"/"Jardim";
+// (2) opção morta, tipo oferecer Ensino Médio pra escola que vai até o 9º ano.
+// A última opção é a saída pra quem não se encontrar na lista.
+//
+// Sem catálogo (rota "outra escola", ou escola sem nenhuma lista) cai na lista
+// genérica — aí não faz sentido oferecer "não encontrei", porque nenhuma das
+// opções leva a um PDF mesmo.
+function opcoesDeAno(sessao) {
+  const nomeEscola = sessao?.dados?.escolaSelecionada?.nome;
+  const doCatalogo = nomeEscola ? materiaisEscolares.listarAnos(nomeEscola) : [];
+  return doCatalogo.length > 0 ? [...doCatalogo, ROTULO_OUTRO_ANO] : ANOS_DISPONIVEIS;
+}
+
+function mensagemAno(sessao) {
+  return `Qual o ano?\n\n${numerarOpcoes(opcoesDeAno(sessao))}`;
 }
 
 function processarAno(textoRecebido, sessao) {
-  const indice = parseOpcaoNumerica(textoRecebido, ANOS_DISPONIVEIS.length);
+  const opcoes = opcoesDeAno(sessao);
+  const indice = parseOpcaoNumerica(textoRecebido, opcoes.length);
 
   if (indice === null) {
-    return { estado: ESTADO_ANO, resposta: fallback.mensagemOpcaoInvalida(mensagemAno()) };
+    return { estado: ESTADO_ANO, resposta: fallback.mensagemOpcaoInvalida(mensagemAno(sessao)) };
   }
 
-  const anoEscolhido = ANOS_DISPONIVEIS[indice];
+  const anoEscolhido = opcoes[indice];
+
+  // "Não encontrei a turma": em vez de registrar esse rótulo como se fosse a
+  // série do aluno, pede o nome da turma — é o que a Vanessa precisa saber pra
+  // atender, e é também o sinal de que falta lista pra essa turma na origem.
+  if (anoEscolhido === ROTULO_OUTRO_ANO) {
+    return { estado: ESTADO_ANO_OUTRO, dados: sessao.dados };
+  }
+
   const dados = { ...sessao.dados, anoSelecionado: anoEscolhido };
   const nomeEscola = sessao.dados.escolaSelecionada?.nome;
 
@@ -143,11 +172,30 @@ function processarAno(textoRecebido, sessao) {
   }
 
   // Só pergunta o período (Integral/Regular) quando a escola realmente tiver
-  // as duas versões cadastradas pra esse ano (hoje, só a Linus Pauling do 1º
-  // ao 5º ano). Pra todas as outras combinações, pula direto pra observação.
+  // as duas versões cadastradas pra essa turma (hoje, só a Linus Pauling: Grupo
+  // 2 a 5 e 1º ao 5º ano). Pra todas as outras combinações, pula direto pra
+  // observação.
   const precisaPerguntarPeriodo = materiaisEscolares.temVariacaoDePeriodo(nomeEscola, anoEscolhido);
 
   return { estado: precisaPerguntarPeriodo ? ESTADO_PERIODO : ESTADO_OBSERVACAO, dados };
+}
+
+// --- Passo 2b (condicional): turma que não está no menu da escola ---
+
+function mensagemAnoOutro() {
+  return 'Qual a turma ou o ano do seu filho? Pode escrever do jeito que a escola chama.';
+}
+
+function processarAnoOutro(textoRecebido, sessao) {
+  const ano = textoRecebido.trim();
+
+  if (!ano) {
+    return { estado: ESTADO_ANO_OUTRO, resposta: fallback.mensagemOpcaoInvalida(mensagemAnoOutro()) };
+  }
+
+  // Vai direto pra observação: se a turma não está no menu da escola, também não
+  // há PDF pra ela — `buscarMaterial` devolve null e o fluxo notifica a Vanessa.
+  return { estado: ESTADO_OBSERVACAO, dados: { ...sessao.dados, anoSelecionado: ano } };
 }
 
 // --- Passo 2b (condicional, "outra escola"): lista de material em texto ---
@@ -203,11 +251,16 @@ function mensagemObservacao() {
   return 'Você tem alguma observação a fazer?';
 }
 
-function montarMensagemComMaterial(escola, ano, periodo, nomeCliente) {
+// O anexo é anunciado pelo que ele realmente é: na maioria das turmas o bot
+// manda o orçamento (cotação com preço), mas onde a escola não tem orçamento na
+// origem vai a lista crua, sem valor. Chamar as duas coisas de "orçamento" faria
+// o cliente voltar perguntando o preço que não está lá.
+function montarMensagemComMaterial(escola, ano, periodo, nomeCliente, ehOrcamento) {
   const sufixoPeriodo = periodo ? ` (Período ${periodo})` : '';
   const nome = primeiroNome(nomeCliente);
   const abertura = nome ? `Prontinho, ${nome}! ` : 'Prontinho! ';
-  return `${abertura}Aqui está a lista de material de ${escola} - ${ano}${sufixoPeriodo}. `
+  const oQueSegue = ehOrcamento ? 'o orçamento do material' : 'a lista de material';
+  return `${abertura}Aqui está ${oQueSegue} de ${escola} - ${ano}${sufixoPeriodo}. `
     + 'Se precisar de mais alguma coisa, é só chamar por aqui.';
 }
 
@@ -258,6 +311,9 @@ function processarObservacao(textoRecebido, sessao, contexto = {}) {
       periodo: periodoSelecionado,
       observacao,
       materialEnviadoAutomaticamente: Boolean(material),
+      // Sinaliza pra Vanessa que essa turma foi atendida com a lista da escola
+      // em vez do orçamento — é onde ela pode precisar cotar na mão.
+      enviadoSemOrcamento: Boolean(material) && !material.ehOrcamento,
     },
   }];
 
@@ -268,7 +324,9 @@ function processarObservacao(textoRecebido, sessao, contexto = {}) {
       tipo: 'ENVIAR_ARQUIVO',
       dados: { caminhoArquivo: material.caminhoAbsoluto, nomeArquivo: material.nomeArquivo },
     });
-    resposta = montarMensagemComMaterial(nomeEscola, anoSelecionado, periodoSelecionado, contexto.nomeCliente);
+    resposta = montarMensagemComMaterial(
+      nomeEscola, anoSelecionado, periodoSelecionado, contexto.nomeCliente, material.ehOrcamento,
+    );
   }
 
   return {
@@ -289,6 +347,12 @@ module.exports = {
       aceitaTextoLivre: true,
     },
     { STATE: ESTADO_ANO, mensagem: mensagemAno, processar: processarAno },
+    {
+      STATE: ESTADO_ANO_OUTRO,
+      mensagem: mensagemAnoOutro,
+      processar: processarAnoOutro,
+      aceitaTextoLivre: true,
+    },
     {
       STATE: ESTADO_ESCOLA_OUTRA_LISTA_MATERIAL,
       mensagem: mensagemOutraListaMaterial,

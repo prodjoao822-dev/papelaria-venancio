@@ -25,13 +25,24 @@ async function obterEmpresaId() {
 
 // Cria o cliente na primeira mensagem ou atualiza o nome/atualizado_em nas seguintes.
 // O telefone (dentro da empresa) é a chave de identificação (conflito é resolvido por ele).
+//
+// `nome` vazio/nulo é OMITIDO do payload de propósito, em vez de ir como null: o
+// PostgREST monta o `ON CONFLICT DO UPDATE SET` a partir das chaves presentes no
+// JSON, então mandar `nome: null` APAGARIA o nome já cadastrado. Isso importa
+// porque quem chama nem sempre tem um nome confiável em mãos — ver o
+// `fromMe` no webhookController, onde o pushName é o da própria loja.
 async function upsertCliente(telefone, nome) {
   const empresaId = await obterEmpresaId();
 
   const { data, error } = await supabase
     .from('clientes')
     .upsert(
-      { telefone, nome, empresa_id: empresaId, atualizado_em: new Date().toISOString() },
+      {
+        telefone,
+        ...(nome ? { nome } : {}),
+        empresa_id: empresaId,
+        atualizado_em: new Date().toISOString(),
+      },
       { onConflict: 'empresa_id,telefone' }
     )
     .select()

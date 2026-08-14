@@ -84,15 +84,33 @@ function criarEstadoDeMenu(config) {
     }
 
     if (opcao.tipo === 'notificar') {
+      const acoes = [{
+        tipo: 'NOTIFICAR_HUMANO',
+        alvo: opcao.alvo,
+        dados: opcao.intencao ? { intencao: opcao.intencao } : {},
+      }];
+
+      // `pausarBot` na opção significa: a partir daqui quem responde é gente, o
+      // atendimento automático sai de cena. Sem isso o bot prometia "já vamos te
+      // atender por aqui!" e continuava respondendo — em 13/08 uma cliente
+      // escolheu "Falar com um atendente", recebeu a promessa, disse "Oi" e
+      // levou o menu de volta na cara.
+      //
+      // Vira AÇÃO, e não uma escrita aqui, porque este motor é função pura (sem
+      // I/O): quem executa é o webhookController, igual já faz com
+      // CONSULTAR_AGENTE_VENDAS.
+      if (opcao.pausarBot) {
+        acoes.push({
+          tipo: 'PAUSAR_ATENDIMENTO_AUTOMATICO',
+          dados: { motivo: `cliente escolheu "${opcao.rotulo}" no menu` },
+        });
+      }
+
       return {
         estado: opcao.proximoEstado || STATE,
         dados: dadosBase,
         resposta: mensagemAguardarAtendimento(contexto.nomeCliente),
-        acoes: [{
-          tipo: 'NOTIFICAR_HUMANO',
-          alvo: opcao.alvo,
-          dados: opcao.intencao ? { intencao: opcao.intencao } : {},
-        }],
+        acoes,
       };
     }
 

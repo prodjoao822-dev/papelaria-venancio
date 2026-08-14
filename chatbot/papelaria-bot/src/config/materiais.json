@@ -1,0 +1,717 @@
+{
+  "alternativo": {
+    "menu": [
+      "Grupo 3",
+      "Grupo 4",
+      "Grupo 5",
+      "1º ano - Fundamental",
+      "2º ano - Fundamental",
+      "3º ano - Fundamental",
+      "4º ano - Fundamental",
+      "5º ano - Fundamental",
+      "6º ano - Fundamental",
+      "7º ano - Fundamental",
+      "8º ano - Fundamental",
+      "9º ano - Fundamental",
+      "1º ano - Ensino Médio",
+      "2º ano - Ensino Médio",
+      "3º ano - Ensino Médio"
+    ],
+    "semPeriodo": {
+      "1º ano - Fundamental": "alternativo/1-ano-fundamental.pdf",
+      "2º ano - Fundamental": "alternativo/2-ano-fundamental.pdf",
+      "3º ano - Ensino Médio": "alternativo/3-serie-medio.pdf",
+      "3º ano - Fundamental": "alternativo/3-ano-fundamental.pdf",
+      "4º ano - Fundamental": "alternativo/4-ano-fundamental.pdf",
+      "5º ano - Fundamental": "alternativo/5-ano-fundamental.pdf",
+      "6º ano - Fundamental": "alternativo/6-ano-fundamental.pdf",
+      "7º ano - Fundamental": "alternativo/7-ano-fundamental.pdf",
+      "8º ano - Fundamental": "alternativo/8-ano-fundamental.pdf",
+      "9º ano - Fundamental": "alternativo/9-ano-fundamental.pdf",
+      "Grupo 3": "alternativo/grupo-3.pdf",
+      "Grupo 4": "alternativo/grupo-4.pdf",
+      "Grupo 5": "alternativo/grupo-5.pdf",
+      "1º ano - Ensino Médio": "alternativo/1-a-2-serie-medio.pdf",
+      "2º ano - Ensino Médio": "alternativo/1-a-2-serie-medio.pdf"
+    }
+  },
+  "americano": {
+    "menu": [
+      "Grupo 3",
+      "Grupo 4",
+      "Grupo 5",
+      "1º ano - Fundamental",
+      "2º ano - Fundamental",
+      "3º ano - Fundamental",
+      "4º ano - Fundamental",
+      "5º ano - Fundamental",
+      "6º ano - Fundamental",
+      "7º ano - Fundamental",
+      "8º ano - Fundamental",
+      "9º ano - Fundamental",
+      "1º ano - Ensino Médio",
+      "2º ano - Ensino Médio",
+      "3º ano - Ensino Médio"
+    ],
+    "semPeriodo": {
+      "1º ano - Fundamental": "americano/1-ano-fundamental.pdf",
+      "2º ano - Fundamental": "americano/2-ano-fundamental.pdf",
+      "3º ano - Fundamental": "americano/3-ano-fundamental.pdf",
+      "4º ano - Fundamental": "americano/4-ano-fundamental.pdf",
+      "5º ano - Fundamental": "americano/5-ano-fundamental.pdf",
+      "7º ano - Fundamental": "americano/7-ano-fundamental.pdf",
+      "Grupo 3": "americano/grupo-3.pdf",
+      "Grupo 4": "americano/grupo-4.pdf",
+      "Grupo 5": "americano/grupo-5.pdf",
+      "6º ano - Fundamental": "americano/6-ano-fundamental.pdf",
+      "8º ano - Fundamental": "americano/8-a-9-ano-fundamental.pdf",
+      "9º ano - Fundamental": "americano/8-a-9-ano-fundamental.pdf",
+      "1º ano - Ensino Médio": "americano/1-a-3-serie-medio.pdf",
+      "2º ano - Ensino Médio": "americano/1-a-3-serie-medio.pdf",
+      "3º ano - Ensino Médio": "americano/1-a-3-serie-medio.pdf"
+    }
+  },
+  "arca-educa": {
+    "menu": [
+      "1º ano - Fundamental",
+      "2º ano - Fundamental",
+      "3º ano - Fundamental",
+      "4º ano - Fundamental",
+      "5º ano - Fundamental",
+      "6º ano - Fundamental",
+      "7º ano - Fundamental",
+      "8º ano - Fundamental",
+      "9º ano - Fundamental"
+    ],
+    "semPeriodo": {
+      "1º ano - Fundamental": "arca-educa/1-a-9-ano-fundamental.pdf",
+      "2º ano - Fundamental": "arca-educa/1-a-9-ano-fundamental.pdf",
+      "3º ano - Fundamental": "arca-educa/1-a-9-ano-fundamental.pdf",
+      "4º ano - Fundamental": "arca-educa/1-a-9-ano-fundamental.pdf",
+      "5º ano - Fundamental": "arca-educa/1-a-9-ano-fundamental.pdf",
+      "6º ano - Fundamental": "arca-educa/1-a-9-ano-fundamental.pdf",
+      "7º ano - Fundamental": "arca-educa/1-a-9-ano-fundamental.pdf",
+      "8º ano - Fundamental": "arca-educa/1-a-9-ano-fundamental.pdf",
+      "9º ano - Fundamental": "arca-educa/1-a-9-ano-fundamental.pdf"
+    }
+  },
+  "balao-magico": {
+    "menu": [
+      "Creche 1",
+      "Creche 2",
+      "Creche 3",
+      "Pré 1",
+      "Pré 2",
+      "Educação Infantil - Integral",
+      "1º ano - Fundamental",
+      "2º ano - Fundamental",
+      "3º ano - Fundamental",
+      "4º ano - Fundamental",
+      "5º ano - Fundamental"
+    ],
+    "semPeriodo": {
+      "1º ano - Fundamental": "balao-magico/1-ano-fundamental.pdf",
+      "2º ano - Fundamental": "balao-magico/2-ano-fundamental.pdf",
+      "3º ano - Fundamental": "balao-magico/3-ano-fundamental.pdf",
+      "4º ano - Fundamental": "balao-magico/4-ano-fundamental.pdf",
+      "5º ano - Fundamental": "balao-magico/5-ano-fundamental.pdf",
+      "Creche 1": "balao-magico/creche-1.pdf",
+      "Creche 2": "balao-magico/creche-2.pdf",
+      "Creche 3": "balao-magico/creche-3.pdf",
+      "Pré 1": "balao-magico/pre-1.pdf",
+      "Pré 2": "balao-magico/pre-2.pdf",
+      "Educação Infantil - Integral": "balao-magico/educacao-infantil-integral.pdf"
+    }
+  },
+  "cec": {
+    "menu": [
+      "Grupo 3",
+      "Grupo 4",
+      "Grupo 5",
+      "1º ano - Fundamental",
+      "2º ano - Fundamental",
+      "3º ano - Fundamental",
+      "4º ano - Fundamental",
+      "5º ano - Fundamental",
+      "6º ano - Fundamental",
+      "7º ano - Fundamental",
+      "8º ano - Fundamental",
+      "9º ano - Fundamental",
+      "1º ano - Ensino Médio",
+      "2º ano - Ensino Médio",
+      "3º ano - Ensino Médio"
+    ],
+    "semPeriodo": {
+      "1º ano - Fundamental": "cec/1-ano-fundamental.pdf",
+      "2º ano - Fundamental": "cec/2-ano-fundamental.pdf",
+      "3º ano - Fundamental": "cec/3-ano-fundamental.pdf",
+      "4º ano - Fundamental": "cec/4-ano-fundamental.pdf",
+      "5º ano - Fundamental": "cec/5-ano-fundamental.pdf",
+      "9º ano - Fundamental": "cec/9-ano-fundamental.pdf",
+      "Grupo 3": "cec/grupo-3.pdf",
+      "Grupo 4": "cec/grupo-4.pdf",
+      "Grupo 5": "cec/grupo-5.pdf",
+      "6º ano - Fundamental": "cec/6-a-8-ano-fundamental.pdf",
+      "7º ano - Fundamental": "cec/6-a-8-ano-fundamental.pdf",
+      "8º ano - Fundamental": "cec/6-a-8-ano-fundamental.pdf",
+      "1º ano - Ensino Médio": "cec/1-a-3-serie-medio.pdf",
+      "2º ano - Ensino Médio": "cec/1-a-3-serie-medio.pdf",
+      "3º ano - Ensino Médio": "cec/1-a-3-serie-medio.pdf"
+    }
+  },
+  "colorart": {
+    "menu": [
+      "Berçário",
+      "Grupo 2",
+      "Grupo 3",
+      "Grupo 4"
+    ],
+    "semPeriodo": {
+      "Berçário": "colorart/bercario.pdf",
+      "Grupo 2": "colorart/grupo-2.pdf",
+      "Grupo 3": "colorart/grupo-3-4.pdf",
+      "Grupo 4": "colorart/grupo-3-4.pdf"
+    }
+  },
+  "colegio-adventista-laranjeiras": {
+    "menu": [
+      "Maternal 2",
+      "Pré 1",
+      "Pré 2",
+      "1º ano - Fundamental",
+      "2º ano - Fundamental",
+      "3º ano - Fundamental",
+      "4º ano - Fundamental",
+      "5º ano - Fundamental",
+      "6º ano - Fundamental",
+      "7º ano - Fundamental",
+      "8º ano - Fundamental",
+      "9º ano - Fundamental",
+      "1º ano - Ensino Médio",
+      "2º ano - Ensino Médio"
+    ],
+    "semPeriodo": {
+      "1º ano - Fundamental": "colegio-adventista-laranjeiras/1-ano-fundamental.pdf",
+      "2º ano - Fundamental": "colegio-adventista-laranjeiras/2-ano-fundamental.pdf",
+      "3º ano - Fundamental": "colegio-adventista-laranjeiras/3-ano-fundamental.pdf",
+      "4º ano - Fundamental": "colegio-adventista-laranjeiras/4-ano-fundamental.pdf",
+      "5º ano - Fundamental": "colegio-adventista-laranjeiras/5-ano-fundamental.pdf",
+      "Maternal 2": "colegio-adventista-laranjeiras/maternal-2.pdf",
+      "Pré 1": "colegio-adventista-laranjeiras/pre-1.pdf",
+      "Pré 2": "colegio-adventista-laranjeiras/pre-2.pdf",
+      "1º ano - Ensino Médio": "colegio-adventista-laranjeiras/1-a-2-serie-medio.pdf",
+      "2º ano - Ensino Médio": "colegio-adventista-laranjeiras/1-a-2-serie-medio.pdf",
+      "6º ano - Fundamental": "colegio-adventista-laranjeiras/6-a-9-ano-fundamental.pdf",
+      "7º ano - Fundamental": "colegio-adventista-laranjeiras/6-a-9-ano-fundamental.pdf",
+      "8º ano - Fundamental": "colegio-adventista-laranjeiras/6-a-9-ano-fundamental.pdf",
+      "9º ano - Fundamental": "colegio-adventista-laranjeiras/6-a-9-ano-fundamental.pdf"
+    }
+  },
+  "dinamico": {
+    "menu": [
+      "Nível 2",
+      "Nível 3",
+      "Nível 4",
+      "Pré 1",
+      "1º ano - Fundamental",
+      "2º ano - Fundamental",
+      "3º ano - Fundamental",
+      "4º ano - Fundamental",
+      "5º ano - Fundamental"
+    ],
+    "semPeriodo": {
+      "1º ano - Fundamental": "dinamico/1-ano-fundamental.pdf",
+      "2º ano - Fundamental": "dinamico/2-ano-fundamental.pdf",
+      "3º ano - Fundamental": "dinamico/3-ano-fundamental.pdf",
+      "4º ano - Fundamental": "dinamico/4-ano-fundamental.pdf",
+      "5º ano - Fundamental": "dinamico/5-ano-fundamental.pdf",
+      "Nível 2": "dinamico/nivel-2.pdf",
+      "Nível 3": "dinamico/nivel-3.pdf",
+      "Nível 4": "dinamico/nivel-4.pdf",
+      "Pré 1": "dinamico/pre-1.pdf"
+    }
+  },
+  "ebc": {
+    "menu": [
+      "3º ano - Fundamental",
+      "4º ano - Fundamental",
+      "5º ano - Fundamental"
+    ],
+    "semPeriodo": {
+      "3º ano - Fundamental": "ebc/3-a-5-ano-fundamental.pdf",
+      "4º ano - Fundamental": "ebc/3-a-5-ano-fundamental.pdf",
+      "5º ano - Fundamental": "ebc/3-a-5-ano-fundamental.pdf"
+    }
+  },
+  "henrique-valentim": {
+    "menu": [
+      "1º ano - Fundamental",
+      "2º ano - Fundamental",
+      "3º ano - Fundamental",
+      "4º ano - Fundamental",
+      "5º ano - Fundamental",
+      "6º ano - Fundamental",
+      "7º ano - Fundamental",
+      "8º ano - Fundamental",
+      "9º ano - Fundamental"
+    ],
+    "semPeriodo": {
+      "1º ano - Fundamental": "henrique-valentim/1-ano-fundamental.pdf",
+      "2º ano - Fundamental": "henrique-valentim/2-ano-fundamental.pdf",
+      "3º ano - Fundamental": "henrique-valentim/3-ano-fundamental.pdf",
+      "4º ano - Fundamental": "henrique-valentim/4-ano-fundamental.pdf",
+      "5º ano - Fundamental": "henrique-valentim/5-ano-fundamental.pdf",
+      "6º ano - Fundamental": "henrique-valentim/6-a-9-ano-fundamental.pdf",
+      "7º ano - Fundamental": "henrique-valentim/6-a-9-ano-fundamental.pdf",
+      "8º ano - Fundamental": "henrique-valentim/6-a-9-ano-fundamental.pdf",
+      "9º ano - Fundamental": "henrique-valentim/6-a-9-ano-fundamental.pdf"
+    }
+  },
+  "idade-kids": {
+    "menu": [
+      "Grupo 1",
+      "Grupo 2",
+      "Grupo 3",
+      "Grupo 4",
+      "Grupo 5",
+      "1º ano - Fundamental",
+      "2º ano - Fundamental",
+      "3º ano - Fundamental",
+      "4º ano - Fundamental",
+      "5º ano - Fundamental"
+    ],
+    "semPeriodo": {
+      "1º ano - Fundamental": "idade-kids/1-ano-fundamental.pdf",
+      "2º ano - Fundamental": "idade-kids/2-ano-fundamental.pdf",
+      "3º ano - Fundamental": "idade-kids/3-ano-fundamental.pdf",
+      "4º ano - Fundamental": "idade-kids/4-ano-fundamental.pdf",
+      "5º ano - Fundamental": "idade-kids/5-ano-fundamental.pdf",
+      "Grupo 1": "idade-kids/grupo-1.pdf",
+      "Grupo 2": "idade-kids/grupo-2.pdf",
+      "Grupo 3": "idade-kids/grupo-3.pdf",
+      "Grupo 4": "idade-kids/grupo-4.pdf",
+      "Grupo 5": "idade-kids/grupo-5.pdf"
+    }
+  },
+  "integra": {
+    "menu": [
+      "Grupo 2",
+      "Grupo 3",
+      "Grupo 4",
+      "Grupo 5",
+      "1º ano - Fundamental",
+      "2º ano - Fundamental",
+      "3º ano - Fundamental",
+      "4º ano - Fundamental",
+      "5º ano - Fundamental",
+      "6º ano - Fundamental",
+      "7º ano - Fundamental",
+      "8º ano - Fundamental",
+      "9º ano - Fundamental"
+    ],
+    "semPeriodo": {
+      "1º ano - Fundamental": "integra/1-ano-fundamental.pdf",
+      "2º ano - Fundamental": "integra/2-ano-fundamental.pdf",
+      "3º ano - Fundamental": "integra/3-ano-fundamental.pdf",
+      "Grupo 3": "integra/grupo-3.pdf",
+      "Grupo 4": "integra/grupo-4.pdf",
+      "Grupo 5": "integra/grupo-5.pdf",
+      "4º ano - Fundamental": "integra/4-a-5-ano-fundamental.pdf",
+      "5º ano - Fundamental": "integra/4-a-5-ano-fundamental.pdf",
+      "6º ano - Fundamental": "integra/6-a-9-ano-fundamental.pdf",
+      "7º ano - Fundamental": "integra/6-a-9-ano-fundamental.pdf",
+      "8º ano - Fundamental": "integra/6-a-9-ano-fundamental.pdf",
+      "9º ano - Fundamental": "integra/6-a-9-ano-fundamental.pdf",
+      "Grupo 2": "integra/grupo-2.pdf"
+    },
+    "semOrcamento": [
+      "integra/grupo-2.pdf"
+    ]
+  },
+  "linus-pauling": {
+    "menu": [
+      "Grupo 2",
+      "Grupo 3",
+      "Grupo 4",
+      "Grupo 5",
+      "1º ano - Fundamental",
+      "2º ano - Fundamental",
+      "3º ano - Fundamental",
+      "4º ano - Fundamental",
+      "5º ano - Fundamental",
+      "6º ano - Fundamental",
+      "7º ano - Fundamental",
+      "8º ano - Fundamental",
+      "9º ano - Fundamental",
+      "1º ano - Ensino Médio",
+      "2º ano - Ensino Médio",
+      "3º ano - Ensino Médio"
+    ],
+    "comPeriodo": {
+      "1º ano - Fundamental": {
+        "integral": "linus-pauling/1-ano-fundamental-integral.pdf",
+        "regular": "linus-pauling/1-ano-fundamental-regular.pdf"
+      },
+      "2º ano - Fundamental": {
+        "integral": "linus-pauling/2-ano-fundamental-integral.pdf",
+        "regular": "linus-pauling/2-ano-fundamental-regular.pdf"
+      },
+      "3º ano - Fundamental": {
+        "integral": "linus-pauling/3-ano-fundamental-integral.pdf",
+        "regular": "linus-pauling/3-ano-fundamental-regular.pdf"
+      },
+      "4º ano - Fundamental": {
+        "regular": "linus-pauling/4-ano-fundamental-regular.pdf",
+        "integral": "linus-pauling/4-ano-fundamental-integral.pdf"
+      },
+      "5º ano - Fundamental": {
+        "integral": "linus-pauling/5-ano-fundamental-integral.pdf",
+        "regular": "linus-pauling/5-ano-fundamental-regular.pdf"
+      },
+      "Grupo 2": {
+        "integral": "linus-pauling/grupo-2-integral.pdf",
+        "regular": "linus-pauling/grupo-2-regular.pdf"
+      },
+      "Grupo 3": {
+        "integral": "linus-pauling/grupo-3-integral.pdf",
+        "regular": "linus-pauling/grupo-3-regular.pdf"
+      },
+      "Grupo 4": {
+        "integral": "linus-pauling/grupo-4-integral.pdf",
+        "regular": "linus-pauling/grupo-4-regular.pdf"
+      },
+      "Grupo 5": {
+        "integral": "linus-pauling/grupo-5-integral.pdf",
+        "regular": "linus-pauling/grupo-5-regular.pdf"
+      }
+    },
+    "semPeriodo": {
+      "1º ano - Ensino Médio": "linus-pauling/1-a-3-serie-medio.pdf",
+      "2º ano - Ensino Médio": "linus-pauling/1-a-3-serie-medio.pdf",
+      "3º ano - Ensino Médio": "linus-pauling/1-a-3-serie-medio.pdf",
+      "6º ano - Fundamental": "linus-pauling/6-a-9-ano-fundamental.pdf",
+      "7º ano - Fundamental": "linus-pauling/6-a-9-ano-fundamental.pdf",
+      "8º ano - Fundamental": "linus-pauling/6-a-9-ano-fundamental.pdf",
+      "9º ano - Fundamental": "linus-pauling/6-a-9-ano-fundamental.pdf"
+    },
+    "semOrcamento": [
+      "linus-pauling/4-ano-fundamental-integral.pdf"
+    ]
+  },
+  "multipla": {
+    "menu": [
+      "Infantil 2",
+      "Infantil 3",
+      "Infantil 4",
+      "Infantil 5",
+      "1º ano - Fundamental",
+      "2º ano - Fundamental",
+      "3º ano - Fundamental",
+      "4º ano - Fundamental",
+      "5º ano - Fundamental",
+      "6º ano - Fundamental",
+      "7º ano - Fundamental",
+      "8º ano - Fundamental",
+      "9º ano - Fundamental",
+      "1º ano - Ensino Médio",
+      "2º ano - Ensino Médio",
+      "3º ano - Ensino Médio"
+    ],
+    "semPeriodo": {
+      "1º ano - Fundamental": "multipla/1-ano-fundamental.pdf",
+      "2º ano - Fundamental": "multipla/2-ano-fundamental.pdf",
+      "3º ano - Ensino Médio": "multipla/3-serie-medio.pdf",
+      "3º ano - Fundamental": "multipla/3-ano-fundamental.pdf",
+      "4º ano - Fundamental": "multipla/4-ano-fundamental.pdf",
+      "5º ano - Fundamental": "multipla/5-ano-fundamental.pdf",
+      "6º ano - Fundamental": "multipla/6-ano-fundamental.pdf",
+      "9º ano - Fundamental": "multipla/9-ano-fundamental.pdf",
+      "Infantil 2": "multipla/infantil-2.pdf",
+      "Infantil 3": "multipla/infantil-3.pdf",
+      "Infantil 4": "multipla/infantil-4.pdf",
+      "Infantil 5": "multipla/infantil-5.pdf",
+      "1º ano - Ensino Médio": "multipla/1-a-2-serie-medio.pdf",
+      "2º ano - Ensino Médio": "multipla/1-a-2-serie-medio.pdf",
+      "7º ano - Fundamental": "multipla/7-a-8-ano-fundamental.pdf",
+      "8º ano - Fundamental": "multipla/7-a-8-ano-fundamental.pdf"
+    }
+  },
+  "mundo-livre": {
+    "menu": [
+      "Grupo 2",
+      "Grupo 3",
+      "Grupo 4",
+      "Grupo 5",
+      "1º ano - Fundamental",
+      "2º ano - Fundamental",
+      "3º ano - Fundamental",
+      "4º ano - Fundamental",
+      "5º ano - Fundamental",
+      "6º ano - Fundamental",
+      "7º ano - Fundamental",
+      "8º ano - Fundamental",
+      "9º ano - Fundamental"
+    ],
+    "semPeriodo": {
+      "1º ano - Fundamental": "mundo-livre/1-ano-fundamental.pdf",
+      "2º ano - Fundamental": "mundo-livre/2-ano-fundamental.pdf",
+      "3º ano - Fundamental": "mundo-livre/3-ano-fundamental.pdf",
+      "4º ano - Fundamental": "mundo-livre/4-ano-fundamental.pdf",
+      "5º ano - Fundamental": "mundo-livre/5-ano-fundamental.pdf",
+      "6º ano - Fundamental": "mundo-livre/6-ano-fundamental.pdf",
+      "9º ano - Fundamental": "mundo-livre/9-ano-fundamental.pdf",
+      "Grupo 2": "mundo-livre/grupo-2-3.pdf",
+      "Grupo 3": "mundo-livre/grupo-2-3.pdf",
+      "Grupo 4": "mundo-livre/grupo-4-5.pdf",
+      "Grupo 5": "mundo-livre/grupo-4-5.pdf",
+      "7º ano - Fundamental": "mundo-livre/7-a-8-ano-fundamental.pdf",
+      "8º ano - Fundamental": "mundo-livre/7-a-8-ano-fundamental.pdf"
+    }
+  },
+  "oceanus": {
+    "menu": [
+      "Grupo 2",
+      "Grupo 3",
+      "Grupo 4",
+      "Grupo 5",
+      "1º ano - Fundamental",
+      "2º ano - Fundamental",
+      "3º ano - Fundamental",
+      "4º ano - Fundamental",
+      "5º ano - Fundamental",
+      "6º ano - Fundamental",
+      "7º ano - Fundamental",
+      "8º ano - Fundamental",
+      "9º ano - Fundamental"
+    ],
+    "semPeriodo": {
+      "1º ano - Fundamental": "oceanus/1-ano-fundamental.pdf",
+      "2º ano - Fundamental": "oceanus/2-ano-fundamental.pdf",
+      "3º ano - Fundamental": "oceanus/3-ano-fundamental.pdf",
+      "4º ano - Fundamental": "oceanus/4-ano-fundamental.pdf",
+      "5º ano - Fundamental": "oceanus/5-ano-fundamental.pdf",
+      "Grupo 2": "oceanus/grupo-2.pdf",
+      "Grupo 3": "oceanus/grupo-3.pdf",
+      "Grupo 4": "oceanus/grupo-4.pdf",
+      "Grupo 5": "oceanus/grupo-5.pdf",
+      "6º ano - Fundamental": "oceanus/6-a-9-ano-fundamental.pdf",
+      "7º ano - Fundamental": "oceanus/6-a-9-ano-fundamental.pdf",
+      "8º ano - Fundamental": "oceanus/6-a-9-ano-fundamental.pdf",
+      "9º ano - Fundamental": "oceanus/6-a-9-ano-fundamental.pdf"
+    }
+  },
+  "pernalonga": {
+    "menu": [
+      "Grupo 1",
+      "Grupo 2",
+      "Grupo 3",
+      "Grupo 4",
+      "Grupo 5"
+    ],
+    "semPeriodo": {
+      "Grupo 3": "pernalonga/grupo-3.pdf",
+      "Grupo 4": "pernalonga/grupo-4.pdf",
+      "Grupo 5": "pernalonga/grupo-5.pdf",
+      "Grupo 1": "pernalonga/grupo-1-2.pdf",
+      "Grupo 2": "pernalonga/grupo-1-2.pdf"
+    }
+  },
+  "play-kids": {
+    "menu": [
+      "Berçário",
+      "Grupo 1",
+      "Grupo 2",
+      "Grupo 3",
+      "Grupo 4",
+      "Grupo 5"
+    ],
+    "semPeriodo": {
+      "Berçário": "play-kids/bercario.pdf",
+      "Grupo 1": "play-kids/grupo-1.pdf",
+      "Grupo 2": "play-kids/grupo-2.pdf",
+      "Grupo 3": "play-kids/grupo-3.pdf",
+      "Grupo 4": "play-kids/grupo-4.pdf",
+      "Grupo 5": "play-kids/grupo-5.pdf"
+    }
+  },
+  "renascer": {
+    "menu": [
+      "1º ano - Fundamental",
+      "2º ano - Fundamental"
+    ],
+    "semPeriodo": {
+      "1º ano - Fundamental": "renascer/1-ano-fundamental.pdf",
+      "2º ano - Fundamental": "renascer/2-ano-fundamental.pdf"
+    }
+  },
+  "renovacao": {
+    "menu": [
+      "Jardim 2",
+      "1º ano - Fundamental",
+      "2º ano - Fundamental",
+      "3º ano - Fundamental"
+    ],
+    "semPeriodo": {
+      "1º ano - Fundamental": "renovacao/1-ano-fundamental.pdf",
+      "2º ano - Fundamental": "renovacao/2-ano-fundamental.pdf",
+      "3º ano - Fundamental": "renovacao/3-ano-fundamental.pdf",
+      "Jardim 2": "renovacao/jardim-2.pdf"
+    }
+  },
+  "salesiano-jc": {
+    "menu": [
+      "Infantil 2",
+      "Infantil 3",
+      "Infantil 4",
+      "Infantil 5",
+      "1º ano - Fundamental",
+      "2º ano - Fundamental",
+      "3º ano - Fundamental",
+      "4º ano - Fundamental",
+      "5º ano - Fundamental",
+      "6º ano - Fundamental",
+      "7º ano - Fundamental",
+      "8º ano - Fundamental",
+      "9º ano - Fundamental",
+      "1º ano - Ensino Médio",
+      "2º ano - Ensino Médio",
+      "3º ano - Ensino Médio"
+    ],
+    "semPeriodo": {
+      "1º ano - Fundamental": "salesiano-jc/1-ano-fundamental.pdf",
+      "2º ano - Fundamental": "salesiano-jc/2-ano-fundamental.pdf",
+      "Infantil 2": "salesiano-jc/infantil-2.pdf",
+      "Infantil 3": "salesiano-jc/infantil-3.pdf",
+      "1º ano - Ensino Médio": "salesiano-jc/1-serie-medio.pdf",
+      "2º ano - Ensino Médio": "salesiano-jc/2-serie-medio.pdf",
+      "3º ano - Ensino Médio": "salesiano-jc/3-serie-medio.pdf",
+      "3º ano - Fundamental": "salesiano-jc/3-ano-fundamental.pdf",
+      "4º ano - Fundamental": "salesiano-jc/4-ano-fundamental.pdf",
+      "5º ano - Fundamental": "salesiano-jc/5-ano-fundamental.pdf",
+      "6º ano - Fundamental": "salesiano-jc/6-ano-fundamental.pdf",
+      "7º ano - Fundamental": "salesiano-jc/7-ano-fundamental.pdf",
+      "8º ano - Fundamental": "salesiano-jc/8-ano-fundamental.pdf",
+      "9º ano - Fundamental": "salesiano-jc/9-ano-fundamental.pdf",
+      "Infantil 4": "salesiano-jc/infantil-4.pdf",
+      "Infantil 5": "salesiano-jc/infantil-5.pdf"
+    },
+    "semOrcamento": [
+      "salesiano-jc/1-serie-medio.pdf",
+      "salesiano-jc/2-serie-medio.pdf",
+      "salesiano-jc/3-serie-medio.pdf",
+      "salesiano-jc/3-ano-fundamental.pdf",
+      "salesiano-jc/4-ano-fundamental.pdf",
+      "salesiano-jc/5-ano-fundamental.pdf",
+      "salesiano-jc/6-ano-fundamental.pdf",
+      "salesiano-jc/7-ano-fundamental.pdf",
+      "salesiano-jc/8-ano-fundamental.pdf",
+      "salesiano-jc/9-ano-fundamental.pdf",
+      "salesiano-jc/infantil-4.pdf",
+      "salesiano-jc/infantil-5.pdf"
+    ]
+  },
+  "sesi": {
+    "menu": [
+      "1º ano - Fundamental",
+      "2º ano - Fundamental",
+      "3º ano - Fundamental",
+      "4º ano - Fundamental",
+      "5º ano - Fundamental",
+      "6º ano - Fundamental",
+      "7º ano - Fundamental",
+      "8º ano - Fundamental",
+      "9º ano - Fundamental"
+    ],
+    "semPeriodo": {
+      "1º ano - Fundamental": "sesi/1-ano-fundamental.pdf",
+      "2º ano - Fundamental": "sesi/2-a-3-ano-fundamental.pdf",
+      "3º ano - Fundamental": "sesi/2-a-3-ano-fundamental.pdf",
+      "4º ano - Fundamental": "sesi/4-a-5-ano-fundamental.pdf",
+      "5º ano - Fundamental": "sesi/4-a-5-ano-fundamental.pdf",
+      "6º ano - Fundamental": "sesi/6-a-9-ano-fundamental.pdf",
+      "7º ano - Fundamental": "sesi/6-a-9-ano-fundamental.pdf",
+      "8º ano - Fundamental": "sesi/6-a-9-ano-fundamental.pdf",
+      "9º ano - Fundamental": "sesi/6-a-9-ano-fundamental.pdf"
+    }
+  },
+  "siena": {
+    "menu": [
+      "Grupo 4",
+      "Grupo 5",
+      "1º ano - Fundamental",
+      "2º ano - Fundamental",
+      "3º ano - Fundamental",
+      "4º ano - Fundamental",
+      "5º ano - Fundamental",
+      "6º ano - Fundamental",
+      "7º ano - Fundamental",
+      "8º ano - Fundamental",
+      "9º ano - Fundamental",
+      "1º ano - Ensino Médio",
+      "2º ano - Ensino Médio",
+      "3º ano - Ensino Médio"
+    ],
+    "semPeriodo": {
+      "1º ano - Fundamental": "siena/1-ano-fundamental.pdf",
+      "2º ano - Fundamental": "siena/2-ano-fundamental.pdf",
+      "3º ano - Fundamental": "siena/3-ano-fundamental.pdf",
+      "4º ano - Fundamental": "siena/4-ano-fundamental.pdf",
+      "5º ano - Fundamental": "siena/5-ano-fundamental.pdf",
+      "6º ano - Fundamental": "siena/6-ano-fundamental.pdf",
+      "7º ano - Fundamental": "siena/7-ano-fundamental.pdf",
+      "8º ano - Fundamental": "siena/8-ano-fundamental.pdf",
+      "9º ano - Fundamental": "siena/9-ano-fundamental.pdf",
+      "Grupo 4": "siena/grupo-4.pdf",
+      "Grupo 5": "siena/grupo-5.pdf",
+      "1º ano - Ensino Médio": "siena/1-a-3-serie-medio.pdf",
+      "2º ano - Ensino Médio": "siena/1-a-3-serie-medio.pdf",
+      "3º ano - Ensino Médio": "siena/1-a-3-serie-medio.pdf"
+    }
+  },
+  "universo-do-saber": {
+    "menu": [
+      "Grupo 4"
+    ],
+    "semPeriodo": {
+      "Grupo 4": "universo-do-saber/grupo-4.pdf"
+    }
+  },
+  "apice": {
+    "menu": [
+      "Grupo 2",
+      "Grupo 3",
+      "Grupo 4",
+      "Grupo 5",
+      "1º ano - Fundamental",
+      "2º ano - Fundamental",
+      "3º ano - Fundamental",
+      "4º ano - Fundamental",
+      "5º ano - Fundamental",
+      "6º ano - Fundamental",
+      "7º ano - Fundamental",
+      "8º ano - Fundamental",
+      "9º ano - Fundamental",
+      "1º ano - Ensino Médio",
+      "2º ano - Ensino Médio",
+      "3º ano - Ensino Médio"
+    ],
+    "semPeriodo": {
+      "1º ano - Fundamental": "apice/1-ano-fundamental.pdf",
+      "2º ano - Fundamental": "apice/2-ano-fundamental.pdf",
+      "3º ano - Fundamental": "apice/3-ano-fundamental.pdf",
+      "4º ano - Fundamental": "apice/4-ano-fundamental.pdf",
+      "5º ano - Fundamental": "apice/5-ano-fundamental.pdf",
+      "6º ano - Fundamental": "apice/6-ano-fundamental.pdf",
+      "Grupo 2": "apice/grupo-2.pdf",
+      "Grupo 3": "apice/grupo-3.pdf",
+      "Grupo 4": "apice/grupo-4.pdf",
+      "Grupo 5": "apice/grupo-5.pdf",
+      "7º ano - Fundamental": "apice/7-a-9-ano-fundamental.pdf",
+      "8º ano - Fundamental": "apice/7-a-9-ano-fundamental.pdf",
+      "9º ano - Fundamental": "apice/7-a-9-ano-fundamental.pdf",
+      "1º ano - Ensino Médio": "apice/1-a-3-serie-medio.pdf",
+      "2º ano - Ensino Médio": "apice/1-a-3-serie-medio.pdf",
+      "3º ano - Ensino Médio": "apice/1-a-3-serie-medio.pdf"
+    }
+  }
+}

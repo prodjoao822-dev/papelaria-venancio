@@ -7,6 +7,7 @@ const notifyTargets = require('../config/notifyTargets');
 const evolutionApi = require('../services/evolutionApi');
 const clientesService = require('../services/clientesService');
 const orcamentosService = require('../services/orcamentosService');
+const conversasService = require('../services/conversasService');
 const n8nClient = require('../integracoes/n8nClient');
 const logger = require('../utils/logger');
 
@@ -96,10 +97,12 @@ function mensagemDadosFiscaisProOperador(cliente, cadastroFiscal, origemOrcament
 }
 
 // Se criar/aceitar o orçamento falhar (banco fora do ar, transição inválida
-// etc.), o cliente já viu "Perfeito! Já estou confirmando seu pedido..." (a
-// resposta da stateMachine, mandada antes desta ação rodar) e, sem isso,
-// nunca mais ouviria falar do pedido de novo — via em produção em 20/07
-// (orçamento ficava órfão em 'rascunho', cliente sem confirmação nem erro).
+// etc.), o cliente já viu "Perfeito! Já estou confirmando seu pedido...". A
+// mensagem "Perfeito! Já estou confirmando..." é enviada pelo webhookController
+// antes desta função ser chamada (desde a correção de A7 em 2026-07-30), e,
+// sem o tratamento abaixo, o cliente nunca mais ouviria falar do pedido de
+// novo — visto em produção em 20/07 (orçamento ficava órfão em 'rascunho',
+// cliente sem confirmação nem erro).
 function mensagemFalhaFechamento(cliente, origemOrcamento, cadastroFiscal) {
   const linhas = [
     'FALHA ao confirmar pedido pelo bot — precisa de atenção manual:',
@@ -175,6 +178,13 @@ async function finalizarCadastroEPedido(acao, cliente, conversaId) {
     tipo: origemOrcamento.tipo,
     payload: { itens: origemOrcamento.itensTexto, observacoes: origemOrcamento.observacoes },
   }));
+
+  // Pausa automática pós-pedido: com o pedido já criado, o bot silencia esta
+  // conversa até o cliente voltar a falar — aí reativa na hora e cai no Agente
+  // de Vendas com o contexto do pedido (ver reativacaoBot.garantirBotAtivo e
+  // webhookController.receberWebhook). Best-effort: uma falha aqui não desfaz o
+  // pedido nem as notificações já enviadas acima.
+  await rodarEtapaBestEffort('Falha ao pausar o bot após o pedido', cliente, () => conversasService.pausarPosPedido(conversaId));
 }
 
 const EXECUTORES_POR_TIPO = {

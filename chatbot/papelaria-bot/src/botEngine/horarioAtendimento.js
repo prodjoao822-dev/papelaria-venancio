@@ -10,7 +10,11 @@
 // o servidor roda em UTC, não no horário de Brasília.
 const FUSO_HORARIO = 'America/Sao_Paulo';
 
-const HORARIO_SEMANA = { abre: 9, fecha: 18 }; // segunda a sexta
+// As duas lojas têm horários diferentes de segunda a sexta (ver LOJAS). O aviso
+// de "fora do horário" é sobre o ATENDIMENTO, não sobre uma loja específica:
+// enquanto qualquer uma delas estiver aberta tem gente pra responder, então a
+// janela aqui é a união das duas — abre no mais cedo, fecha no mais tarde.
+const HORARIO_SEMANA = { abre: 8.5, fecha: 19 }; // 08h30 (Eldes Scherrer) às 19h (Eldes Scherrer)
 const HORARIO_SABADO = { abre: 9, fecha: 14 };
 
 const DIA_SEMANA_POR_ABREVIACAO = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
@@ -60,16 +64,20 @@ const AVISO_FORA_DO_HORARIO = '⏰ No momento estamos fora do nosso horário de 
   + 'do nosso time já te chama!';
 
 // Aparece sempre no cabeçalho do menu principal, dentro ou fora do expediente.
+// Cada loja tem o seu horário logo abaixo do endereço: são diferentes de
+// segunda a sexta, e uma linha única ("Segunda a Sexta: 9h às 18h") mandaria o
+// cliente da Eldes Scherrer embora meia hora antes da loja fechar.
 const CARTAO_INSTITUCIONAL = `✅ Nosso atendimento é por ordem de chegada das mensagens ou conforme a lista de espera, sempre prezando pela qualidade e atenção que você merece.
 
-🕑 *Horários de Atendimento*
-📅 Segunda a Sexta: 9h às 18h
-📅 Sábado: 9h às 14h
+📍 *Nossas Lojas e Horários de Atendimento*
 
-📍 *Nossas Lojas*
-📌 Av. Central, 1270
-📌 Av. Primeira Avenida, 232 (em frente ao Shopping Laranjeiras)
-📌 Av. Eldes Scherrer, 1482 (ao lado do Ricardão Lanches)
+📌 *Av. Primeira Avenida, 232*
+_em frente ao Shopping Laranjeiras_
+🕑 Segunda a Sexta: 9h às 18h | Sábado: 9h às 14h
+
+📌 *Av. Eldes Scherrer, 1482*
+_ao lado do Ricardão Lanches_
+🕑 Segunda a Sexta: 8h30 às 19h | Sábado: 9h às 14h
 
 💙 Estamos prontos para te atender!`;
 

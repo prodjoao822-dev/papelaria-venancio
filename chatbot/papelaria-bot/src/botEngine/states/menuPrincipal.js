@@ -39,10 +39,16 @@ module.exports = criarEstadoDeMenu({
   // de acertar.
   primeiraMensagemSemErro: true,
 
+  // Os rótulos dizem o que o cliente ganha, não o nome do setor interno. Em
+  // 10/08, com o número oficial no ar, uma cliente que queria perguntar preço
+  // de papel crepom escolheu "Financeiro" e depois "Atendimento" — nenhuma das
+  // duas era o caminho. "Compras" era a pior: pro cliente parece "quero
+  // comprar", quando na verdade é o canal de fornecedor falando com o dono.
+  // `alvo` e `intencao` continuam iguais — isso aqui é só o texto visível.
   opcoes: {
-    1: { rotulo: 'Vendas', tipo: 'estado', estado: 'SUBMENU_VENDAS' },
-    2: { rotulo: 'Financeiro', tipo: 'notificar', alvo: 'financeiro' },
-    3: { rotulo: 'Compras', tipo: 'notificar', alvo: 'compras' },
+    1: { rotulo: 'Comprar / Ver preços', tipo: 'estado', estado: 'SUBMENU_VENDAS' },
+    2: { rotulo: 'Financeiro (boleto, nota fiscal)', tipo: 'notificar', alvo: 'financeiro' },
+    3: { rotulo: 'Sou fornecedor / representante', tipo: 'notificar', alvo: 'compras' },
     4: { rotulo: 'Serviços / Xerox', tipo: 'notificar', alvo: 'servicos' },
   },
 });

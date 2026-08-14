@@ -44,8 +44,24 @@ module.exports = criarEstadoDeMenu({
     4: { rotulo: 'Informática', tipo: 'consultarAgente', estado: 'AGENTE_VENDAS_ATIVO', intencao: 'informática' },
     5: { rotulo: 'Brinquedos', tipo: 'consultarAgente', estado: 'AGENTE_VENDAS_ATIVO', intencao: 'brinquedos' },
     // Pedido explícito de humano (não é pergunta de produto) — continua indo
-    // direto pra Vanessa, sem passar pelo Agente de Vendas.
-    6: { rotulo: 'Atendimento', tipo: 'notificar', alvo: 'vendas', intencao: 'atendimento' },
+    // direto pra Vanessa, sem passar pelo Agente de Vendas. O rótulo era só
+    // "Atendimento", que soava como "tirar qualquer dúvida": em 10/08 uma
+    // cliente escolheu essa opção pra perguntar se tinha papel crepom, algo que
+    // as opções 2 a 5 respondem na hora. Deixar explícito que aqui entra na
+    // fila humana empurra a pergunta de produto pro caminho que é instantâneo.
+    // `pausarBot`: escolher esta opção tira o atendimento automático de cena até
+    // a Vanessa (ou quem pegar) responder. Antes, o bot avisava "já vamos te
+    // atender" e continuava no ar — a próxima mensagem do cliente levava o menu
+    // de volta, por cima de quem já tinha sido chamado. Note a incoerência que
+    // isso criava: digitar a PALAVRA "atendente" pausava o bot (comando global
+    // de escalação), mas escolher a OPÇÃO escrita "Falar com um atendente" não.
+    6: {
+      rotulo: 'Falar com um atendente (pode ter espera)',
+      tipo: 'notificar',
+      alvo: 'vendas',
+      intencao: 'atendimento',
+      pausarBot: true,
+    },
     7: {
       rotulo: 'Cotação pra empresa',
       tipo: 'estado',

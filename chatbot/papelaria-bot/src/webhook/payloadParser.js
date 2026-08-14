@@ -13,12 +13,18 @@
 // }
 
 // Sufixos usados pelo WhatsApp para identificar contato individual ou grupo.
+// `@lid` é o identificador "linked ID" que o WhatsApp vem usando pra alguns
+// contatos (privacidade), visto em teste real em 24/07 — sem remover esse
+// sufixo, o "telefone" salvo ficava como "251629416747016@lid" e todo envio
+// futuro pra esse cliente saía quebrado (Evolution API não entende esse
+// formato como destinatário).
 const SUFIXO_CONTATO = '@s.whatsapp.net';
 const SUFIXO_GRUPO = '@g.us';
+const SUFIXO_LID = '@lid';
 
 function extrairTelefone(remoteJid) {
   if (!remoteJid) return null;
-  return remoteJid.replace(SUFIXO_CONTATO, '').replace(SUFIXO_GRUPO, '');
+  return remoteJid.replace(SUFIXO_CONTATO, '').replace(SUFIXO_GRUPO, '').replace(SUFIXO_LID, '');
 }
 
 function extrairTexto(mensagem) {
@@ -57,6 +63,23 @@ function extrairDocumentoPdf(mensagem) {
   };
 }
 
+// Áudio (nota de voz ou arquivo) enviado pelo cliente. O bot não transcreve
+// nada — escutar áudio exigiria recurso novo no n8n. Aqui só reconhecemos que
+// veio um, pra chamar a Vanessa em vez de deixar o cliente no vácuo (ver
+// receberAudio no webhookController). Em 10/08 uma cliente mandou 4 áudios
+// seguidos e o bot ignorou os 4 sem dar um pio.
+function extrairAudio(mensagem) {
+  const audio = mensagem?.audioMessage;
+  if (!audio) return null;
+
+  return {
+    // `ptt` (push-to-talk) separa nota de voz gravada na hora de um arquivo de
+    // áudio anexado — muda só o texto que a Vanessa recebe.
+    notaDeVoz: Boolean(audio.ptt),
+    duracaoSegundos: Number(audio.seconds) || null,
+  };
+}
+
 function parsePayload(payloadBruto) {
   const dados = payloadBruto?.data;
 
@@ -67,6 +90,7 @@ function parsePayload(payloadBruto) {
   const telefone = extrairTelefone(dados.key.remoteJid);
   const texto = extrairTexto(dados.message);
   const documentoPdf = extrairDocumentoPdf(dados.message);
+  const audio = extrairAudio(dados.message);
 
   if (!telefone) {
     return null;
@@ -77,6 +101,7 @@ function parsePayload(payloadBruto) {
     nome: dados.pushName || null,
     texto,
     documentoPdf,
+    audio,
     fromMe: Boolean(dados.key.fromMe),
     mensagemId: dados.key.id || null,
   };

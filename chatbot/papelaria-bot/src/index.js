@@ -3,10 +3,45 @@
 const express = require('express');
 const env = require('./config/env'); // valida as variáveis de ambiente já na subida (falha rápido)
 const verifyToken = require('./middlewares/verifyToken');
+const verifyOperador = require('./middlewares/verifyOperador');
+const { limiteWebhook } = require('./middlewares/rateLimiter');
 const webhookController = require('./webhook/webhookController');
+const operadorController = require('./dashboard/operadorController');
+const analyticsService = require('./services/analyticsService');
 const logger = require('./utils/logger');
 
+// Rede de segurança de visibilidade: sem isso, um erro não tratado em
+// qualquer lugar (uma promise sem .catch(), um throw síncrono num callback de
+// EventEmitter como res.on('finish')) derruba o processo inteiro sem deixar
+// NENHUM rastro do que aconteceu — só "app crashed" no nodemon/pm2, sem stack
+// trace. (Investigação de crash de 07/08/2026: o log parava logo depois de um
+// webhook bem-sucedido, sem erro nenhum impresso antes do processo morrer.)
+//
+// unhandledRejection só loga, não derruba o processo: a arquitetura do bot é
+// muitas conversas independentes em paralelo — uma promise esquecida sem
+// await numa conversa não deveria tirar todo mundo do ar. É um bug a corrigir
+// (o ideal é sempre ter await + try/catch), mas não motivo pra crashar tudo.
+//
+// uncaughtException loga e SAI do processo propositalmente: nesse caso o
+// estado da aplicação pode estar inconsistente (é a recomendação oficial do
+// Node), então é mais seguro deixar o pm2 (autorestart:true, ver
+// ecosystem.config.js) subir um processo novo e limpo do que continuar
+// rodando sobre um estado desconhecido.
+process.on('unhandledRejection', (motivo) => {
+  logger.erro('unhandledRejection — promise rejeitada sem .catch() em algum lugar do código', motivo);
+});
+
+process.on('uncaughtException', (erro) => {
+  logger.erro('uncaughtException — erro não tratado; encerrando o processo pro pm2 reiniciar limpo', erro);
+  process.exit(1);
+});
+
 const app = express();
+// O bot roda atrás de um túnel (ngrok) — sem isso, o Express não confia no
+// header X-Forwarded-For que o ngrok manda, e o express-rate-limit loga
+// ERR_ERL_UNEXPECTED_X_FORWARDED_FOR (visto em produção em 29/07/2026) em vez
+// de identificar corretamente o IP de origem de cada requisição.
+app.set('trust proxy', 1);
 // O limite padrão do Express (100kb) é pequeno demais pra alguns eventos da
 // Evolution API — mensagens com mídia (imagem, áudio, etc.) chegam com o
 // arquivo em base64 dentro do próprio payload do webhook e passam disso fácil.
@@ -16,11 +51,64 @@ app.get('/', (req, res) => {
   res.json({ status: 'ok', servico: 'papelaria-bot' });
 });
 
-app.post('/webhook', verifyToken, webhookController.receberWebhook);
+// Instrumentação (análise de instabilidade, 29/07/2026): mede o tempo total
+// de processamento de cada webhook (Supabase + stateMachine + chamada ao
+// Agente de Vendas somados). Comparado com o evento 'agente_vendas_tempo_resposta'
+// (registrado dentro do webhookController, só pela chamada ao n8n), a diferença
+// entre os dois isola quanto tempo é gasto fora do n8n (Supabase, state machine
+// etc.) — sem isso só sabíamos o tempo total até o timeout, sem saber onde ele ia.
+function medirDuracaoWebhook(req, res, next) {
+  const inicio = Date.now();
+  res.on('finish', () => {
+    analyticsService.registrarEvento('webhook_tempo_total', {
+      rota: req.path,
+      status: res.statusCode,
+      duracaoMs: Date.now() - inicio,
+    });
+  });
+  next();
+}
+
+app.post('/webhook', limiteWebhook, medirDuracaoWebhook, verifyToken, webhookController.receberWebhook);
 
 // Callback opcional do Agente de Orçamento (n8n -> JS Bot, contrato na seção 6
 // do PRD) — mesmo token de webhook, só que a origem é o n8n, não a Evolution API.
-app.post('/webhook/agente-orcamento', verifyToken, webhookController.receberCallbackAgenteOrcamento);
+app.post('/webhook/agente-orcamento', limiteWebhook, medirDuracaoWebhook, verifyToken, webhookController.receberCallbackAgenteOrcamento);
+
+// Rotas usadas pelo dashboard (venancio-ai-ops) — origem restrita via CORS
+// (DASHBOARD_ORIGIN/DASHBOARD_ORIGINS) e autenticação pela sessão real do
+// operador (verifyOperador), não pelo token fixo de webhook. Ver
+// AUDITORIA_INTEGRACAO.md, item 1 (fecha o ciclo operador -> WhatsApp real).
+//
+// Causa raiz de um CORS error real em produção (07/08/2026): esta função
+// devolvia um valor FIXO em Access-Control-Allow-Origin (o antigo
+// env.DASHBOARD_ORIGIN, string única). O Vite do dashboard troca de porta
+// sozinho (3000 -> 3001, 3002...) sempre que a porta padrão já está ocupada
+// — assim que isso acontece, o Origin real da requisição para de bater com
+// o valor fixo, e o navegador bloqueia a resposta por CORS mesmo com o
+// preflight OPTIONS respondendo 204 normalmente (o mismatch é no valor do
+// header, não na existência dele). A correção é o padrão allowlist +
+// reflect: comparar o Origin recebido contra DASHBOARD_ORIGINS e devolver
+// esse MESMO valor de volta só quando ele bate — nunca um valor estático,
+// nunca "*" (não funciona com Authorization). `Vary: Origin` avisa caches
+// intermediários que a resposta depende do Origin da requisição.
+function corsDashboard(req, res, next) {
+  const origem = req.get('origin');
+  if (origem && env.DASHBOARD_ORIGINS.includes(origem)) {
+    res.set('Access-Control-Allow-Origin', origem);
+    res.set('Vary', 'Origin');
+  }
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  return next();
+}
+
+app.options('/operador/mensagens/enviar', corsDashboard);
+app.post('/operador/mensagens/enviar', corsDashboard, verifyOperador, operadorController.enviarMensagem);
+
+app.options('/operador/consultas/:id/notificar', corsDashboard);
+app.post('/operador/consultas/:id/notificar', corsDashboard, verifyOperador, operadorController.notificarRespostaConsulta);
 
 app.listen(env.PORT, () => {
   logger.info(`Papelaria bot escutando na porta ${env.PORT}`);

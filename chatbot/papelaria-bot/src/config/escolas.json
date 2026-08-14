@@ -1,0 +1,102 @@
+[
+  {
+    "id": "alternativo",
+    "nome": "Alternativo"
+  },
+  {
+    "id": "americano",
+    "nome": "Americano"
+  },
+  {
+    "id": "apice",
+    "nome": "Ápice"
+  },
+  {
+    "id": "arca-educa",
+    "nome": "Arca Educa"
+  },
+  {
+    "id": "balao-magico",
+    "nome": "Balão Mágico"
+  },
+  {
+    "id": "cec",
+    "nome": "CEC"
+  },
+  {
+    "id": "colegio-adventista-laranjeiras",
+    "nome": "Colégio Adventista Laranjeiras"
+  },
+  {
+    "id": "colorart",
+    "nome": "Colorart"
+  },
+  {
+    "id": "dinamico",
+    "nome": "Dinâmico"
+  },
+  {
+    "id": "ebc",
+    "nome": "EBC"
+  },
+  {
+    "id": "henrique-valentim",
+    "nome": "Henrique Valentim"
+  },
+  {
+    "id": "idade-kids",
+    "nome": "Idade Kids"
+  },
+  {
+    "id": "integra",
+    "nome": "Integra"
+  },
+  {
+    "id": "linus-pauling",
+    "nome": "Linus Pauling"
+  },
+  {
+    "id": "multipla",
+    "nome": "Múltipla"
+  },
+  {
+    "id": "mundo-livre",
+    "nome": "Mundo Livre"
+  },
+  {
+    "id": "oceanus",
+    "nome": "Oceanus"
+  },
+  {
+    "id": "pernalonga",
+    "nome": "Pernalonga"
+  },
+  {
+    "id": "play-kids",
+    "nome": "Play Kids"
+  },
+  {
+    "id": "renascer",
+    "nome": "Renascer"
+  },
+  {
+    "id": "renovacao",
+    "nome": "Renovação"
+  },
+  {
+    "id": "salesiano-jc",
+    "nome": "Salesiano JC"
+  },
+  {
+    "id": "sesi",
+    "nome": "SESI"
+  },
+  {
+    "id": "siena",
+    "nome": "Siena"
+  },
+  {
+    "id": "universo-do-saber",
+    "nome": "Universo do Saber"
+  }
+]

@@ -1,133 +1,80 @@
 // Mapeia escola + ano (e, quando existir, período) para o arquivo PDF da lista
-// de material correspondente, guardados em `materiais/<escola>/<arquivo>.pdf`
-// na raiz do projeto.
+// de material correspondente, guardados em `materiais/<slug-escola>/`.
 //
-// Por que isso é um "config" e não uma tabela do Supabase ainda:
-// já existe uma tabela pensada pra isso (`materiais_lista_escolar`, ver
-// supabase/schema.sql), mas ela guarda uma URL (`pdf_url`) — útil quando os
-// PDFs estiverem hospedados (ex.: Supabase Storage). Por enquanto os PDFs só
-// existem localmente neste projeto (fase de teste com 4 escolas), então o
-// mapeamento fica aqui, apontando pra arquivos em disco. Quando os PDFs forem
-// hospedados de verdade, este arquivo é o único lugar que precisa mudar: as
-// funções abaixo (`temVariacaoDePeriodo` e `buscarMaterial`) podem passar a
-// consultar a tabela em vez do objeto MATERIAIS, sem tocar em listaEscolar.js.
+// O mapeamento em si vive em `materiais.json`, gerado por
+// `scripts/importarListasEscolares.js` a partir da pasta de listas do ano. Este
+// módulo é só a camada de consulta: estrutura permanente aqui, dados
+// substituíveis no JSON. Trocar as listas do ano que vem não exige tocar em
+// código — basta rodar o script apontando pra pasta nova.
 //
-// Cobertura parcial é esperada e normal nesta fase de teste: só 4 escolas
-// (CEC, Múltipla, Linus Pauling, Mundo Livre) têm PDFs cadastrados, e mesmo
-// essas não cobrem todos os anos (ex.: Mundo Livre só tem a lista do 3º ano
-// fundamental pronta). Quando não há PDF cadastrado, `buscarMaterial` retorna
-// `null` e o fluxo de lista escolar cai no caminho de sempre: notifica a
-// Vanessa com escola/ano/observação pra ela atender manualmente.
+// Por que ainda não é uma tabela do Supabase: já existe uma tabela pensada pra
+// isso (`materiais_lista_escolar`, ver supabase/schema.sql), mas ela guarda uma
+// URL (`pdf_url`), útil só quando os PDFs estiverem hospedados (ex.: Supabase
+// Storage). Enquanto os arquivos moram em disco neste projeto, o JSON cumpre o
+// papel. Quando forem hospedados, só as duas funções abaixo mudam.
+//
+// Cobertura parcial é esperada: nem toda escola tem lista pra toda série.
+// Quando não há PDF, `buscarMaterial` retorna `null` e o fluxo de lista escolar
+// cai no caminho de sempre: notifica a Vanessa com escola/ano/observação.
+//
+// Educação Infantil: as escolas nomeiam as turmas cada uma no seu sistema
+// ("Grupo 3", "Infantil 4", "Nível 2", "Creche 1", "Pré 1", "Berçário") e não
+// existe de-para confiável entre eles — "Grupo 4" é Maternal numa escola e
+// Jardim I na outra. Por isso o bot não traduz nada: `listarAnos` devolve as
+// turmas com o nome que a própria escola usa, e o menu do WhatsApp mostra
+// exatamente isso. A mãe sabe responder "Grupo 4"; ela não saberia converter
+// isso pra "Maternal", e nós também não.
 
 const path = require('node:path');
+
+const MATERIAIS = require('./materiais.json');
 
 // Raiz onde os PDFs ficam guardados (dois níveis acima de src/config/).
 const PASTA_MATERIAIS = path.join(__dirname, '..', '..', 'materiais');
 
-// Observação sobre Educação Infantil: CEC, Múltipla e Linus Pauling organizam
-// as turmas de Educação Infantil em "grupos" por idade (ex.: Grupo 3, 4, 5),
-// enquanto o menu do bot usa "Maternal" e "Jardim". Como não há uma regra
-// clara e confirmada de conversão entre um sistema e o outro, essas séries
-// ficam de propósito fora do mapeamento abaixo — ou seja, "Maternal" e
-// "Jardim" sempre caem no fallback (notifica a Vanessa) até essa conversão
-// ser confirmada com o dono do projeto.
-const MATERIAIS = {
-  CEC: {
-    semPeriodo: {
-      '1º ano - Fundamental': 'cec/1-ano-fundamental.pdf',
-      '2º ano - Fundamental': 'cec/2-ano-fundamental.pdf',
-      '3º ano - Fundamental': 'cec/3-ano-fundamental.pdf',
-      '4º ano - Fundamental': 'cec/4-ano-fundamental.pdf',
-      '5º ano - Fundamental': 'cec/5-ano-fundamental.pdf',
-      // CEC junta 6º ao 8º ano numa lista só.
-      '6º ano - Fundamental': 'cec/6-a-8-ano-fundamental.pdf',
-      '7º ano - Fundamental': 'cec/6-a-8-ano-fundamental.pdf',
-      '8º ano - Fundamental': 'cec/6-a-8-ano-fundamental.pdf',
-      '9º ano - Fundamental': 'cec/9-ano-fundamental.pdf',
-      // CEC junta as 3 séries do Ensino Médio numa lista só.
-      '1º ano - Ensino Médio': 'cec/1-a-3-serie-medio.pdf',
-      '2º ano - Ensino Médio': 'cec/1-a-3-serie-medio.pdf',
-      '3º ano - Ensino Médio': 'cec/1-a-3-serie-medio.pdf',
-    },
-  },
+// O nome da escola chega do cadastro (tabela `escolas`), onde é escrito pra
+// leitura humana ("Múltipla", "Colégio Adventista Laranjeiras"), enquanto as
+// chaves do JSON são slugs derivados da pasta de origem ("multipla"). Normalizar
+// os dois lados evita que uma diferença de acento ou caixa quebre a busca.
+function slugificar(nomeEscola) {
+  return String(nomeEscola ?? '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
 
-  Múltipla: {
-    semPeriodo: {
-      '1º ano - Fundamental': 'multipla/1-ano-fundamental.pdf',
-      '2º ano - Fundamental': 'multipla/2-ano-fundamental.pdf',
-      '3º ano - Fundamental': 'multipla/3-ano-fundamental.pdf',
-      '4º ano - Fundamental': 'multipla/4-ano-fundamental.pdf',
-      '5º ano - Fundamental': 'multipla/5-ano-fundamental.pdf',
-      '6º ano - Fundamental': 'multipla/6-ano-fundamental.pdf',
-      // Múltipla junta 7º e 8º ano numa lista só.
-      '7º ano - Fundamental': 'multipla/7-a-8-ano-fundamental.pdf',
-      '8º ano - Fundamental': 'multipla/7-a-8-ano-fundamental.pdf',
-      '9º ano - Fundamental': 'multipla/9-ano-fundamental.pdf',
-      // Múltipla junta 1ª e 2ª série do Médio, mas a 3ª série tem lista própria.
-      '1º ano - Ensino Médio': 'multipla/1-a-2-serie-medio.pdf',
-      '2º ano - Ensino Médio': 'multipla/1-a-2-serie-medio.pdf',
-      '3º ano - Ensino Médio': 'multipla/3-serie-medio.pdf',
-    },
-  },
+function configDaEscola(nomeEscola) {
+  const slug = slugificar(nomeEscola);
+  return slug ? MATERIAIS[slug] ?? null : null;
+}
 
-  'Linus Pauling': {
-    // Do 1º ao 5º ano, a Linus Pauling tem lista diferente pra Período
-    // Integral e Período Regular — por isso essas séries entram em
-    // `comPeriodo`, e o fluxo do bot pergunta o período antes de buscar o PDF.
-    comPeriodo: {
-      '1º ano - Fundamental': {
-        integral: 'linus-pauling/1-ano-fundamental-integral.pdf',
-        regular: 'linus-pauling/1-ano-fundamental-regular.pdf',
-      },
-      '2º ano - Fundamental': {
-        integral: 'linus-pauling/2-ano-fundamental-integral.pdf',
-        regular: 'linus-pauling/2-ano-fundamental-regular.pdf',
-      },
-      '3º ano - Fundamental': {
-        integral: 'linus-pauling/3-ano-fundamental-integral.pdf',
-        regular: 'linus-pauling/3-ano-fundamental-regular.pdf',
-      },
-      '4º ano - Fundamental': {
-        integral: 'linus-pauling/4-ano-fundamental-integral.pdf',
-        regular: 'linus-pauling/4-ano-fundamental-regular.pdf',
-      },
-      '5º ano - Fundamental': {
-        integral: 'linus-pauling/5-ano-fundamental-integral.pdf',
-        regular: 'linus-pauling/5-ano-fundamental-regular.pdf',
-      },
-    },
-    semPeriodo: {
-      // Do 6º ao 9º ano e no Ensino Médio não há distinção de período: uma lista só.
-      '6º ano - Fundamental': 'linus-pauling/6-a-9-ano-fundamental.pdf',
-      '7º ano - Fundamental': 'linus-pauling/6-a-9-ano-fundamental.pdf',
-      '8º ano - Fundamental': 'linus-pauling/6-a-9-ano-fundamental.pdf',
-      '9º ano - Fundamental': 'linus-pauling/6-a-9-ano-fundamental.pdf',
-      '1º ano - Ensino Médio': 'linus-pauling/1-a-3-serie-medio.pdf',
-      '2º ano - Ensino Médio': 'linus-pauling/1-a-3-serie-medio.pdf',
-      '3º ano - Ensino Médio': 'linus-pauling/1-a-3-serie-medio.pdf',
-    },
-  },
-
-  'Mundo Livre': {
-    // Escola de teste com cobertura propositalmente incompleta: só o 3º ano
-    // fundamental tem lista cadastrada. Qualquer outro ano cai no fallback.
-    semPeriodo: {
-      '3º ano - Fundamental': 'mundo-livre/3-ano-fundamental.pdf',
-    },
-  },
-};
+// Turmas/séries que ESTA escola oferece, na ordem escolar (Educação Infantil,
+// depois Fundamental, depois Médio) e com o vocabulário da própria escola.
+// Devolve [] quando não há material cadastrado — aí o fluxo mostra a lista
+// genérica de anos em vez de um menu vazio.
+function listarAnos(nomeEscola) {
+  return configDaEscola(nomeEscola)?.menu ?? [];
+}
 
 // Diz se aquela escola+ano tem variação de período (Integral/Regular). Usado
 // pelo estado LISTA_ESCOLAR_ANO pra decidir se pergunta o período ou pula
 // direto pra observação.
 function temVariacaoDePeriodo(nomeEscola, ano) {
-  return Boolean(MATERIAIS[nomeEscola]?.comPeriodo?.[ano]);
+  return Boolean(configDaEscola(nomeEscola)?.comPeriodo?.[ano]);
 }
 
-// Retorna { caminhoAbsoluto, nomeArquivo } do PDF correspondente, ou `null`
-// se ainda não há material cadastrado pra essa combinação de escola+ano(+período).
+// Retorna { caminhoAbsoluto, nomeArquivo, ehOrcamento } do PDF correspondente,
+// ou `null` se ainda não há material cadastrado pra essa combinação de
+// escola+ano(+período).
+//
+// `ehOrcamento` diz se o arquivo é a cotação com preço (o caso normal) ou a
+// lista crua da escola, usada nas turmas que não têm orçamento na origem. Quem
+// chama usa isso pra anunciar o anexo pelo nome certo: prometer "orçamento" e
+// mandar uma lista sem valor nenhum faz o cliente voltar perguntando o preço.
 function buscarMaterial(nomeEscola, ano, periodo) {
-  const configEscola = MATERIAIS[nomeEscola];
+  const configEscola = configDaEscola(nomeEscola);
   if (!configEscola) return null;
 
   let caminhoRelativo;
@@ -144,7 +91,8 @@ function buscarMaterial(nomeEscola, ano, periodo) {
   return {
     caminhoAbsoluto: path.join(PASTA_MATERIAIS, caminhoRelativo),
     nomeArquivo: path.basename(caminhoRelativo),
+    ehOrcamento: !configEscola.semOrcamento?.includes(caminhoRelativo),
   };
 }
 
-module.exports = { temVariacaoDePeriodo, buscarMaterial };
+module.exports = { listarAnos, temVariacaoDePeriodo, buscarMaterial };

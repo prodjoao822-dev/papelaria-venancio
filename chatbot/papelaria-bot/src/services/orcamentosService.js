@@ -45,33 +45,38 @@ function itensDeTexto(itensTexto) {
     .map(itemDeLinha);
 }
 
+// Antes, esta função fazia 2 chamadas Supabase separadas (insert em `orcamentos`
+// e depois insert em `itens_orcamento`) sem transação: uma falha na segunda
+// deixava o orçamento órfão, sem nenhum item (achado M2 do diagnóstico de
+// 30/07/2026). Agora chama a RPC `criar_orcamento_com_itens_tx`
+// (supabase/correcoes_criticas.sql), que faz as duas inserções na mesma
+// transação PL/pgSQL — ou cria orçamento + itens juntos, ou nenhum dos dois.
 async function criarOrcamentoComItens({ clienteId, conversaId, tipo, escolaId, itensTexto, observacoes }) {
-  const { data: orcamento, error: erroOrcamento } = await supabase
-    .from('orcamentos')
-    .insert({
-      cliente_id: clienteId,
-      conversa_id: conversaId,
-      tipo,
-      escola_id: escolaId || null,
-      observacoes: observacoes || null,
-    })
-    .select()
-    .single();
+  const itensJson = itensDeTexto(itensTexto).map((item) => ({
+    produto_id: item.produto_id || null,
+    descricao_livre: item.descricao_livre || null,
+    quantidade: item.quantidade,
+    valor_unitario: item.valor_unitario || null,
+  }));
 
-  if (erroOrcamento) {
-    logger.erro(`Falha ao criar orçamento para o cliente ${clienteId}`, erroOrcamento);
-    throw new Error(`Não foi possível criar o orçamento: ${erroOrcamento.message}`);
-  }
+  // `p_itens` vai como ARRAY, nunca como JSON.stringify(...). O supabase-js já
+  // serializa o objeto inteiro de parâmetros pro corpo da requisição: mandar a
+  // string aqui faz o parâmetro chegar no Postgres como um jsonb ESCALAR (uma
+  // string JSON) em vez de array, e a função quebra em jsonb_array_length com
+  // "cannot get array length of a scalar" (22023) — visto em teste real em
+  // 08/08/2026, o cliente recebia "tivemos um problema técnico" no fim do fluxo.
+  const { data: orcamento, error } = await supabase.rpc('criar_orcamento_com_itens_tx', {
+    p_cliente_id: clienteId,
+    p_conversa_id: conversaId || null,
+    p_tipo: tipo,
+    p_escola_id: escolaId || null,
+    p_observacoes: observacoes || null,
+    p_itens: itensJson,
+  });
 
-  const itens = itensDeTexto(itensTexto).map((item) => ({ ...item, orcamento_id: orcamento.id }));
-
-  if (itens.length > 0) {
-    const { error: erroItens } = await supabase.from('itens_orcamento').insert(itens);
-
-    if (erroItens) {
-      logger.erro(`Falha ao gravar itens do orçamento ${orcamento.id}`, erroItens);
-      throw new Error(`Não foi possível gravar os itens do orçamento: ${erroItens.message}`);
-    }
+  if (error) {
+    logger.erro(`Falha ao criar orçamento para o cliente ${clienteId}`, error);
+    throw new Error(`Não foi possível criar o orçamento: ${error.message}`);
   }
 
   return orcamento;
