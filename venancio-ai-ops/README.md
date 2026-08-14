@@ -4,8 +4,11 @@ Central operacional de vendas, pedidos e atendimento integrado ao WhatsApp com I
 
 > **Unificado com o banco do bot.** Este dashboard não usa mais um projeto
 > Supabase próprio — ele lê/escreve no mesmo projeto onde o `papelaria-bot`
-> já roda em produção. Ver `supabase/README.md` para os arquivos de schema
-> reais (em `chatbot/papelaria-bot/supabase/`).
+> já roda em produção. Os arquivos de schema reais ficam em
+> `chatbot/papelaria-bot/supabase/`. As migrations antigas deste projeto
+> (de um Supabase separado, já apagado) foram movidas pra
+> `_deprecated/venancio-ai-ops-supabase-legado/` — histórico morto,
+> nunca reaplicar.
 
 ## Stack
 
