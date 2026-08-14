@@ -340,6 +340,10 @@ create table if not exists pedidos_status_historico (
 -- M. FUNÇÕES CENTRAIS — únicas portas de escrita de status
 -- =====================================================================
 
+-- ⚠️ ATENÇÃO — 2026-07-30: ESTA DEFINIÇÃO FOI SUPERSEDIDA POR correcoes_criticas.sql
+-- A versão abaixo PROÍBE rascunho→aceito e causou o incidente de 20/07.
+-- NÃO reaplicar este arquivo em produção sem executar correcoes_criticas.sql logo depois.
+-- A versão correta e vigente está em correcoes_criticas.sql.
 create or replace function atualizar_status_orcamento(
   p_orcamento_id uuid,
   p_novo_status status_orcamento,

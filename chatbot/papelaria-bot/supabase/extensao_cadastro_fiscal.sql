@@ -60,6 +60,9 @@ $$ language sql stable;
 -- cadastro fiscal. Sem essa transição liberada, todo fechamento pelo JS Bot
 -- falhava com "Transição de orçamento inválida: rascunho -> aceito" (visto em
 -- produção em 20/07) e o orçamento ficava órfão em 'rascunho', sem virar pedido.
+-- ⚠️ ATENÇÃO — 2026-07-30: Esta versão foi a correção do incidente de 20/07.
+-- A versão canônica definitiva foi movida para correcoes_criticas.sql.
+-- Este arquivo ainda é necessário para os campos fiscais de clientes.
 create or replace function atualizar_status_orcamento(
   p_orcamento_id uuid,
   p_novo_status status_orcamento,
