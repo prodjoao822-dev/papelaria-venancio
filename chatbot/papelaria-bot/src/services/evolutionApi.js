@@ -81,12 +81,28 @@ function aguardar(ms) {
   return new Promise((resolve) => { setTimeout(resolve, ms); });
 }
 
+// Mesmo problema descrito em `NOTIFICAR_AGENTE_ORCAMENTO_TIMEOUT_MS`
+// (src/integracoes/n8nClient.js): sem teto de tempo, um travamento do proxy/da
+// Evolution API prendia o handler do webhook indefinidamente. Valor bem menor
+// que o dos agentes n8n (que rodam LLM) porque isso aqui é só enviar/baixar
+// uma mensagem — 15s já é folga generosa pra um envio de texto ou mídia.
+const EVOLUTION_API_TIMEOUT_MS = 15000;
+
 async function fetchComRetentativa(url, opcoes, descricaoErro) {
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS_ENVIO; tentativa += 1) {
+    const controleTimeout = new AbortController();
+    const timeoutId = setTimeout(() => controleTimeout.abort(), EVOLUTION_API_TIMEOUT_MS);
+
     try {
       // eslint-disable-next-line no-await-in-loop -- retentativas são sequenciais por natureza
-      return await fetch(url, { ...opcoes, dispatcher: agenteSemConexaoOciosa });
+      return await fetch(url, { ...opcoes, signal: controleTimeout.signal, dispatcher: agenteSemConexaoOciosa });
     } catch (erroDeRede) {
+      if (erroDeRede.name === 'AbortError') {
+        logger.aviso(`Timeout de ${EVOLUTION_API_TIMEOUT_MS}ms ao chamar a Evolution API (${descricaoErro})`, {
+          tentativa,
+        });
+      }
+
       const tentativasMaximasParaEsteErro = tentativasMaximasPara(erroDeRede);
 
       if (tentativa >= tentativasMaximasParaEsteErro) {
@@ -103,6 +119,8 @@ async function fetchComRetentativa(url, opcoes, descricaoErro) {
       );
       // eslint-disable-next-line no-await-in-loop -- espera intencional entre tentativas
       await aguardar(500 * tentativa);
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
   return undefined; // inalcançável: o loop sempre retorna ou lança na última tentativa
