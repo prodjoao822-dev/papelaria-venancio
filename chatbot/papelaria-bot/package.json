@@ -10,7 +10,9 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "chat": "node src/cli.js",
-    "test": "node --test"
+    "test": "node --test",
+    "loadtest:server": "node loadtest/server-teste.js",
+    "loadtest": "k6 run loadtest/webhook.k6.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
