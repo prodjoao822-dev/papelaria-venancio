@@ -1,15 +1,20 @@
 {
   "expo": {
-    "name": "app-mobile",
-    "slug": "app-mobile",
+    "name": "Venâncio Equipe",
+    "slug": "venancio-equipe",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "scheme": "venancio-equipe",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.papelariavenancio.equipe",
+      "buildNumber": "1"
     },
     "android": {
+      "package": "com.papelariavenancio.equipe",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -21,7 +26,26 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-secure-store"
-    ]
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "backgroundColor": "#FAFBFD"
+        }
+      ]
+    ],
+    "extra": {
+      "buildIdentity": {
+        "packageIdProvisorio": true,
+        "nota": "com.papelariavenancio.equipe eh um identificador PROVISORIO escolhido em 26/08/2026 (T3.2, problema P19). O dono nao confirmou explicitamente ainda. Pode ser trocado livremente em android.package/ios.bundleIdentifier ate o dia da PRIMEIRA submissao real a Play Store/App Store, momento em que o identificador se torna irreversivel de fato. Ver app-mobile/README.md, secao 'Identidade de build'.",
+        "eas": {
+          "projectId": "PENDENTE",
+          "pendencia": "projectId real do EAS depende de 'eas login' + 'eas init' com a conta Expo do dono. Nao foi gerado/inventado aqui."
+        }
+      }
+    }
   }
 }
