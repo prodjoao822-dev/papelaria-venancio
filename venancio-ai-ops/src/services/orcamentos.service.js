@@ -1,5 +1,5 @@
 import { supabase } from '@/supabase/client'
-import { N8N_WEBHOOKS } from '@/utils/constants'
+import { N8N_WEBHOOKS, BOT_API_URL } from '@/utils/constants'
 
 const SELECT_ORC_COMPLETO = `
   *,
@@ -13,6 +13,22 @@ const SELECT_ORC_COMPLETO = `
 
 export const orcamentosService = {
   async listar(filtros = {}) {
+    // Mesma limitação do PostgREST documentada em pedidos.service.js: filtrar
+    // uma coluna de tabela embutida (clientes.nome) sem !inner não garante
+    // filtrar as linhas de fora — busca clientes primeiro, filtra orçamentos
+    // por cliente_id.
+    let clienteIdsBusca = null
+    if (filtros.busca) {
+      const termoBusca = filtros.busca.trim()
+      const { data: clientesMatch, error: errClientes } = await supabase
+        .from('clientes')
+        .select('id')
+        .or(`nome.ilike.%${termoBusca}%,telefone.ilike.%${termoBusca}%`)
+      if (errClientes) throw errClientes
+      clienteIdsBusca = (clientesMatch ?? []).map((c) => c.id)
+      if (clienteIdsBusca.length === 0) return []
+    }
+
     let query = supabase
       .from('orcamentos')
       .select(SELECT_ORC_COMPLETO)
@@ -25,8 +41,8 @@ export const orcamentosService = {
     if (filtros.clienteId) {
       query = query.eq('cliente_id', filtros.clienteId)
     }
-    if (filtros.busca) {
-      query = query.ilike('clientes.nome', `%${filtros.busca}%`)
+    if (clienteIdsBusca) {
+      query = query.in('cliente_id', clienteIdsBusca)
     }
 
     const { data, error } = await query
@@ -140,6 +156,60 @@ export const orcamentosService = {
     }
 
     return orcamentosService.buscarPorId(id)
+  },
+
+  /**
+   * Preenche o preço de um item sem valor_unitario — caso mais comum: itens
+   * de "Cotação Empresa" (WhatsApp → lista digitada pelo cliente), que
+   * nascem sem preço de propósito (cotacaoEmpresa.js: "sem catálogo/preço
+   * automático") e ficavam sem nenhum jeito de precificar depois no
+   * dashboard. valor_total é coluna gerada (quantidade * valor_unitario),
+   * recalcula sozinha.
+   */
+  async atualizarPrecoItem(itemId, valorUnitario) {
+    const { data, error } = await supabase
+      .from('itens_orcamento')
+      .update({ valor_unitario: valorUnitario })
+      .eq('id', itemId)
+      .select()
+      .single()
+    if (error) throw error
+    return data
+  },
+
+  /**
+   * Manda o PDF do orçamento pro WhatsApp do cliente através do JS Bot (mesmo
+   * motivo de atendimentoService.enviarMensagem: é ele quem tem a credencial
+   * da Evolution API). Diferente do envio de mensagem manual, não exige uma
+   * conversa com bot pausado — mandar um documento não é "assumir" a
+   * conversa, então funciona mesmo pra cliente sem conversa em aberto.
+   */
+  async enviarPdf(telefone, base64, nomeArquivo, legenda) {
+    if (!BOT_API_URL) {
+      throw new Error('VITE_BOT_API_URL não configurado — não é possível enviar o PDF pelo WhatsApp.')
+    }
+    if (!telefone) {
+      throw new Error('Orçamento sem telefone de cliente associado.')
+    }
+
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) throw new Error('Sessão expirada. Faça login novamente.')
+
+    const resposta = await fetch(`${BOT_API_URL}/operador/orcamentos/enviar-pdf`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ telefone, base64, nomeArquivo, legenda }),
+    })
+
+    const corpo = await resposta.json().catch(() => ({}))
+    if (!resposta.ok || !corpo.ok) {
+      throw new Error(corpo.erro || 'Falha ao enviar o PDF pelo WhatsApp.')
+    }
+
+    return true
   },
 
   /** Sequência/Operação do ShopControl — pode ser preenchida antes de virar pedido. */

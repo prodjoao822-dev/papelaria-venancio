@@ -1,14 +1,35 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { PRIORIDADE_CONFIG, INTENCOES_CONFIG, STATUS_ATENDIMENTO_CONFIG, DEMO_MODE } from '@/utils/constants'
+import { formatTimeAgo } from '@/utils/formatters'
 import { atendimentoService } from '@/services/atendimento.service'
 import { useConversas, useMensagens } from '@/hooks/useAtendimento'
+import { useHeartbeatOperador } from '@/hooks/useHeartbeatOperador'
 import { RealtimeIndicator } from '@/components/dashboard/RealtimeIndicator'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { NovoPedidoModal } from '@/components/pedidos/NovoPedidoModal'
 import { NovoOrcamentoModal } from '@/components/orcamentos/NovoOrcamentoModal'
 import { useToast } from '@/contexts/AppContext'
 import { useAuth } from '@/contexts/AuthContext'
+
+// Acima disso, o chip "aguardando" do header vira alerta visual (cor de
+// destaque + pulsante) em vez do estilo neutro — ver nAguardando/render do
+// header mais abaixo.
+const LIMIAR_ALERTA_FILA = 5
+
+const FOLLOWUP_PREFIXO = 'followup:'
+
+function getFollowupTag(tags) {
+  return (tags ?? []).find((t) => t.startsWith(FOLLOWUP_PREFIXO)) ?? null
+}
+
+function parseFollowupData(tag) {
+  if (!tag) return null
+  const bruto = tag.slice(FOLLOWUP_PREFIXO.length)
+  const data = new Date(bruto)
+  return Number.isNaN(data.getTime()) ? null : data
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MOCK DATA — só usada com VITE_DEMO_MODE=true (opt-in explícito, ver
@@ -209,12 +230,53 @@ function MsgBalao({ msg }) {
   )
 }
 
+/** Modal simples de agendamento de follow-up — não existe coluna própria de
+ * data de follow-up em `conversas`, então a data é guardada como uma tag no
+ * formato `followup:AAAA-MM-DD` (ver adicionarTag/removerTag em
+ * atendimento.service.js, que já são graváveis por UPDATE direto). */
+function FollowupModal({ valorInicial, onFechar, onSalvar }) {
+  const [data, setData] = useState(valorInicial ?? '')
+
+  return (
+    <div className="modal-overlay" onClick={onFechar}>
+      <div className="modal modal--pequeno" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3 className="modal-titulo">Agendar Follow-up</h3>
+        </div>
+        <div className="modal-body">
+          <div className="form-grupo">
+            <label className="form-label">Data do follow-up</label>
+            <input
+              className="input"
+              type="date"
+              value={data}
+              onChange={(e) => setData(e.target.value)}
+              autoFocus
+            />
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onFechar}>Cancelar</button>
+          <button
+            className="btn btn-primary"
+            disabled={!data}
+            onClick={() => onSalvar(data)}
+          >
+            Agendar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PAGE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 
 const FILTROS = [
   { id: 'todos',    label: 'Todos' },
+  { id: 'fila',     label: 'Fila' },
   { id: 'urgente',  label: 'Urgente' },
   { id: 'operador', label: 'Com Operador' },
   { id: 'ia',       label: 'IA Ativa' },
@@ -230,6 +292,11 @@ export function AtendimentoPage() {
   const conversas = DEMO_MODE ? conversasMock : real.conversas
   const setConversas = DEMO_MODE ? setConversasMock : real.setConversas
 
+  // Heartbeat de presença — só com operador real logado e fora do modo demo
+  // (ver useHeartbeatOperador.js). O banco usa isso pra saber quem está
+  // "online" na distribuição automática de conversas sem dono.
+  useHeartbeatOperador(DEMO_MODE ? null : operador?.id)
+
   const [conversaId, setConversaId] = useState(null)
   const [painelMobile, setPainelMobile] = useState('fila')
   const [filtro, setFiltro] = useState('todos')
@@ -238,6 +305,8 @@ export function AtendimentoPage() {
   const [tagInput, setTagInput] = useState('')
   const [modalPedido, setModalPedido] = useState(false)
   const [modalOrcamento, setModalOrcamento] = useState(false)
+  const [modalFollowup, setModalFollowup] = useState(false)
+  const [confirmEncerrar, setConfirmEncerrar] = useState(false)
   const msgsEndRef = useRef(null)
 
   const mensagensReal = useMensagens(DEMO_MODE ? null : conversaId)
@@ -260,6 +329,10 @@ export function AtendimentoPage() {
     [conversas, conversaId]
   )
 
+  const followupTagAtual = getFollowupTag(conversa?.tags)
+  const followupDataAtual = parseFollowupData(followupTagAtual)
+  const followupAtrasadoAtual = !!followupDataAtual && followupDataAtual.getTime() < Date.now()
+
   const conversasFiltradas = useMemo(() => {
     let lista = [...conversas]
 
@@ -279,9 +352,28 @@ export function AtendimentoPage() {
       lista = lista.filter((c) => c.operador_nome)
     } else if (filtro === 'ia') {
       lista = lista.filter((c) => c.ia_ativa)
+    } else if (filtro === 'fila') {
+      // Mesmo critério de contarAguardandoOperador() no service: bot pausado
+      // (ia_ativa=false) + ninguém assumiu (sem operador_nome) — nunca usa
+      // c.status, que o bot não grava.
+      lista = lista.filter((c) => !c.ia_ativa && !c.operador_nome)
     }
 
-    return lista.sort((a, b) => (b.prioridade_score ?? 0) - (a.prioridade_score ?? 0))
+    if (filtro === 'fila') {
+      // Quem espera há mais tempo primeiro (ultima_interacao_em crescente),
+      // sem entrar prioridade no critério aqui — a aba "Fila" é sobre tempo
+      // de espera, não sobre urgência.
+      return lista.sort((a, b) => new Date(a.ultima_msg_at ?? 0) - new Date(b.ultima_msg_at ?? 0))
+    }
+
+    // Prioridade primeiro; em empate, quem espera há mais tempo sobe (data de
+    // última mensagem mais antiga primeiro) — mesmo critério da Entrega 2 do
+    // PROMPT-01-DIMENSIONAMENTO-CARGA.md.
+    return lista.sort((a, b) => {
+      const diffPrioridade = (b.prioridade_score ?? 0) - (a.prioridade_score ?? 0)
+      if (diffPrioridade !== 0) return diffPrioridade
+      return new Date(a.ultima_msg_at ?? 0) - new Date(b.ultima_msg_at ?? 0)
+    })
   }, [conversas, filtro, busca])
 
   // ── Helpers de mensagem local (decoração — "sistema" não é persistido) ──────
@@ -318,7 +410,7 @@ export function AtendimentoPage() {
       return
     }
     try {
-      const atualizada = await atendimentoService.assumirConversa(conversa.id, operador?.id)
+      const atualizada = await atendimentoService.assumirConversa(conversa.id)
       setConversas((prev) => prev.map((c) => (c.id === atualizada.id ? atualizada : c)))
       addSistema(conversa.id, `${OPERADOR_ATUAL} assumiu o atendimento`)
       toast.sucesso('Conversa assumida')
@@ -448,11 +540,66 @@ export function AtendimentoPage() {
     }
   }
 
+  /** Agendar Follow-up: não existe coluna própria de data em `conversas`,
+   * então a data vira uma tag `followup:AAAA-MM-DD` (removendo uma tag de
+   * follow-up anterior antes, se existir, pra não acumular duas datas). */
+  async function handleSalvarFollowup(data) {
+    if (!conversa) return
+    const novaTag = `${FOLLOWUP_PREFIXO}${data}`
+    const tagAntiga = getFollowupTag(conversa.tags)
+    setModalFollowup(false)
+
+    if (DEMO_MODE) {
+      const semAntiga = (conversa.tags ?? []).filter((t) => t !== tagAntiga)
+      mutarConversaLocal(conversa.id, { tags: [...new Set([...semAntiga, novaTag])] })
+      toast.sucesso(`Follow-up agendado para ${data}`)
+      return
+    }
+    try {
+      let atual = conversa
+      if (tagAntiga) {
+        atual = await atendimentoService.removerTag(conversa.id, tagAntiga, atual.tags)
+      }
+      const atualizada = await atendimentoService.adicionarTag(conversa.id, novaTag, atual.tags)
+      setConversas((prev) => prev.map((c) => (c.id === atualizada.id ? atualizada : c)))
+      toast.sucesso(`Follow-up agendado para ${data}`)
+    } catch (e) {
+      toast.erro(e.message)
+    }
+  }
+
+  /** Encerrar Conversa: só grava status='finalizado' (coluna já gravável por
+   * UPDATE direto, sem RPC nova) — não precisa zerar operador_id porque a
+   * distribuição automática já exclui status in ('finalizado','cancelado')
+   * do cálculo de carga do operador. */
+  async function handleEncerrarConversa() {
+    if (!conversa) return
+    setConfirmEncerrar(false)
+    if (DEMO_MODE) {
+      mutarConversaLocal(conversa.id, { status: 'finalizado' })
+      addSistema(conversa.id, `${OPERADOR_ATUAL} encerrou a conversa`)
+      toast.sucesso('Conversa encerrada')
+      return
+    }
+    try {
+      const atualizada = await atendimentoService.atualizarStatus(conversa.id, 'finalizado')
+      setConversas((prev) => prev.map((c) => (c.id === atualizada.id ? atualizada : c)))
+      addSistema(conversa.id, `${OPERADOR_ATUAL} encerrou a conversa`)
+      toast.sucesso('Conversa encerrada')
+    } catch (e) {
+      toast.erro(e.message)
+    }
+  }
+
   // ── Contadores para header ───────────────────────────────────────────────────
 
   const nCriticos = conversas.filter((c) => c.prioridade === 'critica').length
   const nComIA = conversas.filter((c) => c.ia_ativa).length
-  const nAguardando = conversas.filter((c) => c.status === 'aguardando_operador').length
+  // Não usa c.status (só o dashboard grava; o bot nunca marca 'aguardando_operador' —
+  // ver contarAguardandoOperador em atendimento.service.js). bot pausado (ia_ativa=false)
+  // + ninguém assumiu (sem operador_nome) é o sinal real de que precisa de um operador.
+  const nAguardando = conversas.filter((c) => !c.ia_ativa && !c.operador_nome).length
+  const alertaFila = nAguardando > LIMIAR_ALERTA_FILA
 
   // ──────────────────────────────────────────────────────────────────────────────
   // RENDER
@@ -477,7 +624,9 @@ export function AtendimentoPage() {
               <span className="atend-chip atend-chip--danger">🔴 {nCriticos} crítico{nCriticos > 1 ? 's' : ''}</span>
             )}
             {nAguardando > 0 && (
-              <span className="atend-chip atend-chip--warning">👤 {nAguardando} aguardando</span>
+              <span className={`atend-chip ${alertaFila ? 'atend-chip--danger atend-chip--alerta' : 'atend-chip--warning'}`}>
+                {alertaFila ? '🚨' : '👤'} {nAguardando} aguardando
+              </span>
             )}
             <span className="atend-chip">🤖 {nComIA} com IA</span>
             <span className="atend-chip">💬 {conversas.length} conversas</span>
@@ -515,7 +664,7 @@ export function AtendimentoPage() {
                   className={`atend-filtro-btn ${filtro === f.id ? 'atend-filtro-btn--ativo' : ''}`}
                   onClick={() => setFiltro(f.id)}
                 >
-                  {f.label}
+                  {f.label}{f.id === 'fila' && nAguardando > 0 ? ` (${nAguardando})` : ''}
                 </button>
               ))}
             </div>
@@ -533,6 +682,9 @@ export function AtendimentoPage() {
               conversasFiltradas.map((c) => {
                 const prCfg = PRIORIDADE_CONFIG[c.prioridade] ?? PRIORIDADE_CONFIG.normal
                 const ativa = c.id === conversaId
+                const followupTag = getFollowupTag(c.tags)
+                const followupData = parseFollowupData(followupTag)
+                const followupAtrasado = !!followupData && followupData.getTime() < Date.now()
                 return (
                   <button
                     key={c.id}
@@ -567,6 +719,14 @@ export function AtendimentoPage() {
                         )}
                         {c.operador_nome && (
                           <span className="atend-operador-mini">{c.operador_nome}</span>
+                        )}
+                        {filtro === 'fila' && (
+                          <span className="atend-espera-badge">⏳ aguardando {formatTimeAgo(c.ultima_msg_at)}</span>
+                        )}
+                        {followupTag && (
+                          <span className={`atend-tag atend-tag--followup ${followupAtrasado ? 'atend-tag--atrasado' : ''}`}>
+                            📅 {followupTag.slice(FOLLOWUP_PREFIXO.length)}
+                          </span>
                         )}
                       </div>
                     </div>
@@ -724,16 +884,29 @@ export function AtendimentoPage() {
                 </div>
               </div>
 
+              {/* Follow-up agendado (tag followup:AAAA-MM-DD — sem coluna própria) */}
+              {followupTagAtual && (
+                <div className="atend-painel-secao">
+                  <p className="atend-painel-titulo">Follow-up</p>
+                  <div className={`atend-followup-aviso ${followupAtrasadoAtual ? 'atend-followup-aviso--atrasado' : ''}`}>
+                    <span>{followupAtrasadoAtual ? '⚠️ Atrasado —' : '📅 Agendado para'} {followupTagAtual.slice(FOLLOWUP_PREFIXO.length)}</span>
+                    <button className="atend-tag-remove" onClick={() => handleRemoveTag(followupTagAtual)}>✕</button>
+                  </div>
+                </div>
+              )}
+
               {/* Tags */}
               <div className="atend-painel-secao">
                 <p className="atend-painel-titulo">Tags</p>
                 <div className="atend-tags">
-                  {(conversa.tags ?? []).map((tag) => (
-                    <span key={tag} className="atend-tag">
-                      {tag}
-                      <button className="atend-tag-remove" onClick={() => handleRemoveTag(tag)}>✕</button>
-                    </span>
-                  ))}
+                  {(conversa.tags ?? [])
+                    .filter((tag) => tag !== followupTagAtual)
+                    .map((tag) => (
+                      <span key={tag} className="atend-tag">
+                        {tag}
+                        <button className="atend-tag-remove" onClick={() => handleRemoveTag(tag)}>✕</button>
+                      </span>
+                    ))}
                 </div>
                 <div className="atend-tag-input-row">
                   <input
@@ -758,10 +931,10 @@ export function AtendimentoPage() {
                   <button className="atend-acao-btn" onClick={() => setModalOrcamento(true)}>
                     📋 Gerar Orçamento
                   </button>
-                  <button className="atend-acao-btn" onClick={() => toast.info('Agendar Follow-up ainda não foi implementado — precisa de decisão de produto sobre o fluxo.')}>
-                    🔁 Agendar Follow-up
+                  <button className="atend-acao-btn" onClick={() => setModalFollowup(true)}>
+                    🔁 {followupTagAtual ? 'Reagendar' : 'Agendar'} Follow-up
                   </button>
-                  <button className="atend-acao-btn atend-acao-btn--danger" onClick={() => toast.info('Encerrar Conversa ainda não foi implementado — precisa de decisão de produto sobre o que "encerrada" significa.')}>
+                  <button className="atend-acao-btn atend-acao-btn--danger" onClick={() => setConfirmEncerrar(true)}>
                     ✕ Encerrar Conversa
                   </button>
                 </div>
@@ -811,6 +984,21 @@ export function AtendimentoPage() {
           onFechar={() => setModalOrcamento(false)}
         />
       )}
+      {modalFollowup && (
+        <FollowupModal
+          valorInicial={followupTagAtual ? followupTagAtual.slice(FOLLOWUP_PREFIXO.length) : ''}
+          onFechar={() => setModalFollowup(false)}
+          onSalvar={handleSalvarFollowup}
+        />
+      )}
+      <ConfirmDialog
+        visivel={confirmEncerrar}
+        titulo="Encerrar conversa"
+        descricao={`Encerrar o atendimento de ${conversa?.nome_cliente ?? conversa?.telefone ?? 'este cliente'}? A conversa fica marcada como finalizada.`}
+        perigo
+        onConfirmar={handleEncerrarConversa}
+        onCancelar={() => setConfirmEncerrar(false)}
+      />
     </div>
   )
 }

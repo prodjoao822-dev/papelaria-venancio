@@ -1,6 +1,23 @@
 export const APP_NAME = import.meta.env.VITE_APP_NAME ?? 'Venâncio Operations'
 export const APP_VERSION = import.meta.env.VITE_APP_VERSION ?? '2.0.0'
 
+// Dados fixos do papel timbrado do orçamento (impressão/PDF) — mesmos dados
+// do cabeçalho usado nos orçamentos que o JS Bot manda (PDFs pré-montados em
+// "ORÇAMENTOS 2026"). Não vem do banco: a tabela `empresa` só guarda
+// id/nome/criado_em hoje, sem endereço/CNPJ/contato.
+export const EMPRESA_INFO = {
+  nome: 'VENANCIO PAPELARIA',
+  slogan: 'DESDE 2001 FAZENDO PARTE DA SUA HISTÓRIA!',
+  cnpj: '57.184.982/0001-36',
+  endereco: 'Avenida Eldes Scherrer Souza',
+  bairro: 'Civit II',
+  cidade: 'Serra',
+  estado: 'ES',
+  cep: '29168060',
+  telefone: '27998398881',
+  email: 'venancio@venanciopapelaria.com.br',
+}
+
 export const N8N_WEBHOOK_BASE = import.meta.env.VITE_N8N_WEBHOOK_BASE ?? null
 
 // URL do JS Bot (chatbot/papelaria-bot) — é ele quem fala com a Evolution API.

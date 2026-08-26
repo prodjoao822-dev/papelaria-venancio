@@ -1,11 +1,14 @@
 import { useState, useMemo } from 'react'
 import { useOrcamentos } from '@/hooks/useOrcamentos'
+import { orcamentosService } from '@/services/orcamentos.service'
 import { NovoOrcamentoModal } from '@/components/orcamentos/NovoOrcamentoModal'
 import { StatusOrcBadge } from '@/components/orcamentos/StatusOrcBadge'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { ProdutoAutocompleteInput } from '@/components/pedidos/ProdutoAutocompleteInput'
 import { useToast } from '@/contexts/AppContext'
 import { formatCurrency, formatDate, formatTimeAgo, formatPhone } from '@/utils/formatters'
+import { orcamentoDocumento } from '@/utils/orcamentoDocumento'
 
 // Enum real status_orcamento (chatbot/papelaria-bot/supabase/squemanovo.sql):
 // rascunho -> enviado|recusado|aceito ; enviado -> aceito|recusado|expirado.
@@ -34,18 +37,126 @@ const ACOES_STATUS = {
   expirado: [],
 }
 
-function OrcamentoDetalhe({ orc, onStatusChange, onAceitar, onFechar }) {
+const ITEM_EDIT_VAZIO = { descricao_livre: '', quantidade: 1, valor_unitario: '', produto_id: null }
+
+function itensParaEdicao(orc) {
+  return (orc.itens_orcamento ?? []).map((item) => ({
+    descricao_livre: item.nome_item ?? item.descricao_livre ?? '',
+    quantidade: item.quantidade,
+    valor_unitario: item.valor_unitario === null ? '' : String(item.valor_unitario),
+    produto_id: item.produto_id ?? null,
+  }))
+}
+
+function OrcamentoDetalhe({ orc, onStatusChange, onAceitar, onPrecoAtualizado, onAtualizado, onFechar }) {
+  const { toast } = useToast()
   const [processando, setProcessando] = useState(false)
+  const [editandoItemId, setEditandoItemId] = useState(null)
+  const [precoEditado, setPrecoEditado] = useState('')
+  const [salvandoPreco, setSalvandoPreco] = useState(false)
+  const [editando, setEditando] = useState(false)
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false)
+  const [itensEdit, setItensEdit] = useState([])
+  const [observacoesEdit, setObservacoesEdit] = useState('')
+  const [enviandoPdf, setEnviandoPdf] = useState(false)
   const acoes = ACOES_STATUS[orc.status] ?? []
   const pedidoGerado = orc.pedidos?.[0]
+  const itensSemPreco = (orc.itens_orcamento ?? []).filter((i) => i.valor_unitario === null)
 
   async function handleAcao(acao) {
+    if (acao.acao === 'aceitar' && itensSemPreco.length > 0) {
+      toast.aviso('Preencha o preço de todos os itens antes de aceitar — tem item sem valor ainda.')
+      return
+    }
     setProcessando(true)
     try {
       if (acao.acao === 'aceitar') await onAceitar(orc.id)
       else await onStatusChange(orc.id, acao.status)
     } finally {
       setProcessando(false)
+    }
+  }
+
+  function iniciarEdicaoPreco(item) {
+    setEditandoItemId(item.id)
+    setPrecoEditado('')
+  }
+
+  async function confirmarPreco(item) {
+    const valor = parseFloat(String(precoEditado).replace(',', '.'))
+    if (!valor || valor <= 0) { toast.aviso('Informe um preço válido.'); return }
+    setSalvandoPreco(true)
+    try {
+      await onPrecoAtualizado(item.id, valor)
+      setEditandoItemId(null)
+      toast.sucesso('Preço atualizado.')
+    } catch (err) {
+      toast.erro('Erro ao salvar preço: ' + err.message)
+    } finally {
+      setSalvandoPreco(false)
+    }
+  }
+
+  function iniciarEdicaoOrcamento() {
+    setItensEdit(itensParaEdicao(orc))
+    setObservacoesEdit(orc.observacoes ?? '')
+    setEditando(true)
+  }
+
+  function addItemEdit() { setItensEdit((p) => [...p, { ...ITEM_EDIT_VAZIO }]) }
+  function removeItemEdit(idx) { setItensEdit((p) => p.filter((_, i) => i !== idx)) }
+  function setItemEdit(idx, campo, val) {
+    setItensEdit((p) => p.map((it, i) => {
+      if (i !== idx) return it
+      if (campo === 'descricao_livre' && it.produto_id) {
+        return { ...it, descricao_livre: val, produto_id: null }
+      }
+      return { ...it, [campo]: val }
+    }))
+  }
+  function selecionarProdutoEdit(idx, produto) {
+    setItensEdit((p) => p.map((it, i) =>
+      i === idx
+        ? { ...it, produto_id: produto.id, descricao_livre: produto.nome, valor_unitario: it.valor_unitario || String(produto.preco ?? '') }
+        : it
+    ))
+  }
+
+  async function salvarEdicaoOrcamento() {
+    const itensFiltrados = itensEdit.filter((i) => i.descricao_livre.trim())
+    if (itensFiltrados.length === 0) { toast.aviso('O orçamento precisa de ao menos um item.'); return }
+
+    setSalvandoEdicao(true)
+    try {
+      const atualizado = await orcamentosService.atualizar(orc.id, {
+        observacoes: observacoesEdit || null,
+        itens: itensFiltrados.map((i) => ({
+          produto_id: i.produto_id ?? null,
+          descricao_livre: i.descricao_livre.trim(),
+          quantidade: Number(i.quantidade) || 1,
+          valor_unitario: parseFloat(String(i.valor_unitario).replace(',', '.')) || 0,
+        })),
+      })
+      onAtualizado(atualizado)
+      setEditando(false)
+      toast.sucesso('Orçamento atualizado.')
+    } catch (err) {
+      toast.erro('Erro ao salvar: ' + err.message)
+    } finally {
+      setSalvandoEdicao(false)
+    }
+  }
+
+  async function handleEnviarPdf() {
+    setEnviandoPdf(true)
+    try {
+      const { base64, nomeArquivo } = orcamentoDocumento.gerarPdfBase64Orcamento(orc)
+      await orcamentosService.enviarPdf(orc.clientes?.telefone, base64, nomeArquivo, `Orçamento ${orc.protocolo}`)
+      toast.sucesso('PDF enviado pelo WhatsApp.')
+    } catch (err) {
+      toast.erro('Erro ao enviar: ' + err.message)
+    } finally {
+      setEnviandoPdf(false)
     }
   }
 
@@ -63,6 +174,29 @@ function OrcamentoDetalhe({ orc, onStatusChange, onAceitar, onFechar }) {
           <button className="modal-fechar" onClick={onFechar}>✕</button>
         </div>
 
+        {/* Documento: imprimir, baixar PDF e enviar — mesmo layout do orçamento
+            que o JS Bot manda pro cliente (ver src/utils/orcamentoDocumento.js) */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '12px 20px', borderBottom: '1px solid var(--border)' }}>
+          <button className="btn btn-ghost btn-sm" onClick={() => orcamentoDocumento.imprimirOrcamento(orc)}>
+            🖨️ Imprimir
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={() => orcamentoDocumento.baixarPdfOrcamento(orc)}>
+            📄 Baixar PDF
+          </button>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={handleEnviarPdf}
+            disabled={enviandoPdf || !orc.clientes?.telefone}
+            title={!orc.clientes?.telefone ? 'Cliente sem telefone cadastrado' : undefined}
+          >
+            {enviandoPdf ? '...' : '📤 Enviar por WhatsApp'}
+          </button>
+          <div style={{ flex: 1 }} />
+          {!editando && (
+            <button className="btn btn-ghost btn-sm" onClick={iniciarEdicaoOrcamento}>✏️ Editar</button>
+          )}
+        </div>
+
         <div className="modal-body">
           <div className="pedido-detalhe">
 
@@ -73,7 +207,10 @@ function OrcamentoDetalhe({ orc, onStatusChange, onAceitar, onFechar }) {
                 <StatusOrcBadge status={orc.status} tamanho="lg" />
                 {acoes.map((a) => (
                   <button key={a.status} className={`btn btn-sm ${a.cls}`}
-                    onClick={() => handleAcao(a)} disabled={processando}>
+                    onClick={() => handleAcao(a)}
+                    disabled={processando || (a.acao === 'aceitar' && itensSemPreco.length > 0)}
+                    title={a.acao === 'aceitar' && itensSemPreco.length > 0 ? 'Preencha o preço de todos os itens primeiro' : undefined}
+                  >
                     {processando ? '...' : a.label}
                   </button>
                 ))}
@@ -96,7 +233,13 @@ function OrcamentoDetalhe({ orc, onStatusChange, onAceitar, onFechar }) {
                   <span className="campo-label">Tipo</span>
                   <span className="campo-valor">{orc.tipo}</span>
                 </div>
-                {orc.observacoes && (
+                {editando ? (
+                  <div className="pedido-detalhe-campo pedido-detalhe-campo--full">
+                    <span className="campo-label">Observações</span>
+                    <input className="input" placeholder="Ex: desconto negociado..." value={observacoesEdit}
+                      onChange={(e) => setObservacoesEdit(e.target.value)} />
+                  </div>
+                ) : orc.observacoes && (
                   <div className="pedido-detalhe-campo pedido-detalhe-campo--full">
                     <span className="campo-label">Observações</span>
                     <span className="campo-valor">{orc.observacoes}</span>
@@ -116,20 +259,88 @@ function OrcamentoDetalhe({ orc, onStatusChange, onAceitar, onFechar }) {
             {/* Itens */}
             <div className="pedido-detalhe-secao">
               <p className="pedido-detalhe-titulo">Itens</p>
-              <div className="itens-lista">
-                {(orc.itens_orcamento ?? []).map((item) => (
-                  <div key={item.id} className="item-linha">
-                    <span className="item-qtd">{item.quantidade}×</span>
-                    <span className="item-nome">{item.nome_item}</span>
-                    <span className="item-preco">{formatCurrency(item.valor_unitario)}</span>
-                    <span className="item-subtotal">{formatCurrency(item.valor_total)}</span>
+
+              {editando ? (
+                <>
+                  <div className="itens-input-lista">
+                    <div className="item-input-linha" style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-3)', paddingBottom: 4 }}>
+                      <span>Produto / Descrição</span>
+                      <span style={{ textAlign: 'center' }}>Qtd</span>
+                      <span style={{ textAlign: 'right' }}>Preço Unit.</span>
+                      <span />
+                    </div>
+                    {itensEdit.map((item, idx) => (
+                      <div key={idx} className="item-input-linha">
+                        <ProdutoAutocompleteInput
+                          placeholder="Nome do produto (busca no catálogo)"
+                          value={item.descricao_livre}
+                          onChangeText={(v) => setItemEdit(idx, 'descricao_livre', v)}
+                          onSelecionar={(produto) => selecionarProdutoEdit(idx, produto)}
+                        />
+                        <input className="input input-sm" type="number" min="1" value={item.quantidade}
+                          onChange={(e) => setItemEdit(idx, 'quantidade', e.target.value)} style={{ textAlign: 'center' }} />
+                        <input className="input input-sm" placeholder="0,00" value={item.valor_unitario}
+                          onChange={(e) => setItemEdit(idx, 'valor_unitario', e.target.value)} style={{ textAlign: 'right' }} />
+                        <button className="btn-remover-item" onClick={() => removeItemEdit(idx)} disabled={itensEdit.length === 1}>×</button>
+                      </div>
+                    ))}
                   </div>
-                ))}
-                <div className="itens-total">
-                  <span>Total do Orçamento</span>
-                  <span className="itens-total-valor">{formatCurrency(orc.valor_total)}</span>
-                </div>
-              </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+                    <button className="btn btn-ghost btn-sm" onClick={addItemEdit}>＋ Adicionar item</button>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setEditando(false)} disabled={salvandoEdicao}>
+                        Cancelar
+                      </button>
+                      <button className="btn btn-primary btn-sm" onClick={salvarEdicaoOrcamento} disabled={salvandoEdicao}>
+                        {salvandoEdicao ? '...' : '✓ Salvar alterações'}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {itensSemPreco.length > 0 && (
+                    <p className="form-hint" style={{ color: 'var(--warning, #F59E0B)', marginBottom: 8 }}>
+                      ⚠️ {itensSemPreco.length} {itensSemPreco.length === 1 ? 'item ainda não tem preço' : 'itens ainda não têm preço'}
+                      {orc.tipo === 'cotacao_empresa' ? ' — cotação empresa nasce sem preço automático, precisa preencher aqui.' : '.'}
+                    </p>
+                  )}
+                  <div className="itens-lista">
+                    {(orc.itens_orcamento ?? []).map((item) => (
+                      <div key={item.id} className="item-linha">
+                        <span className="item-qtd">{item.quantidade}×</span>
+                        <span className="item-nome">{item.nome_item}</span>
+                        {editandoItemId === item.id ? (
+                          <span className="item-preco" style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                            <input
+                              className="input input-sm"
+                              style={{ width: 80 }}
+                              placeholder="0,00"
+                              autoFocus
+                              value={precoEditado}
+                              onChange={(e) => setPrecoEditado(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && confirmarPreco(item)}
+                            />
+                            <button className="btn btn-ghost btn-xs" disabled={salvandoPreco} onClick={() => confirmarPreco(item)}>✓</button>
+                            <button className="btn btn-ghost btn-xs" onClick={() => setEditandoItemId(null)}>✕</button>
+                          </span>
+                        ) : item.valor_unitario === null ? (
+                          <button className="btn btn-warning btn-xs" onClick={() => iniciarEdicaoPreco(item)}>
+                            + Definir preço
+                          </button>
+                        ) : (
+                          <span className="item-preco">{formatCurrency(item.valor_unitario)}</span>
+                        )}
+                        <span className="item-subtotal">{item.valor_total !== null ? formatCurrency(item.valor_total) : '—'}</span>
+                      </div>
+                    ))}
+                    <div className="itens-total">
+                      <span>Total do Orçamento</span>
+                      <span className="itens-total-valor">{formatCurrency(orc.valor_total)}</span>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
           </div>
@@ -348,6 +559,16 @@ export function OrcamentosPage() {
           onAceitar={async (id) => {
             await aceitar(id)
             setOrcDetalhe(null)
+          }}
+          onPrecoAtualizado={async (itemId, valorUnitario) => {
+            await orcamentosService.atualizarPrecoItem(itemId, valorUnitario)
+            const atualizado = await orcamentosService.buscarPorId(orcDetalhe.id)
+            setOrcDetalhe(atualizado)
+            carregar()
+          }}
+          onAtualizado={(atualizado) => {
+            setOrcDetalhe(atualizado)
+            carregar()
           }}
           onFechar={() => setOrcDetalhe(null)}
         />

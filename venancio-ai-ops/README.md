@@ -152,7 +152,7 @@ O JS Bot fala **direto** com dois workflows n8n via `n8nClient.js`
 - **Agente de Vendas** — consulta síncrona, com timeout (`consultarAgenteVendas`)
 - **Agente de Orçamento** — notificação best-effort, fire-and-forget (`notificarAgenteOrcamento`)
 
-Cada um é um workflow n8n independente (ver `chatbot/AGENTE DE IA (N8N)/` na
+Cada um é um workflow n8n independente (ver `chatbot/AGENTES N8N/` na
 raiz do monorepo), configurado via `N8N_ORCAMENTO_WEBHOOK_URL` e
 `N8N_VENDAS_WEBHOOK_URL` no `.env` do próprio JS Bot — não no `.env` deste
 dashboard. `VITE_N8N_WEBHOOK_BASE` (aqui no `venancio-ai-ops`) é uma

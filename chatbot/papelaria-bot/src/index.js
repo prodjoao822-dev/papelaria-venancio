@@ -111,6 +111,9 @@ app.post('/operador/mensagens/enviar', corsDashboard, verifyOperador, operadorCo
 app.options('/operador/consultas/:id/notificar', corsDashboard);
 app.post('/operador/consultas/:id/notificar', corsDashboard, verifyOperador, operadorController.notificarRespostaConsulta);
 
+app.options('/operador/orcamentos/enviar-pdf', corsDashboard);
+app.post('/operador/orcamentos/enviar-pdf', corsDashboard, verifyOperador, operadorController.enviarArquivoOrcamento);
+
 // Login do Separador (código + PIN) — SEM verifyOperador: quem chama ainda
 // não tem sessão nenhuma, é o próprio login. Rate limit dedicado
 // (limiteLoginSeparador) por ser um endpoint especificamente exposto a

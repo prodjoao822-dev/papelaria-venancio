@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { FiltrosPedidos } from '@/components/pedidos/FiltrosPedidos'
 import { PedidoRow } from '@/components/pedidos/PedidoRow'
 import { PedidoModal } from '@/components/pedidos/PedidoModal'
+import { RetiradasAgendadas } from '@/components/pedidos/RetiradasAgendadas'
 import { RealtimeIndicator } from '@/components/dashboard/RealtimeIndicator'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -49,6 +50,9 @@ export function PedidosPage() {
       </div>
 
       <FiltrosPedidos filtros={filtros} onChange={handleFiltroChange} />
+
+      {/* Painel de retiradas agendadas — aparece automaticamente quando houver pedidos com horário previsto */}
+      <RetiradasAgendadas onAbrirPedido={(id) => setPedidoSelecionado(id)} />
 
       <div className="card">
         {carregando ? (

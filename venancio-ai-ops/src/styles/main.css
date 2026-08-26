@@ -1329,6 +1329,37 @@ table { border-collapse: collapse; width: 100%; }
 .historico-obs { font-size: 12px; color: var(--text-2); }
 .historico-tempo { font-size: 11px; color: var(--text-3); }
 
+/* ── TIMELINE UNIFICADA (pedido/orçamento/entrega/ocorrência) ────────────────── */
+.timeline-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.timeline-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.timeline-item:last-child { border-bottom: none; }
+
+.timeline-icone {
+  font-size: 15px;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.timeline-info { display: flex; flex-direction: column; gap: 2px; }
+.timeline-descricao { font-size: 13px; font-weight: 600; color: var(--text-1); }
+.timeline-meta { font-size: 11px; color: var(--text-3); }
+
 /* ── AÇÕES DE STATUS ─────────────────────────────────────────────────────────── */
 .status-acoes { display: flex; flex-direction: column; gap: 12px; }
 .status-acoes-btns { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -1911,6 +1942,11 @@ select.input option { background: var(--bg-card-2); color: var(--text-1); }
 .atend-chip--danger { background: var(--danger-bg); border-color: rgba(239,68,68,0.25); color: #F87171; }
 .atend-chip--warning { background: var(--warning-bg); border-color: rgba(245,158,11,0.25); color: #FCD34D; }
 
+/* Estado de alerta de volume (fila grande demais — ver LIMIAR_ALERTA_FILA em
+   AtendimentoPage.jsx) reaproveitando o keyframe pulse-danger já usado em
+   ConsultasPage. */
+.atend-chip--alerta { animation: pulse-danger 1.4s ease-in-out infinite; font-weight: 800; }
+
 .atend-mock-aviso {
   font-size: 11px;
   color: var(--text-3);
@@ -2113,6 +2149,19 @@ select.input option { background: var(--bg-card-2); color: var(--text-1); }
   padding: 1px 5px;
   border-radius: 3px;
   border: 1px solid var(--border);
+}
+
+/* Badge "aguardando há Xmin" — só aparece na aba Fila (ver filtro==='fila'
+   em AtendimentoPage.jsx). */
+.atend-espera-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: #FCD34D;
+  background: var(--warning-bg);
+  border: 1px solid rgba(245,158,11,0.25);
+  padding: 1px 6px;
+  border-radius: 99px;
+  white-space: nowrap;
 }
 
 /* ── ETIQUETA DE ATENDIMENTO (fora da Central de Atendimento) ─────────────── */
@@ -2538,6 +2587,38 @@ select.input option { background: var(--bg-card-2); color: var(--text-1); }
   transition: color var(--transition);
 }
 .atend-tag-remove:hover { color: var(--danger); }
+
+/* Tag de follow-up (followup:AAAA-MM-DD) — destacada em relação às tags
+   normais, e em vermelho quando a data já passou. */
+.atend-tag--followup {
+  background: var(--warning-bg);
+  border-color: rgba(245,158,11,0.3);
+  color: #FCD34D;
+}
+.atend-tag--atrasado {
+  background: var(--danger-bg);
+  border-color: rgba(239,68,68,0.3);
+  color: #F87171;
+}
+
+.atend-followup-aviso {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--warning-bg);
+  border: 1px solid rgba(245,158,11,0.3);
+  color: #FCD34D;
+}
+.atend-followup-aviso--atrasado {
+  background: var(--danger-bg);
+  border-color: rgba(239,68,68,0.3);
+  color: #F87171;
+}
 
 .atend-tag-input-row {
   display: flex;
@@ -3878,3 +3959,521 @@ select.input option { background: var(--bg-card-2); color: var(--text-1); }
   .ficha-tabela, .ficha-header-grid { box-shadow: none !important; border-color: #999 !important; }
   .ficha-page { color: #12183A !important; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   CARD DE PROTOCOLO — PRONTO PARA RETIRADA (Entrega 4.3)
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.protocolo-retirada-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, rgba(47, 168, 90, 0.12), rgba(47, 168, 90, 0.06));
+  border: 1.5px solid rgba(47, 168, 90, 0.35);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 0 20px rgba(47, 168, 90, 0.08);
+}
+
+.protocolo-retirada-icone {
+  font-size: 32px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 8px rgba(47, 168, 90, 0.4));
+}
+
+.protocolo-retirada-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.protocolo-retirada-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--success);
+  opacity: 0.85;
+}
+
+.protocolo-retirada-codigo {
+  font-size: 28px;
+  font-weight: 900;
+  color: var(--success);
+  font-family: var(--font-mono);
+  letter-spacing: 1px;
+  line-height: 1.1;
+}
+
+.protocolo-retirada-instrucao {
+  font-size: 12px;
+  color: var(--text-2);
+  font-style: italic;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   BADGE DE PRIORIDADE — IMEDIATA (Entrega 4.1)
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.pedido-prioridade-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border-radius: 99px;
+  font-size: 10px;
+  font-weight: 700;
+  margin-left: 6px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.pedido-prioridade-badge--imediata {
+  background: rgba(229, 72, 77, 0.14);
+  color: var(--danger);
+  border: 1px solid rgba(229, 72, 77, 0.30);
+  animation: piscar-imediata 2s ease-in-out infinite;
+}
+
+@keyframes piscar-imediata {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   RETIRADAS AGENDADAS — Seção e Cards (Entrega 2)
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.retiradas-agendadas {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.retiradas-agendadas-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: rgba(240, 178, 62, 0.06);
+  border-bottom: 1px solid var(--border);
+}
+
+.retiradas-agendadas-titulo {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-1);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.retiradas-agendadas-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--accent-bg);
+  color: var(--accent);
+  border: 1px solid rgba(240, 178, 62, 0.3);
+}
+
+.retiradas-agendadas-lista {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Card individual de retirada ─────────────────────────────────────────────── */
+.retirada-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background var(--transition);
+  min-height: 60px;
+}
+
+.retirada-card:last-child { border-bottom: none; }
+.retirada-card:hover { background: var(--bg-hover); }
+
+.retirada-card--atrasado {
+  border-left: 3px solid var(--danger);
+  background: rgba(229, 72, 77, 0.04);
+}
+
+.retirada-card--proximo {
+  border-left: 3px solid var(--warning);
+  background: rgba(240, 178, 62, 0.04);
+}
+
+.retirada-card--normal {
+  border-left: 3px solid var(--border);
+}
+
+.retirada-card-tempo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 80px;
+  flex-shrink: 0;
+}
+
+.retirada-tempo-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+
+.retirada-tempo-badge--atrasado {
+  background: rgba(229, 72, 77, 0.14);
+  color: var(--danger);
+  border: 1px solid rgba(229, 72, 77, 0.3);
+}
+
+.retirada-tempo-badge--proximo {
+  background: rgba(240, 178, 62, 0.14);
+  color: var(--warning-dark);
+  border: 1px solid rgba(240, 178, 62, 0.3);
+}
+
+.retirada-tempo-badge--normal {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-2);
+  border: 1px solid var(--border);
+}
+
+.retirada-hora-exata {
+  font-size: 10px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.retirada-card-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.retirada-card-topo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.retirada-protocolo {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-1);
+  font-family: var(--font-mono);
+}
+
+.retirada-cliente {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.retirada-itens {
+  font-size: 11px;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.retirada-card-acao {
+  font-size: 20px;
+  color: var(--text-3);
+  flex-shrink: 0;
+  transition: color var(--transition), transform var(--transition);
+}
+
+.retirada-card:hover .retirada-card-acao {
+  color: var(--text-1);
+  transform: translateX(2px);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   RESPONSIVIDADE MOBILE — 375px e 768px (Entrega 3)
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+
+  /* ── Layout: sidebar oculta por padrão, abre como drawer ── */
+  .sidebar {
+    transform: translateX(-100%);
+  }
+
+  .sidebar--aberta {
+    transform: translateX(0);
+  }
+
+  .sidebar-overlay {
+    display: block;
+  }
+
+  .app-content {
+    margin-left: 0;
+  }
+
+  /* ── Header: mostrar hamburger ── */
+  .header-menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .app-header {
+    padding: 0 12px;
+  }
+
+  .app-header-data {
+    display: none;
+  }
+
+  .header-divider {
+    display: none;
+  }
+
+  .header-search {
+    max-width: none;
+  }
+
+  /* ── Main: menos padding ── */
+  .app-main {
+    padding: 12px;
+  }
+
+  .page {
+    gap: 12px;
+  }
+
+  /* ── Tabela → Cards em mobile ── */
+  .tabela-wrapper {
+    overflow-x: visible;
+  }
+
+  .tabela thead {
+    display: none;
+  }
+
+  .tabela,
+  .tabela tbody,
+  .tabela-row {
+    display: block;
+    width: 100%;
+  }
+
+  .tabela {
+    min-width: unset;
+    font-size: 13px;
+  }
+
+  .tabela-row {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    margin-bottom: 8px;
+    padding: 12px;
+    background: var(--bg-card);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    position: relative;
+  }
+
+  .tabela-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .tabela-cell {
+    display: flex;
+    align-items: center;
+    padding: 2px 0;
+    border: none;
+    vertical-align: unset;
+  }
+
+  /* Ocultar colunas menos importantes em mobile */
+  .tabela-cell--tempo,
+  .tabela-cell--itens,
+  .tabela-cell--entrega {
+    display: none;
+  }
+
+  /* Protocolo como título do card */
+  .tabela-cell--numero {
+    width: auto;
+  }
+
+  /* Coluna de ação: posição absoluta no canto superior direito */
+  .tabela-cell--acao {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: auto;
+    text-align: right;
+  }
+
+  /* ── Modal: fullscreen em mobile ── */
+  .modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal--grande {
+    width: 100%;
+    max-width: 100%;
+    max-height: 94vh;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    margin: 0;
+  }
+
+  .modal-body {
+    max-height: calc(94vh - 60px);
+  }
+
+  /* ── Checklist: touch targets 44px ── */
+  .checklist-item {
+    padding: 14px;
+    min-height: 44px;
+  }
+
+  .checklist-checkbox {
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
+    min-height: 22px;
+  }
+
+  /* ── Pedido Detalhe: 1 coluna ── */
+  .pedido-detalhe-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* ── Card de protocolo retirada: compacto ── */
+  .protocolo-retirada-card {
+    flex-direction: column;
+    text-align: center;
+    gap: 8px;
+    padding: 16px;
+  }
+
+  .protocolo-retirada-codigo {
+    font-size: 22px;
+  }
+
+  /* ── Seção Responsáveis: wrap ── */
+  .pedido-detalhe-secao > div[style] {
+    flex-wrap: wrap;
+  }
+
+  /* ── Ações de Status: empilhar ── */
+  .status-acoes-btns {
+    flex-direction: column;
+  }
+
+  .status-acoes-btns .btn {
+    width: 100%;
+  }
+
+  /* ── Filtros de pedidos ── */
+  .filtros-status {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .filtros-linha {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filtros-busca {
+    min-width: unset;
+  }
+
+  /* ── Retiradas agendadas: scroll horizontal dos cards ── */
+  .retiradas-agendadas-lista {
+    overflow-x: auto;
+    flex-direction: row;
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .retirada-card {
+    min-width: 240px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    border-left-width: 3px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 0;
+    min-height: 44px;
+  }
+
+  .retirada-card-tempo {
+    flex-direction: row;
+    align-items: center;
+    min-width: unset;
+    width: 100%;
+  }
+
+  .retirada-card-acao {
+    display: none;
+  }
+
+  /* ── NovoPedidoModal em mobile ── */
+  .novo-pedido-modal {
+    width: 100%;
+    max-height: 94vh;
+  }
+
+  /* ── Header Breadcrumb: ocultar pai em mobile ── */
+  .header-breadcrumb-pai,
+  .header-breadcrumb-sep {
+    display: none;
+  }
+
+  /* ── Garantir botões grandes o suficiente para toque ── */
+  .btn {
+    min-height: 36px;
+  }
+
+  .btn-sm {
+    min-height: 32px;
+  }
+}
+
+/* Extra pequeno: 375px e abaixo */
+@media (max-width: 375px) {
+  .app-main {
+    padding: 8px;
+  }
+
+  .modal--grande {
+    max-height: 100vh;
+    border-radius: 0;
+  }
+}
+
+

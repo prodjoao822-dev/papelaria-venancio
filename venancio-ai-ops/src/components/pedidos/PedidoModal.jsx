@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { pedidosService, mapStatusRealParaDashboard } from '@/services/pedidos.service'
+import { pedidosService } from '@/services/pedidos.service'
 import { funcionariosService } from '@/services/funcionarios.service'
 import { StatusBadge } from './StatusBadge'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
@@ -13,6 +13,8 @@ import { getStatusConfig } from '@/utils/status'
 import { OPERACOES_SHOPCONTROL } from '@/utils/constants'
 import { useToast } from '@/contexts/AppContext'
 import { useAuth } from '@/contexts/AuthContext'
+import { AbrirOcorrenciaModal } from '@/components/ocorrencias/AbrirOcorrenciaModal'
+import { TimelinePedido } from './TimelinePedido'
 
 // ── Responsáveis + Sequência ShopControl ───────────────────────────────────────
 function ResponsaveisSequencia({ pedido, onAtualizar }) {
@@ -151,11 +153,14 @@ function ChecklistSeparacao({ pedido, onAtualizar }) {
 
   async function handleToggle(item) {
     const novoValor = !item.separado
-    // Atualiza otimisticamente
+    // Atualiza otimisticamente — resposta visual imediata (< 100ms)
+    // NÃO chamar onAtualizar() aqui: o pai faria carregar() que, ao retornar do
+    // servidor, sobrescreveria este estado otimista via useEffect([pedido]),
+    // causando um "flash" de estado antigo antes do verde aparecer.
     setItens((prev) => prev.map((i) => (i.id === item.id ? { ...i, separado: novoValor } : i)))
     try {
       await pedidosService.marcarItemSeparado(item.id, novoValor)
-      onAtualizar?.()
+      // Não re-fetcha o pedido inteiro — o estado local já está correto
     } catch (e) {
       // Reverte em caso de erro
       setItens((prev) => prev.map((i) => (i.id === item.id ? { ...i, separado: item.separado } : i)))
@@ -244,6 +249,7 @@ export function PedidoModal({ pedidoId, onFechar, onStatusAtualizado }) {
   const [carregando, setCarregando] = useState(true)
   const [atualizando, setAtualizando] = useState(false)
   const [observacao, setObservacao] = useState('')
+  const [modalOcorrencia, setModalOcorrencia] = useState(false)
   const { toast } = useToast()
   const { operador } = useAuth()
 
@@ -284,6 +290,7 @@ export function PedidoModal({ pedidoId, onFechar, onStatusAtualizado }) {
   const cfg = pedido ? getStatusConfig(pedido.status) : null
 
   return (
+    <>
     <div className="modal-overlay" onClick={onFechar}>
       <div className="modal modal--grande" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
@@ -294,9 +301,16 @@ export function PedidoModal({ pedidoId, onFechar, onStatusAtualizado }) {
             </h2>
             {pedido && <StatusBadge status={pedido.status} />}
           </div>
-          <button className="modal-fechar" onClick={onFechar} aria-label="Fechar">
-            ✕
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {pedido && (
+              <button className="btn btn-ghost btn-sm" onClick={() => setModalOcorrencia(true)}>
+                🧾 Abrir Ocorrência
+              </button>
+            )}
+            <button className="modal-fechar" onClick={onFechar} aria-label="Fechar">
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* Body */}
@@ -392,6 +406,22 @@ export function PedidoModal({ pedidoId, onFechar, onStatusAtualizado }) {
                 )}
               </section>
 
+              {/* Card destaque — Código do pedido na área de retirada */}
+              {pedido.status === 'PRONTO_RETIRADA' && (
+                <section className="pedido-detalhe-secao">
+                  <div className="protocolo-retirada-card">
+                    <div className="protocolo-retirada-icone">🏪</div>
+                    <div className="protocolo-retirada-info">
+                      <span className="protocolo-retirada-label">Código do Pedido — Área de Retirada</span>
+                      <span className="protocolo-retirada-codigo">{pedido.protocolo}</span>
+                      <span className="protocolo-retirada-instrucao">
+                        Identifique o pacote com este código na área de retirada
+                      </span>
+                    </div>
+                  </div>
+                </section>
+              )}
+
               {/* Checklist de Separação */}
               {['EM_SEPARACAO', 'SEPARADO'].includes(pedido.status) &&
                 pedido.itens_pedido?.length > 0 && (
@@ -401,34 +431,11 @@ export function PedidoModal({ pedidoId, onFechar, onStatusAtualizado }) {
                   </section>
                 )}
 
-              {/* Histórico */}
-              {pedido.pedidos_status_historico?.length > 0 && (
-                <section className="pedido-detalhe-secao">
-                  <h3 className="pedido-detalhe-titulo">Histórico</h3>
-                  <div className="historico-lista">
-                    {pedido.pedidos_status_historico.map((h) => {
-                      const cfgNovo = getStatusConfig(mapStatusRealParaDashboard(h.status_novo))
-                      return (
-                        <div key={h.id} className="historico-item">
-                          <span
-                            className="historico-dot"
-                            style={{ backgroundColor: cfgNovo.cor }}
-                          />
-                          <div className="historico-info">
-                            <span className="historico-status">{cfgNovo.label}</span>
-                            {h.observacao && (
-                              <span className="historico-obs">{h.observacao}</span>
-                            )}
-                            <span className="historico-tempo">
-                              {formatDateTime(h.criado_em)}
-                            </span>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </section>
-              )}
+              {/* Linha do tempo unificada (status + entrega + ocorrências) */}
+              <section className="pedido-detalhe-secao">
+                <h3 className="pedido-detalhe-titulo">Linha do Tempo</h3>
+                <TimelinePedido pedidoId={pedido.id} orcamentoId={pedido.orcamento_id} />
+              </section>
 
               {/* Ações de status */}
               {cfg.acoes.length > 0 && (
@@ -462,5 +469,13 @@ export function PedidoModal({ pedidoId, onFechar, onStatusAtualizado }) {
         </div>
       </div>
     </div>
+
+    {modalOcorrencia && pedido && (
+      <AbrirOcorrenciaModal
+        pedidoIdInicial={pedido.id}
+        onFechar={() => setModalOcorrencia(false)}
+      />
+    )}
+    </>
   )
 }

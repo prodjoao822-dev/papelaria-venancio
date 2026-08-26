@@ -20,6 +20,12 @@ function FuncionarioModal({ funcionario, onSalvar, onFechar }) {
   const [pinGerado, setPinGerado] = useState(null)
   const { toast } = useToast()
 
+  // Login (código + PIN) é exigido por qualquer papel com app mobile —
+  // hoje Separador e Entregador (mesmo endpoint de login no bot, ver
+  // separadorAuthController.js: aceita 'separacao' OU 'entrega'). Um
+  // funcionário só de outro papel futuro sem app não precisa disso.
+  const precisaLogin = papeis.includes('separacao') || papeis.includes('entrega')
+
   function togglePapel(valor) {
     setPapeis((p) => (p.includes(valor) ? p.filter((v) => v !== valor) : [...p, valor]))
   }
@@ -28,7 +34,7 @@ function FuncionarioModal({ funcionario, onSalvar, onFechar }) {
     e.preventDefault()
     if (!nome.trim()) return toast.aviso('Nome é obrigatório.')
     if (papeis.length === 0) return toast.aviso('Selecione ao menos um papel.')
-    if (papeis.includes('separacao') && codigoFuncionario && codigoFuncionario.trim().length < 2) {
+    if (precisaLogin && codigoFuncionario && codigoFuncionario.trim().length < 2) {
       return toast.aviso('Código de funcionário precisa ter ao menos 2 caracteres.')
     }
 
@@ -38,7 +44,7 @@ function FuncionarioModal({ funcionario, onSalvar, onFechar }) {
         nome: nome.trim(),
         papeis,
         ...(isEdicao ? { ativo } : {}),
-        ...(papeis.includes('separacao') ? { codigo_funcionario: codigoFuncionario.trim() || null } : {}),
+        ...(precisaLogin ? { codigo_funcionario: codigoFuncionario.trim() || null } : {}),
       })
       toast.sucesso(isEdicao ? 'Funcionário atualizado.' : 'Funcionário criado.')
       onFechar()
@@ -119,9 +125,9 @@ function FuncionarioModal({ funcionario, onSalvar, onFechar }) {
               </div>
             )}
 
-            {isEdicao && papeis.includes('separacao') && (
+            {isEdicao && precisaLogin && (
               <div className="form-grupo form-grupo--full">
-                <label className="form-label">Login do Separador (código + PIN)</label>
+                <label className="form-label">Login do App Mobile (código + PIN)</label>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <input
                     className="input"
@@ -140,13 +146,13 @@ function FuncionarioModal({ funcionario, onSalvar, onFechar }) {
                   </button>
                 </div>
                 <p className="form-hint">
-                  Código de login que o separador digita no app/tela dele. O PIN é gerado por aqui
-                  (nunca pelo próprio separador) e só é mostrado uma vez.
+                  Código de login que o funcionário digita no app (Separador ou Entregador). O PIN é
+                  gerado por aqui (nunca pelo próprio funcionário) e só é mostrado uma vez.
                 </p>
                 {pinGerado && (
                   <div className="estado-erro estado-erro--compacto" style={{ borderColor: 'var(--success)', background: 'rgba(47,168,90,0.1)', marginTop: 8 }}>
                     <strong>PIN gerado: {pinGerado}</strong>
-                    <div style={{ fontSize: 12, marginTop: 4 }}>Anote e entregue ao separador agora — não será exibido de novo.</div>
+                    <div style={{ fontSize: 12, marginTop: 4 }}>Anote e entregue ao funcionário agora — não será exibido de novo.</div>
                   </div>
                 )}
               </div>

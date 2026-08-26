@@ -30,7 +30,14 @@ export function PedidoRow({ pedido, onClick, atrasado = false, nomeAtendente = n
         <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{pedido.sequencia || '—'}</span>
       </td>
       <td className="tabela-cell">
-        <div className="pedido-cliente-nome">{nomeCliente}</div>
+        <div className="pedido-cliente-nome">
+          {nomeCliente}
+          {pedido.prioridade === 'imediata' && (
+            <span className="pedido-prioridade-badge pedido-prioridade-badge--imediata" title="Prioridade Imediata">
+              ⚡ Imediata
+            </span>
+          )}
+        </div>
         <div className="pedido-cliente-tel">{telefone}</div>
         <EtiquetaAtendimento nome={nomeAtendente} />
       </td>

@@ -39,21 +39,33 @@ export const pedidosService = {
       query = aplicarFiltroStatusDashboard(query, filtros.status)
     }
     if (filtros.busca) {
-      // PostgREST só aceita filtrar coluna de tabela embutida dentro de um
-      // .or() quando o embed é !inner — sem isso a query falha (silenciosamente
-      // pro usuário, porque quem chama engole o erro e mostra lista vazia).
-      // cliente_id é NOT NULL em pedidos, então !inner nunca descarta linha.
+      // PostgREST não aceita referenciar coluna de tabela embutida
+      // (clientes.nome) dentro de um .or() — nem com clientes!inner (testado
+      // ao vivo contra a API real: sempre retorna PGRST100 "failed to parse
+      // logic tree", erro que quem chama engolia e mostrava lista vazia,
+      // parecendo "busca não encontra por nome"). Único jeito é buscar
+      // clientes primeiro e depois filtrar pedidos só por colunas da própria
+      // tabela (protocolo, cliente_id) — os dois lados do .or() abaixo nunca
+      // tocam uma tabela embutida.
+      const termoBusca = filtros.busca.trim()
+      const { data: clientesMatch, error: errClientes } = await supabase
+        .from('clientes')
+        .select('id')
+        .or(`nome.ilike.%${termoBusca}%,telefone.ilike.%${termoBusca}%`)
+      if (errClientes) throw errClientes
+      const clienteIds = (clientesMatch ?? []).map((c) => c.id)
+
       query = supabase
         .from('pedidos')
-        .select(SELECT_PEDIDO_COMPLETO.replace('clientes (', 'clientes!inner ('))
+        .select(SELECT_PEDIDO_COMPLETO)
         .order('criado_em', { ascending: false })
         .limit(PEDIDOS_POR_PAGINA)
       if (filtros.status && filtros.status !== 'TODOS') {
         query = aplicarFiltroStatusDashboard(query, filtros.status)
       }
-      query = query.or(
-        `clientes.nome.ilike.%${filtros.busca}%,clientes.telefone.ilike.%${filtros.busca}%`
-      )
+      query = clienteIds.length > 0
+        ? query.or(`protocolo.ilike.%${termoBusca}%,cliente_id.in.(${clienteIds.join(',')})`)
+        : query.ilike('protocolo', `%${termoBusca}%`)
       if (filtros.dataInicio) query = query.gte('criado_em', filtros.dataInicio)
       if (filtros.dataFim) {
         const fim = new Date(filtros.dataFim)
@@ -83,23 +95,32 @@ export const pedidosService = {
     if (!termo || termo.trim().length < 2) return []
 
     const t = termo.trim()
-    // clientes!inner (não clientes) — PostgREST exige embed !inner pra aceitar
-    // filtrar coluna de tabela embutida dentro de um .or() (aqui, misturado
-    // com "protocolo" da tabela base). Sem isso a query falhava sempre, e
-    // usePedidoBuscaRapida engolia o erro mostrando lista vazia (parecia
-    // "busca não funciona"). cliente_id é NOT NULL em pedidos, então !inner
-    // nunca descarta um pedido de verdade.
-    const { data, error } = await supabase
+    // Mesma limitação do PostgREST documentada em `listar()`: não dá pra
+    // referenciar clientes.nome/telefone dentro de um .or() (mesmo com
+    // !inner) — busca clientes primeiro, filtra pedidos só por colunas
+    // próprias (protocolo, cliente_id).
+    const { data: clientesMatch, error: errClientes } = await supabase
+      .from('clientes')
+      .select('id')
+      .or(`nome.ilike.%${t}%,telefone.ilike.%${t}%`)
+    if (errClientes) throw errClientes
+    const clienteIds = (clientesMatch ?? []).map((c) => c.id)
+
+    let query = supabase
       .from('pedidos')
       .select(`
         id, protocolo, valor_total, criado_em, status, forma_entrega,
         pronto_para_retirada_em, saiu_para_entrega_em,
-        clientes!inner (nome, telefone)
+        clientes (nome, telefone)
       `)
-      .or(`protocolo.ilike.%${t}%,clientes.nome.ilike.%${t}%,clientes.telefone.ilike.%${t}%`)
       .order('criado_em', { ascending: false })
       .limit(8)
 
+    query = clienteIds.length > 0
+      ? query.or(`protocolo.ilike.%${t}%,cliente_id.in.(${clienteIds.join(',')})`)
+      : query.ilike('protocolo', `%${t}%`)
+
+    const { data, error } = await query
     if (error) throw error
     return (data ?? []).map(normalizarPedido)
   },
@@ -291,6 +312,37 @@ export const pedidosService = {
 
     if (error) throw error
     return data
+  },
+
+  /**
+   * Retiradas agendadas: pedidos com horario_retirada_previsto preenchido e
+   * status 'pronto' ou 'em_separacao'. Ordenados por horário (mais próximo primeiro).
+   * Inclui apenas retiradas das últimas 4 horas em diante (evita acumular histórico).
+   *
+   * MIGRATION SQL necessária (executar no Supabase, uma vez):
+   *   ALTER TABLE pedidos
+   *     ADD COLUMN IF NOT EXISTS horario_retirada_previsto timestamptz DEFAULT NULL;
+   */
+  async listarRetiradas() {
+    const { data, error } = await supabase
+      .from('pedidos')
+      .select(`
+        id, protocolo, valor_total, status, forma_entrega,
+        horario_retirada_previsto,
+        pronto_para_retirada_em, saiu_para_entrega_em,
+        clientes (id, nome, telefone),
+        itens_pedido (id, nome_item, quantidade)
+      `)
+      .not('horario_retirada_previsto', 'is', null)
+      .in('status', ['pronto', 'em_separacao'])
+      .gte(
+        'horario_retirada_previsto',
+        new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString()
+      )
+      .order('horario_retirada_previsto', { ascending: true })
+
+    if (error) throw error
+    return (data ?? []).map(normalizarPedido)
   },
 }
 

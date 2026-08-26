@@ -108,6 +108,8 @@ export function RelatoriosPage() {
   const [historico, setHistorico] = useState(null)
   const [historicoErro, setHistoricoErro] = useState(false)
   const [periodoFiltro, setPeriodoFiltro] = useState('hoje')
+  const [capacidade, setCapacidade] = useState(null)
+  const [capacidadeErro, setCapacidadeErro] = useState(false)
 
   const hoje = new Date().toLocaleDateString('pt-BR', {
     weekday: 'long', day: '2-digit', month: 'long', year: 'numeric',
@@ -121,8 +123,23 @@ export function RelatoriosPage() {
       .catch(() => setHistoricoErro(true))
   }
 
+  function carregarCapacidade() {
+    setCapacidadeErro(false)
+    Promise.all([
+      metricasService.getTaxaResolucaoIA('semana'),
+      metricasService.getTempoMedioAtendimento(),
+      metricasService.getTempoMedioSeparacao(),
+      metricasService.getVolumePeriodo(),
+    ])
+      .then(([taxaResolucaoIA, tempoAtendimento, tempoSeparacao, volume]) =>
+        setCapacidade({ taxaResolucaoIA, tempoAtendimento, tempoSeparacao, volume })
+      )
+      .catch(() => setCapacidadeErro(true))
+  }
+
   useEffect(() => {
     carregarHistorico()
+    carregarCapacidade()
   }, [])
 
   // Trend vs ontem
@@ -350,6 +367,101 @@ export function RelatoriosPage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Capacidade operacional (PROMPT-01, Entrega 1) */}
+      <div className="card">
+        <p className="card-titulo">Capacidade Operacional — últimos 7 dias</p>
+        {capacidadeErro ? (
+          <div style={{ padding: '0 20px 20px' }}>
+            <ErrorState
+              titulo="Não foi possível carregar as métricas de capacidade"
+              detalhe="Verifique a conexão com o Supabase."
+              onRetry={carregarCapacidade}
+              compacto
+            />
+          </div>
+        ) : !capacidade ? (
+          <div style={{ padding: '0 20px 20px', color: 'var(--text-3)' }}>Carregando...</div>
+        ) : (
+          <div style={{ padding: '0 20px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+            <div className="relatorio-metrica-item">
+              <div className="relatorio-metrica-info">
+                <span className="relatorio-metrica-titulo">Taxa de Resolução por IA</span>
+                <span className="relatorio-metrica-sub">
+                  {capacidade.taxaResolucaoIA.resolvidas_ia} de {capacidade.taxaResolucaoIA.total} conversas sem intervenção humana
+                </span>
+              </div>
+              <MiniGauge pct={capacidade.taxaResolucaoIA.taxa} cor="#8B5CF6" />
+            </div>
+
+            <div className="relatorio-metrica-item">
+              <div className="relatorio-metrica-info">
+                <span className="relatorio-metrica-titulo">Tempo Médio de Separação</span>
+                <span className="relatorio-metrica-sub">
+                  {capacidade.tempoSeparacao.total_separacoes} separações concluídas
+                </span>
+              </div>
+              <span className="relatorio-metrica-valor" style={{ color: '#FB923C' }}>
+                {capacidade.tempoSeparacao.total_separacoes > 0
+                  ? `${capacidade.tempoSeparacao.tempo_medio_min} min`
+                  : '—'}
+              </span>
+            </div>
+
+            {capacidade.tempoAtendimento.length > 0 && (
+              <div>
+                <span className="relatorio-metrica-titulo">Tempo Médio de Atendimento por Operador</span>
+                <div className="tabela-wrapper" style={{ marginTop: 8 }}>
+                  <table className="tabela">
+                    <thead>
+                      <tr>
+                        <th className="tabela-th">Operador</th>
+                        <th className="tabela-th">Pedidos</th>
+                        <th className="tabela-th">Tempo Médio</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {capacidade.tempoAtendimento.map((op) => (
+                        <tr key={op.operador_nome} className="tabela-tr">
+                          <td className="tabela-td">{op.operador_nome}</td>
+                          <td className="tabela-td">{op.total_pedidos}</td>
+                          <td className="tabela-td">{op.tempo_medio_min} min</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            <div>
+              <span className="relatorio-metrica-titulo">Volume por Dia</span>
+              <div className="tabela-wrapper" style={{ marginTop: 8 }}>
+                <table className="tabela">
+                  <thead>
+                    <tr>
+                      <th className="tabela-th">Dia</th>
+                      <th className="tabela-th">Conversas</th>
+                      <th className="tabela-th">Pedidos</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {capacidade.volume.map((v) => (
+                      <tr key={v.dia} className="tabela-tr">
+                        <td className="tabela-td">{v.label}</td>
+                        <td className="tabela-td">{v.conversas}</td>
+                        <td className="tabela-td">{v.pedidos}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        )}
       </div>
 
       {/* Resumo financeiro tabular */}

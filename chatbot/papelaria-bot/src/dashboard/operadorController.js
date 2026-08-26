@@ -13,6 +13,12 @@ const logger = require('../utils/logger');
 
 const REGEX_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// Limite generoso pro PDF de orçamento (texto/tabela só, sem imagem — na
+// prática fica na casa de dezenas de KB), bem abaixo do limite de 25mb do
+// express.json() em index.js. É só uma rede de segurança contra um payload
+// absurdo antes de gastar tempo decodificando base64 e chamando a Evolution API.
+const TAMANHO_MAX_BASE64 = 15 * 1024 * 1024;
+
 async function enviarMensagem(req, res) {
   const { conversaId, conteudo } = req.body || {};
 
@@ -130,4 +136,34 @@ async function notificarRespostaConsulta(req, res) {
   return res.status(200).json({ ok: true });
 }
 
-module.exports = { enviarMensagem, notificarRespostaConsulta };
+// Manda o PDF de um orçamento (gerado no dashboard) pro WhatsApp do cliente —
+// chamado por orcamentos.service.js:enviarPdf. Diferente de enviarMensagem,
+// não exige uma conversa com bot_ativo=false: mandar o PDF de um orçamento é
+// um documento avulso, não "assumir" a conversa, então funciona mesmo pra
+// cliente sem conversa em aberto (ex.: orçamento cadastrado manualmente).
+async function enviarArquivoOrcamento(req, res) {
+  const { telefone, base64, nomeArquivo, legenda } = req.body || {};
+
+  if (typeof telefone !== 'string' || !telefone.trim()) {
+    return res.status(400).json({ ok: false, erro: 'telefone é obrigatório.' });
+  }
+  if (typeof base64 !== 'string' || !base64.trim()) {
+    return res.status(400).json({ ok: false, erro: 'base64 é obrigatório.' });
+  }
+  if (base64.length > TAMANHO_MAX_BASE64) {
+    return res.status(413).json({ ok: false, erro: 'Arquivo grande demais.' });
+  }
+  if (typeof nomeArquivo !== 'string' || !nomeArquivo.trim()) {
+    return res.status(400).json({ ok: false, erro: 'nomeArquivo é obrigatório.' });
+  }
+
+  try {
+    await evolutionApi.enviarDocumentoBase64(telefone, base64, nomeArquivo, legenda || undefined);
+    return res.status(200).json({ ok: true });
+  } catch (erroEnvio) {
+    logger.erro(`Falha ao enviar PDF de orçamento (operador ${req.operador.id}) para ${telefone}`, erroEnvio);
+    return res.status(502).json({ ok: false, erro: 'Falha ao enviar o PDF pelo WhatsApp. Tente novamente.' });
+  }
+}
+
+module.exports = { enviarMensagem, notificarRespostaConsulta, enviarArquivoOrcamento };

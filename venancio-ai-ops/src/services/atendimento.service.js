@@ -79,47 +79,49 @@ export const atendimentoService = {
     return (data ?? []).map(normalizarMensagem)
   },
 
-  /** operadorId é o uuid do operador logado (auth.users.id) — previne dois
-   * operadores assumirem a mesma conversa ao mesmo tempo (.is('operador_id', null)).
-   * ultima_interacao_em é atualizado junto porque é a referência que o JS Bot usa
-   * pro timeout de reativação automática (reativacaoBot.garantirBotAtivo) — sem
-   * isso, um cliente que mande mensagem pouco antes do timeout expirar (contado
-   * desde a última mensagem dele, não desde que o operador assumiu) faz o bot se
-   * reativar sozinho por cima do operador. */
-  async assumirConversa(conversaId, operadorId) {
-    const { data, error } = await supabase
-      .from('conversas')
-      .update({
-        operador_id: operadorId,
-        bot_ativo: false,
-        status: 'aguardando_operador',
-        ultima_interacao_em: new Date().toISOString(),
-      })
-      .eq('id', conversaId)
-      .is('operador_id', null)
-      .select(`*, clientes(id, nome, telefone), operadores(id, nome)`)
-      .single()
+  /** Quem assume é resolvido pela RPC via auth.uid() — nunca confiar num
+   * operadorId vindo do client para fins de auditoria (achado de segurança
+   * B1 do plano mestre: RPCs antigas recebiam p_operador_id do client sem
+   * checar sessão real). A RPC já cuida atomicamente do "só se ninguém tiver
+   * assumido ainda" (antes feito via .is('operador_id', null) no update
+   * direto) e levanta 'Conversa já foi assumida por outro operador.' nesse
+   * caso — propagamos error.message direto pra UI. */
+  async assumirConversa(conversaId) {
+    const { data, error } = await supabase.rpc('assumir_conversa_dashboard', {
+      p_conversa_id: conversaId,
+    })
 
-    if (error) throw error
-    if (!data) throw new Error('Conversa já foi assumida por outro operador.')
-    return normalizarConversa(data)
+    if (error) throw new Error(error.message)
+    const row = Array.isArray(data) ? data[0] : data
+    return normalizarConversa(await this.buscarPorId(row.id))
   },
 
+  /** Mesma ideia de assumirConversa: quem libera é resolvido internamente
+   * pela RPC (auth.uid()), que também confere que a conversa pertence a
+   * quem chamou (ou é admin) antes de liberar. */
   async liberarConversa(conversaId) {
-    const { data, error } = await supabase
-      .from('conversas')
-      .update({
-        operador_id: null,
-        bot_ativo: true,
-        status: 'aguardando_cliente',
-        ultima_interacao_em: new Date().toISOString(),
-      })
-      .eq('id', conversaId)
-      .select(`*, clientes(id, nome, telefone), operadores(id, nome)`)
-      .single()
+    const { data, error } = await supabase.rpc('liberar_conversa_dashboard', {
+      p_conversa_id: conversaId,
+    })
 
-    if (error) throw error
-    return normalizarConversa(data)
+    if (error) throw new Error(error.message)
+    const row = Array.isArray(data) ? data[0] : data
+    return normalizarConversa(await this.buscarPorId(row.id))
+  },
+
+  /** Heartbeat de presença do operador logado — o banco usa
+   * operadores.ultimo_heartbeat (últimos 90s) pra saber quem está "online" e
+   * decidir a quem distribuir automaticamente uma conversa que o bot deixou
+   * de atender (bot_ativo=false + operador_id nulo). Falha aqui nunca deve
+   * travar a UI: se o heartbeat não for gravado, o operador só deixa de
+   * receber distribuição automática, o resto da tela continua funcionando. */
+  async registrarHeartbeat() {
+    try {
+      const { error } = await supabase.rpc('registrar_heartbeat_operador')
+      if (error) throw error
+    } catch {
+      // silencioso de propósito — ver comentário acima
+    }
   },
 
   async atualizarStatus(conversaId, novoStatus) {
@@ -239,6 +241,28 @@ export const atendimentoService = {
 
     if (error) throw error
     return data ?? []
+  },
+
+  /** Contagem de conversas aguardando um operador assumir — usado pelo badge
+   * do sidebar (ver Sidebar.jsx) com o mesmo padrão de contarAbertas em
+   * ocorrencias.service.js.
+   *
+   * Não usa `conversas.status`: esse campo só é gravado pelo dashboard
+   * (assumirConversa/liberarConversa acima), nunca pelo bot — uma conversa que
+   * o bot pausou (ex.: comando ESCALACAO) e que nenhum operador assumiu ainda
+   * fica com status='novo_lead' para sempre, mesmo estando de fato na fila.
+   * O sinal real de "precisa de operador e ninguém pegou" é bot_ativo=false +
+   * operador_id nulo — mesmo critério de escalonamentoService.contarFilaAtual()
+   * no bot (chatbot/papelaria-bot/src/services/escalonamentoService.js). */
+  async contarAguardandoOperador() {
+    const { count, error } = await supabase
+      .from('conversas')
+      .select('*', { count: 'exact', head: true })
+      .eq('bot_ativo', false)
+      .is('operador_id', null)
+
+    if (error) throw error
+    return count ?? 0
   },
 
   subscribeConversas(callback) {
