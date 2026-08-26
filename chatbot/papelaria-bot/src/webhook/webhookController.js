@@ -76,6 +76,16 @@ function chaveEmProcessamento(conversaId, mensagemId) {
 // `mensagensEmProcessamento` acima.
 const conversasComAgenteVendasEmAndamento = new Set();
 
+// Conversas que já receberam o aviso de "mensagem concorrente" NESTA janela de
+// processamento (ver avisarMensagemConcorrente). Existe pra o aviso sair no
+// máximo uma vez por janela: sem isso, um cliente que dispara 5 mensagens
+// durante uma consulta lenta recebia 5 avisos idênticos, e um reenvio do mesmo
+// webhook pela Evolution API repetia o aviso pra uma mensagem só (o dedup por
+// `ultima_mensagem_id` não chega a ser gravado quando a mensagem é descartada
+// pelo lock). Ciclo de vida colado no lock acima: quem segura o lock limpa as
+// duas entradas no mesmo `finally`, então nada fica crescendo em memória.
+const conversasJaAvisadasDeConcorrencia = new Set();
+
 // Lock por conversa: impede segunda mensagem disparar FINALIZAR_CADASTRO_E_PEDIDO
 // enquanto a primeira ainda está processando (ver diagnóstico A1).
 const conversasEmFinalizacao = new Set();
@@ -84,6 +94,7 @@ const MENSAGEM_FALLBACK_AGENTE_VENDAS = 'Desculpa a demora! Vou te conectar com 
 const MENSAGEM_CONFIRMACAO_PDF_RECEBIDO = 'Recebemos seu arquivo! Já encaminhamos pra nossa equipe de vendas dar uma olhada.';
 const MENSAGEM_CONFIRMACAO_AUDIO_RECEBIDO = 'Recebi seu áudio! Já chamei alguém da nossa equipe pra te ouvir e responder por aqui. Só um instante 😊';
 const MENSAGEM_CONFIRMACAO_IMAGEM_RECEBIDA = 'Recebi sua imagem! Já chamei alguém da nossa equipe pra dar uma olhada e responder por aqui. Só um instante 😊';
+const MENSAGEM_MENSAGEM_CONCORRENTE = 'Só um instante, ainda estou vendo sua mensagem anterior 😊';
 
 // Rede de segurança pra áudio: usada quando a transcrição (OpenRouter, ver
 // mediaProcessor.js) não está configurada ou falhou, e também quando o bot
@@ -260,6 +271,62 @@ async function prefixarPedidoAtivo(texto, clienteId) {
     + `não crie um orçamento novo.]\n\nMensagem do cliente: "${texto}"`;
 }
 
+// Mensagem que chegou enquanto o Agente de Vendas ainda processava a anterior
+// da MESMA conversa (guarda `conversasComAgenteVendasEmAndamento`).
+//
+// Por que isso existe (teste de carga de 24/08/2026, loadtest/): esse guarda
+// respondia 200 e a mensagem do cliente evaporava — sem resposta pra ele, sem
+// notificação e sem histórico. 90% das mensagens concorrentes sumiram assim, e
+// nem o operador as via na tela de Atendimento. A mensagem continua fora do
+// PROCESSAMENTO (não vira uma segunda chamada ao agente), mas deixa de sumir:
+// o cliente sabe que ela chegou e o operador consegue lê-la.
+//
+// Não é fila: a mensagem descartada não é reprocessada quando a anterior
+// termina. Enfileirar é funcionalidade nova, fora do escopo desta correção.
+//
+// Tudo best-effort, mesmo critério do PDF/áudio: este caminho já é um
+// fallback, uma falha aqui não pode virar 500 e fazer a Evolution API reenviar
+// o webhook (o que multiplicaria o próprio problema de concorrência).
+//
+// `textoDoCliente` vem null quando quem chama já registrou a fala do cliente no
+// histórico — registrar de novo aqui duplicaria a linha na tela do operador.
+async function avisarMensagemConcorrente(cliente, conversaId, textoDoCliente) {
+  // Antes do envio, e FORA do dedup abaixo: TODA fala do cliente entra no
+  // histórico, mesmo a quinta seguida. É o núcleo desta correção — o operador
+  // precisa ver todas. O registro também independe de a Evolution API estar de pé.
+  await registrarNoHistorico(conversaId, 'cliente', textoDoCliente);
+
+  // Dedup do aviso (26/08/2026): a fala do cliente é sempre registrada, mas o
+  // aviso sai no máximo uma vez por janela de lock. Repetir só geraria spam pro
+  // cliente e linhas duplicadas na tela do operador.
+  if (conversasJaAvisadasDeConcorrencia.has(conversaId)) {
+    logger.info(
+      `Aviso de mensagem concorrente suprimido: conversa ${conversaId} já avisada nesta janela de processamento.`
+    );
+    return;
+  }
+
+  // Marca ANTES do envio, sem nenhum await entre o `has` e o `add`: duas
+  // mensagens concorrentes podem estar em voo ao mesmo tempo, e marcar só depois
+  // do await deixaria as duas passarem pela porta.
+  conversasJaAvisadasDeConcorrencia.add(conversaId);
+
+  try {
+    await evolutionApi.enviarTexto(cliente.telefone, MENSAGEM_MENSAGEM_CONCORRENTE);
+    // Depois do envio, não antes (mesmo critério do fluxo de menu): só entra no
+    // histórico o que o cliente de fato viu.
+    await registrarNoHistorico(conversaId, 'bot', MENSAGEM_MENSAGEM_CONCORRENTE);
+  } catch (erro) {
+    // O aviso não chegou ao cliente: solta o dedup pra próxima mensagem
+    // concorrente da mesma janela poder tentar de novo.
+    conversasJaAvisadasDeConcorrencia.delete(conversaId);
+    logger.erro(
+      `Falha ao avisar ${cliente.telefone} de que a mensagem anterior ainda está em processamento`,
+      erro
+    );
+  }
+}
+
 // Chamada síncrona ao Agente de Vendas (n8n) com rede de segurança: nunca
 // deixa o cliente sem resposta. Se der timeout/erro, avisa o cliente, notifica
 // um humano com a mensagem pendente e pausa o bot pra essa conversa
@@ -271,11 +338,21 @@ async function prefixarPedidoAtivo(texto, clienteId) {
 // pelo fluxo de "fechar/pagar" (ver receberIntencaoFechamentoPedido) pra dar
 // ao agente o protocolo/valor/tipo do pedido/orçamento em questão; chamadas
 // existentes (opções 2-5 do submenu de Vendas) continuam sem isso.
-async function consultarAgenteVendasComRedeDeSeguranca(cliente, conversaId, texto, contextoExtra) {
+// `textoDoCliente` (opcional) é a fala CRUA do cliente, usada só pelo caminho de
+// mensagem concorrente (ver avisarMensagemConcorrente): `texto` aqui costuma vir
+// embrulhado em contexto de sistema, que não pode aparecer no histórico do
+// operador. Omitir significa "já registrei essa fala" ou "não há fala crua".
+async function consultarAgenteVendasComRedeDeSeguranca(
+  cliente,
+  conversaId,
+  texto,
+  { contextoExtra, textoDoCliente = null } = {}
+) {
   if (conversasComAgenteVendasEmAndamento.has(conversaId)) {
     logger.aviso(
       `Mensagem pro Agente de Vendas ignorada: já há uma consulta em andamento pra conversa ${conversaId}.`
     );
+    await avisarMensagemConcorrente(cliente, conversaId, textoDoCliente);
     return { ignorado: true, estadoFinal: null };
   }
 
@@ -353,6 +430,9 @@ async function consultarAgenteVendasComRedeDeSeguranca(cliente, conversaId, text
     };
   } finally {
     conversasComAgenteVendasEmAndamento.delete(conversaId);
+    // Fim da janela: o dedup do aviso não pode sobreviver ao lock que o
+    // justifica — a próxima janela precisa voltar a avisar.
+    conversasJaAvisadasDeConcorrencia.delete(conversaId);
   }
 }
 
@@ -373,7 +453,10 @@ async function receberIntencaoFechamentoPedido(cliente, conversaId, textoOrigina
       + `. Mensagem original do cliente: "${textoOriginal}"`;
 
     return consultarAgenteVendasComRedeDeSeguranca(cliente, conversaId, intencaoTexto, {
-      tipo: 'fechamento_pedido', protocolo: pedido.protocolo, valorTotal: valor, status: pedido.status,
+      contextoExtra: {
+        tipo: 'fechamento_pedido', protocolo: pedido.protocolo, valorTotal: valor, status: pedido.status,
+      },
+      textoDoCliente: textoOriginal,
     });
   }
 
@@ -383,7 +466,10 @@ async function receberIntencaoFechamentoPedido(cliente, conversaId, textoOrigina
       + `(ainda em elaboração). Mensagem original do cliente: "${textoOriginal}"`;
 
     return consultarAgenteVendasComRedeDeSeguranca(cliente, conversaId, intencaoTexto, {
-      tipo: 'fechamento_orcamento', protocolo: orcamentoAtivo.protocolo, status: orcamentoAtivo.status,
+      contextoExtra: {
+        tipo: 'fechamento_orcamento', protocolo: orcamentoAtivo.protocolo, status: orcamentoAtivo.status,
+      },
+      textoDoCliente: textoOriginal,
     });
   }
 
@@ -626,9 +712,12 @@ async function receberWebhook(req, res) {
             conversa.id,
             intencaoTexto,
             {
-              tipo: pedido ? 'retomada_pos_pedido' : 'retomada_pos_orcamento',
-              protocolo: alvo.protocolo,
-              status: alvo.status,
+              contextoExtra: {
+                tipo: pedido ? 'retomada_pos_pedido' : 'retomada_pos_orcamento',
+                protocolo: alvo.protocolo,
+                status: alvo.status,
+              },
+              textoDoCliente: mensagem.texto,
             }
           );
 
@@ -656,7 +745,8 @@ async function receberWebhook(req, res) {
           conversa.id,
           // Sem isso o agente perde o fio do pedido a partir da segunda
           // mensagem (ver prefixarPedidoAtivo).
-          await prefixarPedidoAtivo(mensagem.texto, cliente.id)
+          await prefixarPedidoAtivo(mensagem.texto, cliente.id),
+          { textoDoCliente: mensagem.texto }
         );
 
         if (!ignorado) {
@@ -808,6 +898,9 @@ async function receberWebhook(req, res) {
       }
 
       if (acaoConsultarAgenteVendas) {
+        // Sem `textoDoCliente`: este caminho vem da navegação por menu, que já
+        // gravou a fala do cliente no histórico logo acima — passá-la de novo
+        // duplicaria a linha se cair no aviso de mensagem concorrente.
         const { estadoFinal } = await consultarAgenteVendasComRedeDeSeguranca(
           cliente,
           conversa.id,
