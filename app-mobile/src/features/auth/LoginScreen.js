@@ -1,62 +1,135 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
-import { funcionarios } from '../../mocks/db';
+import React, { useRef, useState } from 'react';
+import {
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  KeyboardAvoidingView, Platform, ActivityIndicator, Pressable,
+} from 'react-native';
+import { useSeparadorAuth } from '../../contexts/SeparadorAuthContext';
+import { colors } from '../../theme/colors';
+import { LivroIcon, AlertaIcon } from '../../components/icons';
 
-export default function LoginScreen({ navigation }) {
+const PIN_LENGTH = 6;
+
+export default function LoginScreen() {
+  const { login } = useSeparadorAuth();
   const [codigo, setCodigo] = useState('');
   const [pin, setPin] = useState('');
+  const [entrando, setEntrando] = useState(false);
+  const [erro, setErro] = useState(null);
+  const pinInputRef = useRef(null);
 
-  const handleLogin = () => {
-    // Basic mock authentication
-    const user = funcionarios.find(f => f.codigo_funcionario === codigo);
-    
-    if (user && pin.length === 6) {
-      // In a real app, we'd hash and verify PIN. Here we just accept any 6 digits for the valid codigos.
-      navigation.replace('Painel', { separadorId: user.id, nome: user.nome });
-    } else {
-      Alert.alert('Erro', 'Código ou PIN inválido. Verifique e tente novamente.');
+  const podeEntrar = codigo.length > 0 && pin.length === PIN_LENGTH;
+
+  const handleLogin = async () => {
+    if (!podeEntrar) return;
+    setErro(null);
+    setEntrando(true);
+    try {
+      // Só aplica a sessão no client Supabase — não navega manualmente:
+      // o AppNavigator reage à mudança de `session` do contexto e troca
+      // de tela sozinho (ver AppNavigator.js).
+      await login(codigo, pin);
+    } catch (err) {
+      setErro(err.message || 'Código ou PIN inválido. Verifique e tente novamente.');
+    } finally {
+      setEntrando(false);
     }
   };
 
+  const onChangeCodigo = (valor) => {
+    if (erro) setErro(null);
+    setCodigo(valor.replace(/[^0-9]/g, ''));
+  };
+
+  const onChangePin = (valor) => {
+    if (erro) setErro(null);
+    setPin(valor.replace(/[^0-9]/g, '').slice(0, PIN_LENGTH));
+  };
+
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View style={styles.content}>
         <View style={styles.logoContainer}>
-          <Text style={styles.logoIcon}>📦</Text>
+          <LivroIcon size={34} color={colors.urgente} />
         </View>
         <Text style={styles.title}>Papelaria Venâncio</Text>
         <Text style={styles.subtitle}>Acesso da equipe</Text>
 
+        {erro && (
+          <View style={styles.errorBanner}>
+            <AlertaIcon size={18} color={colors.erro} />
+            <Text style={styles.errorText}>{erro}</Text>
+          </View>
+        )}
+
         <View style={styles.inputGroup}>
           <Text style={styles.label}>CÓDIGO DO FUNCIONÁRIO</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, erro && styles.inputErro]}
             value={codigo}
-            onChangeText={setCodigo}
+            onChangeText={onChangeCodigo}
             keyboardType="number-pad"
             maxLength={10}
             placeholder="Ex: 0231"
+            placeholderTextColor={colors.textoTerciario}
+            editable={!entrando}
+            returnKeyType="next"
+            onSubmitEditing={() => pinInputRef.current?.focus()}
           />
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>PIN (6 DÍGITOS)</Text>
-          <TextInput
-            style={[styles.input, { letterSpacing: 10 }]}
-            value={pin}
-            onChangeText={setPin}
-            keyboardType="number-pad"
-            maxLength={6}
-            secureTextEntry
-            placeholder="••••••"
-          />
+          <Pressable onPress={() => pinInputRef.current?.focus()} style={styles.pinWrapper}>
+            <View style={styles.pinBoxRow}>
+              {Array.from({ length: PIN_LENGTH }).map((_, i) => {
+                const preenchido = i < pin.length;
+                const atual = i === pin.length;
+                return (
+                  <View
+                    key={i}
+                    style={[
+                      styles.pinBox,
+                      (atual || preenchido) && !erro && styles.pinBoxAtivo,
+                      erro && styles.pinBoxErro,
+                    ]}
+                  >
+                    {preenchido && <View style={styles.pinDot} />}
+                  </View>
+                );
+              })}
+            </View>
+            {/* Input real é invisível: captura o teclado numérico e alimenta
+                o estado `pin`; as 6 caixas acima só refletem `pin.length`.
+                Mais robusto em Android/iOS do que 6 TextInputs com foco
+                encadeado. */}
+            <TextInput
+              ref={pinInputRef}
+              style={styles.pinInputOculto}
+              value={pin}
+              onChangeText={onChangePin}
+              keyboardType="number-pad"
+              maxLength={PIN_LENGTH}
+              secureTextEntry
+              editable={!entrando}
+              returnKeyType="done"
+              onSubmitEditing={handleLogin}
+            />
+          </Pressable>
         </View>
 
-        <TouchableOpacity style={styles.button} onPress={handleLogin}>
-          <Text style={styles.buttonText}>Entrar</Text>
+        <TouchableOpacity
+          style={[styles.button, !podeEntrar && styles.buttonDisabled]}
+          onPress={handleLogin}
+          disabled={!podeEntrar || entrando}
+        >
+          {entrando ? (
+            <ActivityIndicator color={podeEntrar ? '#fff' : colors.textoDesabilitado} />
+          ) : (
+            <Text style={[styles.buttonText, !podeEntrar && styles.buttonTextDisabled]}>Entrar</Text>
+          )}
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -66,7 +139,7 @@ export default function LoginScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F7FB',
+    backgroundColor: colors.fundo,
   },
   content: {
     flex: 1,
@@ -76,28 +149,43 @@ const styles = StyleSheet.create({
   logoContainer: {
     width: 72,
     height: 72,
-    backgroundColor: '#1B5FAE',
+    backgroundColor: colors.primary,
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
     alignSelf: 'center',
     marginBottom: 20,
   },
-  logoIcon: {
-    fontSize: 34,
-  },
   title: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#1C2033',
+    color: colors.texto,
     textAlign: 'center',
     marginBottom: 2,
   },
   subtitle: {
     fontSize: 13,
-    color: '#8B91A3',
+    color: colors.textoTerciario,
     textAlign: 'center',
-    marginBottom: 36,
+    marginBottom: 28,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: colors.erroFundo,
+    borderWidth: 1,
+    borderColor: colors.erroBorda,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 20,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 13,
+    color: colors.erroTexto,
+    fontWeight: '600',
+    lineHeight: 18,
   },
   inputGroup: {
     marginBottom: 24,
@@ -105,31 +193,85 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#5B6072',
+    color: colors.textoSecundario,
     marginBottom: 8,
+    letterSpacing: 0.5,
   },
   input: {
     height: 52,
-    backgroundColor: '#FAFBFD',
+    backgroundColor: colors.fundoInput,
     borderWidth: 1.5,
-    borderColor: '#E4E8F0',
+    borderColor: colors.borda,
     borderRadius: 12,
     paddingHorizontal: 16,
     fontSize: 17,
     fontWeight: '700',
-    color: '#1C2033',
+    color: colors.texto,
+  },
+  inputErro: {
+    borderColor: colors.erro,
+  },
+  pinWrapper: {
+    position: 'relative',
+  },
+  pinBoxRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  pinBox: {
+    flex: 1,
+    height: 52,
+    borderWidth: 1.5,
+    borderColor: colors.borda,
+    borderRadius: 12,
+    backgroundColor: colors.fundoInput,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pinBoxAtivo: {
+    borderColor: colors.primary,
+  },
+  pinBoxErro: {
+    borderColor: colors.erro,
+  },
+  pinDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.texto,
+  },
+  pinInputOculto: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0,
   },
   button: {
     height: 56,
-    backgroundColor: '#1B5FAE',
+    backgroundColor: colors.primary,
     borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 8,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 4,
+  },
+  buttonDisabled: {
+    backgroundColor: colors.botaoDesabilitadoFundo,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   buttonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',
+  },
+  buttonTextDisabled: {
+    color: colors.textoDesabilitado,
   },
 });

@@ -1,0 +1,137 @@
+// Lado do Separador — usa o cliente ISOLADO (separadorSupabase), nunca um
+// client genérico. RLS já restringe SELECT às próprias solicitações
+// (separador_id = funcionario_atual_id()), então as queries daqui não
+// precisam (nem devem) filtrar por funcionário manualmente — a policy faz
+// isso. Contrato idêntico ao venancio-ai-ops/src/services/separacaoSeparador.service.js
+// (mesmo SELECT, mesmas RPCs) — só o import do client muda entre plataformas.
+import { separadorSupabase } from '../supabase/separadorClient'
+
+// operador_delegante: join com `operadores` pelo FK operador_delegante_id
+// (coluna confirmada em produção, extensao_separacao_delegada.sql — tabela
+// `solicitacoes_separacao` seção B). Mesmo padrão de join que
+// `listarMensagens` já usa (`autor_operador:operadores(id, nome)`).
+// ATENÇÃO: a policy de leitura de `operadores` em produção (dump
+// extensao_rls_completa.sql, "operadores_leem_a_si_mesmos") só libera
+// `auth.uid() = id` ou admin — não tem cláusula para o papel Separador. Ou
+// seja, hoje esse campo deve vir `null` quando quem consulta é um
+// separador (RLS filtra a linha embutida), até o supabase-db adicionar uma
+// policy equivalente à `funcionarios.separador_le_a_si_mesmo` para
+// `operadores`. Mantido aqui (não quebra nada, é forward-compatible) — a
+// UI trata `null` mostrando só "N itens" sem o sufixo "delegado por".
+//
+// itens_pedido: NÃO tem coluna de código/SKU de produto (confirmado —
+// só ganhou `nome_item`/`separado` via extensao_dashboard.sql). O código
+// existe em `produtos.sku`, mas só é alcançável através de `produto_id`
+// (nulo em itens de texto livre) e a policy de leitura de `produtos`
+// também é `eh_operador_ativo()`-only, sem cláusula de separador — por
+// isso omitido deliberadamente do SELECT e da UI (ver relatório da
+// Etapa B).
+const SELECT_SOLICITACAO = `
+  *,
+  pedidos (id, protocolo, valor_total, clientes (id, nome, telefone)),
+  operador_delegante:operadores (id, nome),
+  itens:solicitacoes_separacao_itens (
+    id, separado, separado_em,
+    itens_pedido (id, nome_item, quantidade)
+  )
+`
+
+export const separacaoSeparadorService = {
+  async listarMinhas(filtros = {}) {
+    // Ordenação por prioridade (imediata primeiro) é feita na tela, não aqui
+    // — client-side é mais simples que replicar a regra num CASE WHEN do SQL.
+    let query = separadorSupabase
+      .from('solicitacoes_separacao')
+      .select(SELECT_SOLICITACAO)
+      .order('criado_em', { ascending: false })
+
+    if (filtros.statusIn) query = query.in('status', filtros.statusIn)
+
+    const { data, error } = await query
+    if (error) throw error
+    return data ?? []
+  },
+
+  async buscarPorId(id) {
+    const { data, error } = await separadorSupabase
+      .from('solicitacoes_separacao')
+      .select(SELECT_SOLICITACAO)
+      .eq('id', id)
+      .single()
+    if (error) throw error
+    return data
+  },
+
+  async listarMensagens(solicitacaoId) {
+    const { data, error } = await separadorSupabase
+      .from('solicitacoes_separacao_mensagens')
+      .select('*, autor_operador:operadores(id, nome), autor_funcionario:funcionarios(id, nome)')
+      .eq('solicitacao_id', solicitacaoId)
+      .order('criado_em', { ascending: true })
+    if (error) throw error
+    return data ?? []
+  },
+
+  async assumir(solicitacaoId) {
+    const { data, error } = await separadorSupabase.rpc('assumir_separacao', {
+      p_solicitacao_id: solicitacaoId,
+    })
+    if (error) throw error
+    return data
+  },
+
+  async marcarItem(solicitacaoItemId, separado) {
+    const { data, error } = await separadorSupabase.rpc('marcar_item_separado_solicitacao', {
+      p_solicitacao_item_id: solicitacaoItemId,
+      p_separado: separado,
+    })
+    if (error) throw error
+    return data
+  },
+
+  async concluir(solicitacaoId) {
+    const { data, error } = await separadorSupabase.rpc('concluir_separacao', {
+      p_solicitacao_id: solicitacaoId,
+    })
+    if (error) throw error
+    return data
+  },
+
+  async cancelar(solicitacaoId, motivo) {
+    const { data, error } = await separadorSupabase.rpc('cancelar_separacao', {
+      p_solicitacao_id: solicitacaoId,
+      p_motivo: motivo ?? null,
+    })
+    if (error) throw error
+    return data
+  },
+
+  async enviarMensagem(solicitacaoId, texto) {
+    const { data, error } = await separadorSupabase.rpc('enviar_mensagem_separacao', {
+      p_solicitacao_id: solicitacaoId,
+      p_texto: texto,
+    })
+    if (error) throw error
+    return data
+  },
+
+  async listarNotificacoes({ apenasNaoLidas = false } = {}) {
+    let query = separadorSupabase
+      .from('notificacoes_internas')
+      .select('*')
+      .eq('destinatario_tipo', 'separador')
+      .order('criado_em', { ascending: false })
+      .limit(50)
+    if (apenasNaoLidas) query = query.eq('lida', false)
+
+    const { data, error } = await query
+    if (error) throw error
+    return data ?? []
+  },
+
+  async marcarNotificacaoLida(id) {
+    const { data, error } = await separadorSupabase.rpc('marcar_notificacao_lida', { p_id: id })
+    if (error) throw error
+    return data
+  },
+}

@@ -1,11 +1,58 @@
-import React from 'react';
-import { View, Text, StyleSheet, FlatList } from 'react-native';
-import { mockDb } from '../../mocks/db';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { separacaoSeparadorService } from '../../services/separacaoSeparador.service';
+import { separadorSupabase } from '../../supabase/separadorClient';
+import { AlertaIcon, RecarregarIcon } from '../../components/icons';
 
+// NOTA (vistoria 19/08): `listarNotificacoes` filtra por
+// `destinatario_tipo = 'separador'` — hoje é a única opção válida do CHECK
+// de `notificacoes_internas` além de 'operador' (ver addendum
+// Requisitos_Addendum_Entrega_Ocorrencia.md, pendência conhecida: papel
+// Entregador ainda não tem tipo de notificação próprio nem gatilho que as
+// gere). Ou seja, um funcionário só-Entregador sempre vê esta tela vazia —
+// não é um bug desta tela, é um schema/gatilho que falta (fora do escopo
+// deste agente).
 export default function NotificacoesScreen() {
-  const notificacoes = [...mockDb.notificacoes_internas].sort(
-    (a, b) => new Date(b.criado_em) - new Date(a.criado_em)
-  );
+  const [notificacoes, setNotificacoes] = useState([]);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState(null);
+
+  const carregar = useCallback(async () => {
+    setErro(null);
+    try {
+      setNotificacoes(await separacaoSeparadorService.listarNotificacoes());
+    } catch (err) {
+      // Bug corrigido (vistoria 19/08): o erro era engolido pelo try/finally
+      // (mesma classe de bug já corrigida em PainelScreen.js) — a tela caía
+      // direto em "Nenhuma notificação", escondendo falha de rede/RLS.
+      setErro(err);
+    } finally {
+      setCarregando(false);
+    }
+  }, []);
+
+  useEffect(() => { carregar(); }, [carregar]);
+
+  useEffect(() => {
+    if (!separadorSupabase) return undefined;
+    const canal = separadorSupabase
+      .channel('notificacoes-internas')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notificacoes_internas' }, carregar)
+      .subscribe();
+    return () => { separadorSupabase.removeChannel(canal); };
+  }, [carregar]);
+
+  // Tocar numa notificação não lida marca ela como lida (marcar_notificacao_lida)
+  // — sem essa ação nenhuma notificação jamais sairia do estado "não lida".
+  const handlePress = async (item) => {
+    if (item.lida) return;
+    try {
+      await separacaoSeparadorService.marcarNotificacaoLida(item.id);
+    } catch {
+      // Falha silenciosa: marcar como lida não é crítico o suficiente pra
+      // interromper o fluxo do separador com um alerta.
+    }
+  };
 
   const formatData = (iso) => {
     const d = new Date(iso);
@@ -23,15 +70,40 @@ export default function NotificacoesScreen() {
   };
 
   const renderItem = ({ item }) => (
-    <View style={[styles.card, !item.lida && styles.cardUnread]}>
+    <TouchableOpacity
+      style={[styles.card, !item.lida && styles.cardUnread]}
+      onPress={() => handlePress(item)}
+    >
       <Text style={styles.icon}>{tipoIcon(item.tipo)}</Text>
       <View style={styles.content}>
         <Text style={[styles.titulo, !item.lida && styles.tituloUnread]}>{item.titulo}</Text>
         <Text style={styles.corpo}>{item.corpo}</Text>
         <Text style={styles.data}>{formatData(item.criado_em)}</Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
+
+  if (carregando) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color="#1B5FAE" />
+      </View>
+    );
+  }
+
+  if (erro) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }]}>
+        <AlertaIcon size={28} color="#E5484D" />
+        <Text style={styles.erroTitulo}>Não foi possível carregar</Text>
+        <Text style={styles.erroSubtitulo}>Verifique sua conexão e tente novamente.</Text>
+        <TouchableOpacity style={styles.tentarNovamenteBtn} onPress={carregar}>
+          <RecarregarIcon size={15} color="#1B5FAE" />
+          <Text style={styles.tentarNovamenteText}>Tentar novamente</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -64,4 +136,14 @@ const styles = StyleSheet.create({
   tituloUnread: { fontWeight: '800', color: '#1C2033' },
   corpo: { fontSize: 14, color: '#5B6072', marginBottom: 8 },
   data: { fontSize: 12, color: '#8B91A3' },
+
+  erroTitulo: { fontSize: 16, fontWeight: '800', color: '#1C2033', marginTop: 14, marginBottom: 6, textAlign: 'center' },
+  erroSubtitulo: { fontSize: 13, color: '#8B91A3', textAlign: 'center', lineHeight: 19 },
+  tentarNovamenteBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    borderWidth: 1.5, borderColor: '#1B5FAE',
+    paddingHorizontal: 20, paddingVertical: 11, borderRadius: 12,
+    marginTop: 20,
+  },
+  tentarNovamenteText: { fontSize: 14, fontWeight: '700', color: '#1B5FAE' },
 });

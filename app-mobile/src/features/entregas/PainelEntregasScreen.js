@@ -2,11 +2,15 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Animated } from 'react-native';
 import { colors } from '../../theme/colors';
 import { radius, spacing } from '../../theme/spacing';
-import { RaioIcon, RelogioIcon, CaixaIcon, AlertaIcon, RecarregarIcon } from '../../components/icons';
-import { separacaoSeparadorService } from '../../services/separacaoSeparador.service';
+import { RelogioIcon, CaminhaoIcon, LocalizacaoIcon, AlertaIcon, RecarregarIcon } from '../../components/icons';
+import { entregaEntregadorService } from '../../services/entregaEntregador.service';
 import { separadorSupabase } from '../../supabase/separadorClient';
 
-const STATUS_ABERTOS = ['pendente', 'em_andamento'];
+// Espelha PainelScreen.js (Separador) — mesma estrutura (skeleton/erro/vazio,
+// realtime refetch completo, ordenação client-side), vocabulário próprio de
+// entrega. Sem conceito de "prioridade imediata" aqui (não existe esse campo
+// em solicitacoes_entrega) — a ordenação relevante é por horario_previsto.
+const STATUS_ABERTOS = ['pendente', 'em_rota'];
 
 function formatHorario(isoString) {
   if (!isoString) return '';
@@ -17,8 +21,10 @@ function formatHorario(isoString) {
 function StatusPill({ status }) {
   const config = {
     pendente: { fundo: colors.divisor, texto: colors.textoSecundario, label: 'Pendente' },
-    em_andamento: { fundo: colors.andamentoFundo, texto: colors.andamento, label: 'Em andamento' },
-    pronta: { fundo: colors.sucessoFundoForte, texto: colors.sucesso, label: 'Pronta' },
+    em_rota: { fundo: colors.andamentoFundo, texto: colors.andamento, label: 'Em rota' },
+    entregue: { fundo: colors.sucessoFundoForte, texto: colors.sucesso, label: 'Entregue' },
+    insucesso: { fundo: colors.erroFundo, texto: colors.erro, label: 'Insucesso' },
+    cancelada: { fundo: colors.divisor, texto: colors.textoTerciario, label: 'Cancelada' },
   }[status] ?? { fundo: colors.divisor, texto: colors.textoSecundario, label: status };
 
   return (
@@ -28,44 +34,33 @@ function StatusPill({ status }) {
   );
 }
 
-// React.memo (vistoria 19/08 — investigação da lentidão relatada ao navegar):
-// nenhum vazamento de canal Realtime foi encontrado (todo useEffect de
-// subscription já tem `removeChannel` no cleanup, aqui e nas outras telas).
-// O card é recriado a cada renderização da FlatList (inclusive nas que o
-// Realtime dispara em telas que ficam montadas em background pela tab bar);
-// memoizar evita recalcular estilos/JSX de itens que não mudaram — melhoria
-// barata e sem risco, não uma correção de bug confirmado (não foi possível
-// medir num device real nesta sessão).
-const SolicitacaoCard = React.memo(function SolicitacaoCard({ item, onPress }) {
-  const isImediata = item.prioridade === 'imediata';
-  const qtdItens = (item.itens ?? []).length;
-  const delegante = item.operador_delegante?.nome;
+// React.memo — mesma justificativa/achado de PainelScreen.js (SolicitacaoCard).
+const EntregaCard = React.memo(function EntregaCard({ item, onPress }) {
+  const endereco = item.endereco_entrega || item.pedidos?.endereco_entrega;
+  const delegante = item.delegado_por?.nome;
 
   return (
-    <TouchableOpacity
-      style={[styles.card, isImediata && styles.cardImediata]}
-      onPress={() => onPress(item.id)}
-      activeOpacity={0.75}
-    >
+    <TouchableOpacity style={styles.card} onPress={() => onPress(item.id)} activeOpacity={0.75}>
       <View style={styles.cardHeader}>
         <Text style={styles.cardTitulo} numberOfLines={1}>
           {item.pedidos?.protocolo} · {item.pedidos?.clientes?.nome}
         </Text>
-        {isImediata ? (
-          <View style={styles.badgeImediata}>
-            <RaioIcon size={11} color={colors.texto} />
-            <Text style={styles.badgeImediataText}>IMEDIATA</Text>
-          </View>
-        ) : (
-          <View style={styles.badgeAgendada}>
+        {item.horario_previsto && (
+          <View style={styles.badgeHorario}>
             <RelogioIcon size={11} color={colors.primary} />
-            <Text style={styles.badgeAgendadaText}>{formatHorario(item.horario_retirada)}</Text>
+            <Text style={styles.badgeHorarioText}>{formatHorario(item.horario_previsto)}</Text>
           </View>
         )}
       </View>
-      <Text style={styles.cardSubtitulo}>
-        {qtdItens} {qtdItens === 1 ? 'item' : 'itens'}{delegante ? ` · delegado por ${delegante}` : ''}
-      </Text>
+      {endereco ? (
+        <View style={styles.enderecoRow}>
+          <LocalizacaoIcon size={13} color={colors.textoSecundario} />
+          <Text style={styles.cardSubtitulo} numberOfLines={1}>{endereco}</Text>
+        </View>
+      ) : (
+        <Text style={styles.cardSubtitulo}>Endereço não informado</Text>
+      )}
+      {delegante && <Text style={styles.cardDelegante}>Delegado por {delegante}</Text>}
       <StatusPill status={item.status} />
     </TouchableOpacity>
   );
@@ -106,11 +101,11 @@ function ListaVazia() {
   return (
     <View style={styles.estadoContainer}>
       <View style={styles.estadoIconeCirculo}>
-        <CaixaIcon size={28} color={colors.primary} />
+        <CaminhaoIcon size={28} color={colors.primary} />
       </View>
-      <Text style={styles.estadoTitulo}>Nenhuma solicitação pendente</Text>
+      <Text style={styles.estadoTitulo}>Nenhuma entrega pendente</Text>
       <Text style={styles.estadoSubtitulo}>
-        Novas solicitações aparecem aqui assim que forem delegadas a você.
+        Novas entregas aparecem aqui assim que forem delegadas a você.
       </Text>
     </View>
   );
@@ -134,23 +129,19 @@ function ListaErro({ onTentarNovamente }) {
   );
 }
 
-export default function PainelScreen({ navigation }) {
+export default function PainelEntregasScreen({ navigation }) {
   // Sem filtro de status na query: uma única leitura serve a lista aberta
-  // (pendente/em_andamento) — RLS já restringe ao próprio separador.
-  const [todasSolicitacoes, setTodasSolicitacoes] = useState([]);
+  // (pendente/em_rota) — RLS já restringe ao próprio entregador.
+  const [todasEntregas, setTodasEntregas] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState(null);
 
   const carregar = useCallback(async () => {
     setErro(null);
     try {
-      const dados = await separacaoSeparadorService.listarMinhas();
-      setTodasSolicitacoes(dados);
+      const dados = await entregaEntregadorService.listarMinhas();
+      setTodasEntregas(dados);
     } catch (err) {
-      // Bug de UX corrigido: antes esse erro era engolido pelo try/finally e
-      // a tela caía direto no estado "nenhuma solicitação pendente", fazendo
-      // o Separador achar que não tem trabalho quando na verdade os dados
-      // não carregaram (rede, RLS, etc.) — ver briefing da Etapa B.
       setErro(err);
     } finally {
       setCarregando(false);
@@ -162,33 +153,32 @@ export default function PainelScreen({ navigation }) {
     if (!separadorSupabase) return undefined;
 
     // Status visível sem refresh manual (RF-05): refaz a query inteira em
-    // qualquer mudança nas duas tabelas relevantes.
+    // qualquer mudança relevante.
     const canal = separadorSupabase
-      .channel('painel-solicitacoes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'solicitacoes_separacao' }, carregar)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'solicitacoes_separacao_itens' }, carregar)
+      .channel('painel-entregas')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'solicitacoes_entrega' }, carregar)
       .subscribe();
 
     return () => { separadorSupabase.removeChannel(canal); };
   }, [carregar]);
 
-  // useCallback com identidade estável: é o que faz o React.memo de
-  // SolicitacaoCard (ver acima) realmente evitar re-render — se `onPress`
-  // fosse recriado a cada render do Painel (como era antes, uma arrow
-  // function inline no renderItem), a comparação rasa do memo sempre
-  // detectaria props "diferentes" e a otimização não faria nada.
+  // useCallback estável — mesma justificativa de PainelScreen.js/abrirDetalhe.
   const abrirDetalhe = useCallback((id) => {
-    navigation.navigate('DetalheSolicitacao', { solicitacaoId: id });
+    navigation.navigate('DetalheEntrega', { solicitacaoId: id });
   }, [navigation]);
 
-  const solicitacoes = todasSolicitacoes
-    .filter(s => STATUS_ABERTOS.includes(s.status))
-    .sort((a, b) => (a.prioridade === 'imediata' ? -1 : 1));
+  const entregas = todasEntregas
+    .filter(e => STATUS_ABERTOS.includes(e.status))
+    .sort((a, b) => {
+      if (!a.horario_previsto) return 1;
+      if (!b.horario_previsto) return -1;
+      return new Date(a.horario_previsto) - new Date(b.horario_previsto);
+    });
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitulo}>Solicitações</Text>
+        <Text style={styles.headerTitulo}>Entregas</Text>
       </View>
 
       <View style={styles.content}>
@@ -198,10 +188,10 @@ export default function PainelScreen({ navigation }) {
           <ListaErro onTentarNovamente={carregar} />
         ) : (
           <FlatList
-            data={solicitacoes}
+            data={entregas}
             keyExtractor={item => item.id}
             renderItem={({ item }) => (
-              <SolicitacaoCard item={item} onPress={abrirDetalhe} />
+              <EntregaCard item={item} onPress={abrirDetalhe} />
             )}
             contentContainerStyle={{ paddingBottom: 20 }}
             ListEmptyComponent={<ListaVazia />}
@@ -234,33 +224,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 12,
   },
-  cardImediata: {
-    backgroundColor: colors.urgenteFundo,
-    borderWidth: 1.5,
-    borderColor: colors.urgente,
-    borderLeftWidth: 5,
-    borderLeftColor: colors.urgente,
-  },
   cardHeader: {
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'flex-start', marginBottom: 8, gap: 8,
   },
   cardTitulo: { flex: 1, fontSize: 15, fontWeight: '800', color: colors.texto },
-  cardSubtitulo: { fontSize: 12.5, color: colors.textoSecundario, marginBottom: 10 },
-  badgeImediata: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: colors.urgente,
-    paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999,
-  },
-  badgeImediataText: { fontSize: 11, fontWeight: '800', color: colors.texto },
-  badgeAgendada: {
+  enderecoRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 },
+  cardSubtitulo: { flex: 1, fontSize: 12.5, color: colors.textoSecundario },
+  cardDelegante: { fontSize: 11.5, color: colors.textoTerciario, marginBottom: 10 },
+  badgeHorario: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     backgroundColor: colors.primaryLight,
     paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
   },
-  badgeAgendadaText: { fontSize: 11, fontWeight: '800', color: colors.primary },
+  badgeHorarioText: { fontSize: 11, fontWeight: '800', color: colors.primary },
   pill: {
     alignSelf: 'flex-start',
+    marginTop: 6,
     paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999,
   },
   pillText: { fontSize: 11, fontWeight: '700' },

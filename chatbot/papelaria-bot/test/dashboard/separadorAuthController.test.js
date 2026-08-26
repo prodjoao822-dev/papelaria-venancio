@@ -13,6 +13,7 @@ const estado = {
   signInWithPasswordImpl: null,
   adminCreateUserImpl: null,
   adminUpdateUserByIdImpl: null,
+  adminListUsersImpl: null,
 };
 
 function resetarEstado() {
@@ -22,6 +23,7 @@ function resetarEstado() {
   estado.signInWithPasswordImpl = async () => ({ data: null, error: new Error('não configurado') });
   estado.adminCreateUserImpl = async () => ({ data: null, error: new Error('não configurado') });
   estado.adminUpdateUserByIdImpl = async () => ({ data: null, error: new Error('não configurado') });
+  estado.adminListUsersImpl = async () => ({ data: { users: [] }, error: null });
 }
 resetarEstado();
 
@@ -63,6 +65,7 @@ require.cache[caminhoSupabase] = {
       admin: {
         createUser: (...args) => estado.adminCreateUserImpl(...args),
         updateUserById: (...args) => estado.adminUpdateUserByIdImpl(...args),
+        listUsers: (...args) => estado.adminListUsersImpl(...args),
       },
     },
   },
@@ -107,15 +110,32 @@ test('login devolve a mesma resposta genérica quando o código não existe', as
   assert.equal(res.body.erro, 'Código ou PIN inválido.');
 });
 
-test('login rejeita funcionário sem papel de separação mesmo com código certo', async () => {
+test('login rejeita funcionário sem nenhum papel operacional mesmo com código certo', async () => {
   resetarEstado();
   inserirFuncionario({
-    id: 'f1', codigo_funcionario: 'sep1', ativo: true, papeis: ['entrega'],
+    id: 'f1', codigo_funcionario: 'sep1', ativo: true, papeis: ['vendas'],
     auth_user_id: 'auth-1', pin_tentativas_falhas: 0, pin_bloqueado_ate: null,
   });
   const res = criarRes();
   await login({ body: { codigo_funcionario: 'sep1', pin: '123456' } }, res);
   assert.equal(res.statusCode, 401);
+});
+
+test('login aceita funcionário com papel de entrega (sem separacao)', async () => {
+  resetarEstado();
+  inserirFuncionario({
+    id: 'f1', codigo_funcionario: 'ent1', nome: 'Beto', ativo: true, papeis: ['entrega'],
+    auth_user_id: 'auth-1', pin_tentativas_falhas: 0, pin_bloqueado_ate: null,
+  });
+  estado.signInWithPasswordImpl = async () => ({
+    data: { session: { access_token: 'tok-a', refresh_token: 'tok-r' } }, error: null,
+  });
+
+  const res = criarRes();
+  await login({ body: { codigo_funcionario: 'ent1', pin: '123456' } }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body.funcionario.papeis, ['entrega']);
 });
 
 test('login rejeita quando a conta está bloqueada por tentativas', async () => {
@@ -275,6 +295,110 @@ test('resetPin troca a senha quando o funcionário já tem login', async () => {
   assert.equal(res.statusCode, 200);
   assert.equal(chamadaUpdate.authUserId, 'auth-existente');
   assert.equal(chamadaUpdate.password, '111222');
+});
+
+test('resetPin reaproveita usuário órfão quando createUser falha com email_exists (code)', async () => {
+  resetarEstado();
+  inserirFuncionario({
+    id: '11111111-1111-1111-1111-111111111111', codigo_funcionario: 'sep5', auth_user_id: null,
+  });
+
+  const erroEmailExiste = Object.assign(new Error('A user with this email address has already been registered'), {
+    code: 'email_exists',
+  });
+  estado.adminCreateUserImpl = async () => ({ data: null, error: erroEmailExiste });
+  estado.adminListUsersImpl = async ({ page }) => {
+    if (page !== 1) return { data: { users: [] }, error: null };
+    return {
+      data: { users: [{ id: 'auth-orfao', email: 'sep5@venancio.internal' }] },
+      error: null,
+    };
+  };
+  let chamadaUpdate = null;
+  estado.adminUpdateUserByIdImpl = async (authUserId, args) => {
+    chamadaUpdate = { authUserId, ...args };
+    return { data: {}, error: null };
+  };
+
+  const res = criarRes();
+  await resetPin({
+    params: { funcionarioId: '11111111-1111-1111-1111-111111111111' },
+    body: { pin: '999888' },
+    operador: { id: 'op1', papel: 'admin' },
+  }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(chamadaUpdate.authUserId, 'auth-orfao');
+  assert.equal(chamadaUpdate.password, '999888');
+  assert.equal(estado.funcionarios.get('11111111-1111-1111-1111-111111111111').auth_user_id, 'auth-orfao');
+});
+
+test('resetPin reaproveita usuário órfão quando createUser falha só com mensagem (sem code)', async () => {
+  resetarEstado();
+  inserirFuncionario({
+    id: '11111111-1111-1111-1111-111111111111', codigo_funcionario: 'sep6', auth_user_id: null,
+  });
+
+  estado.adminCreateUserImpl = async () => ({
+    data: null,
+    error: new Error('Email address already exists'),
+  });
+  estado.adminListUsersImpl = async () => ({
+    data: { users: [{ id: 'auth-orfao-2', email: 'sep6@venancio.internal' }] },
+    error: null,
+  });
+  estado.adminUpdateUserByIdImpl = async () => ({ data: {}, error: null });
+
+  const res = criarRes();
+  await resetPin({
+    params: { funcionarioId: '11111111-1111-1111-1111-111111111111' },
+    body: { pin: '777666' },
+    operador: { id: 'op1', papel: 'admin' },
+  }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(estado.funcionarios.get('11111111-1111-1111-1111-111111111111').auth_user_id, 'auth-orfao-2');
+});
+
+test('resetPin devolve 502 se o e-mail existe mas a listagem não encontra o usuário órfão', async () => {
+  resetarEstado();
+  inserirFuncionario({
+    id: '11111111-1111-1111-1111-111111111111', codigo_funcionario: 'sep7', auth_user_id: null,
+  });
+
+  estado.adminCreateUserImpl = async () => ({
+    data: null,
+    error: Object.assign(new Error('email exists'), { code: 'email_exists' }),
+  });
+  estado.adminListUsersImpl = async () => ({ data: { users: [] }, error: null });
+
+  const res = criarRes();
+  await resetPin({
+    params: { funcionarioId: '11111111-1111-1111-1111-111111111111' },
+    body: { pin: '555444' },
+    operador: { id: 'op1', papel: 'admin' },
+  }, res);
+
+  assert.equal(res.statusCode, 502);
+  assert.equal(estado.funcionarios.get('11111111-1111-1111-1111-111111111111').auth_user_id, null);
+});
+
+test('resetPin devolve 502 quando createUser falha por outro motivo (não email duplicado)', async () => {
+  resetarEstado();
+  inserirFuncionario({
+    id: '11111111-1111-1111-1111-111111111111', codigo_funcionario: 'sep8', auth_user_id: null,
+  });
+
+  estado.adminCreateUserImpl = async () => ({ data: null, error: new Error('serviço indisponível') });
+
+  const res = criarRes();
+  await resetPin({
+    params: { funcionarioId: '11111111-1111-1111-1111-111111111111' },
+    body: { pin: '222333' },
+    operador: { id: 'op1', papel: 'admin' },
+  }, res);
+
+  assert.equal(res.statusCode, 502);
 });
 
 test('resetPin devolve 502 quando o Supabase Auth falha', async () => {

@@ -1,212 +1,306 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  TextInput, KeyboardAvoidingView, Platform, ScrollView
+  ActivityIndicator, Alert, SafeAreaView,
 } from 'react-native';
-import { mockDb } from '../../mocks/db';
+import { colors } from '../../theme/colors';
+import { radius, spacing } from '../../theme/spacing';
+import { SetaVoltarIcon, ChatIcon, CheckIcon, RaioIcon } from '../../components/icons';
+import { separacaoSeparadorService } from '../../services/separacaoSeparador.service';
+import { separadorSupabase } from '../../supabase/separadorClient';
 
 export default function DetalheSolicitacaoScreen({ route, navigation }) {
   const { solicitacaoId } = route.params;
   const [solicitacao, setSolicitacao] = useState(null);
-  const [itens, setItens] = useState([]);
-  const [mensagens, setMensagens] = useState([]);
-  const [novaMensagem, setNovaMensagem] = useState('');
+  const [carregando, setCarregando] = useState(true);
+  const [concluindo, setConcluindo] = useState(false);
 
-  useEffect(() => {
-    const sol = mockDb.solicitacoes_separacao.find(s => s.id === solicitacaoId);
-    setSolicitacao(sol);
-    if (sol) {
-      setItens(mockDb.solicitacoes_separacao_itens.filter(i => i.solicitacao_id === solicitacaoId));
-      setMensagens(mockDb.solicitacoes_separacao_mensagens.filter(m => m.solicitacao_id === solicitacaoId));
+  const carregar = useCallback(async () => {
+    try {
+      const s = await separacaoSeparadorService.buscarPorId(solicitacaoId);
+      setSolicitacao(s);
+    } finally {
+      setCarregando(false);
     }
   }, [solicitacaoId]);
 
+  useEffect(() => { carregar(); }, [carregar]);
+
+  useEffect(() => {
+    if (!separadorSupabase) return undefined;
+
+    // Status visível sem refresh manual (RF-05) — refaz a query inteira em
+    // qualquer mudança relevante. Mensagens não fazem mais parte desta tela
+    // (viraram ChatSolicitacaoScreen), então não assina mais essa tabela aqui.
+    const canal = separadorSupabase
+      .channel(`detalhe-solicitacao-${solicitacaoId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'solicitacoes_separacao', filter: `id=eq.${solicitacaoId}` }, carregar)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'solicitacoes_separacao_itens', filter: `solicitacao_id=eq.${solicitacaoId}` }, carregar)
+      .subscribe();
+    return () => { separadorSupabase.removeChannel(canal); };
+  }, [solicitacaoId, carregar]);
+
+  if (carregando) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </SafeAreaView>
+    );
+  }
   if (!solicitacao) return null;
 
-  const pedido = mockDb.pedidos_mock[solicitacao.pedido_id];
   const isPendente = solicitacao.status === 'pendente';
-  const todosSeparados = itens.length > 0 && itens.every(i => i.separado);
+  const isImediata = solicitacao.prioridade === 'imediata';
+  const itens = solicitacao.itens ?? [];
+  const totalItens = itens.length;
+  const separadosCount = itens.filter(i => i.separado).length;
+  const todosSeparados = totalItens > 0 && separadosCount === totalItens;
+  const percentual = totalItens > 0 ? Math.round((separadosCount / totalItens) * 100) : 0;
+  const delegante = solicitacao.operador_delegante?.nome;
 
-  const assumir = () => setSolicitacao({ ...solicitacao, status: 'em_andamento' });
-
-  const toggleItem = (itemId) => {
-    if (isPendente) return;
-    setItens(prev => prev.map(i => i.id === itemId ? { ...i, separado: !i.separado } : i));
+  const assumir = async () => {
+    try {
+      await separacaoSeparadorService.assumir(solicitacaoId);
+    } catch (err) {
+      Alert.alert('Erro ao assumir', err.message);
+    }
   };
 
-  const concluir = () => navigation.goBack();
+  const toggleItem = async (item) => {
+    if (solicitacao.status !== 'em_andamento') return;
+    try {
+      await separacaoSeparadorService.marcarItem(item.id, !item.separado);
+    } catch (err) {
+      Alert.alert('Erro ao marcar item', err.message);
+    }
+  };
 
-  const enviarMensagem = () => {
-    if (!novaMensagem.trim()) return;
-    setMensagens([...mensagens, {
-      id: Math.random().toString(),
-      solicitacao_id: solicitacao.id,
-      autor_tipo: 'separador',
-      texto: novaMensagem,
-      criado_em: new Date().toISOString()
-    }]);
-    setNovaMensagem('');
+  // concluir_separacao já existe e funciona em produção para o caminho
+  // normal (todo item marcado — é a única forma deste botão habilitar, ver
+  // `todosSeparados`). O que fica pendente de decisão do dono (D1, tela 10
+  // do bundle de design) é só a CONCLUSÃO PARCIAL — chamar essa mesma RPC
+  // com item faltando, que ela hoje rejeita de propósito. Como esta tela
+  // nunca chama a RPC com item pendente, não há conflito com essa decisão
+  // em aberto, e nenhum link "concluir parcial" é oferecido.
+  const concluir = async () => {
+    setConcluindo(true);
+    try {
+      await separacaoSeparadorService.concluir(solicitacaoId);
+      navigation.replace('ConfirmacaoEnvio', {
+        protocolo: solicitacao.pedidos?.protocolo,
+        cliente: solicitacao.pedidos?.clientes?.nome,
+        totalItens,
+        separadosCount: totalItens,
+      });
+    } catch (err) {
+      Alert.alert('Erro ao concluir', err.message);
+    } finally {
+      setConcluindo(false);
+    }
   };
 
   const renderItem = ({ item }) => {
-    const detalhe = pedido?.itens_detalhes[item.item_pedido_id];
+    const marcado = item.separado;
     return (
       <TouchableOpacity
-        style={styles.itemRow}
-        onPress={() => toggleItem(item.id)}
-        disabled={isPendente}
+        style={[styles.itemCard, marcado && styles.itemCardMarcado]}
+        onPress={() => toggleItem(item)}
+        disabled={solicitacao.status !== 'em_andamento'}
+        activeOpacity={0.75}
       >
-        <Text style={styles.itemCheckbox}>{item.separado ? '☑' : '☐'}</Text>
+        <View style={[styles.itemCheckbox, marcado && styles.itemCheckboxMarcado]}>
+          {marcado && <CheckIcon size={16} color="#fff" />}
+        </View>
         <View style={styles.itemInfo}>
-          <Text style={[styles.itemNome, item.separado && styles.itemNomeSeparado]}>
-            {detalhe?.nome}
-          </Text>
-          <Text style={styles.itemQuantidade}>Qtd: {detalhe?.quantidade}</Text>
+          <Text style={styles.itemNome}>{item.itens_pedido?.nome_item}</Text>
+          <Text style={styles.itemQuantidade}>Qtd: {item.itens_pedido?.quantidade}</Text>
         </View>
       </TouchableOpacity>
     );
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : null}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-    >
-      <ScrollView style={{ flex: 1 }}>
-        <View style={styles.header}>
-          <Text style={styles.pedidoTitle}>Pedido {pedido?.protocolo}</Text>
-          <Text style={styles.clienteNome}>{pedido?.cliente_nome}</Text>
-          {solicitacao.prioridade === 'imediata' && (
-            <View style={styles.badgeImediata}>
-              <Text style={styles.badgeImediataText}>⚡ PRIORIDADE IMEDIATA</Text>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <View style={styles.headerTopo}>
+          <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10}>
+            <SetaVoltarIcon size={20} color={colors.texto} />
+          </TouchableOpacity>
+          <View style={styles.headerInfo}>
+            <Text style={styles.headerTitulo} numberOfLines={1}>
+              {solicitacao.pedidos?.protocolo} · {solicitacao.pedidos?.clientes?.nome}
+            </Text>
+            <Text style={styles.headerSubtitulo}>
+              {totalItens} {totalItens === 1 ? 'item' : 'itens'}{delegante ? ` · delegado por ${delegante}` : ''}
+            </Text>
+          </View>
+          {isImediata && (
+            <View style={styles.badgeUrgente}>
+              <RaioIcon size={10} color={colors.texto} />
+              <Text style={styles.badgeUrgenteText}>URGENTE</Text>
             </View>
+          )}
+          {!isPendente && (
+            <TouchableOpacity
+              style={styles.chatButton}
+              hitSlop={10}
+              onPress={() => navigation.navigate('ChatSolicitacao', { solicitacaoId })}
+            >
+              <ChatIcon size={22} color={colors.textoSecundario} />
+            </TouchableOpacity>
           )}
         </View>
 
-        {isPendente ? (
-          <View style={styles.actionContainer}>
-            <Text style={styles.pendenteText}>
-              Esta solicitação está aguardando você iniciar a separação.
-            </Text>
-            <TouchableOpacity style={styles.assumirButton} onPress={assumir}>
-              <Text style={styles.assumirButtonText}>Assumir Solicitação</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.checklistContainer}>
-            <Text style={styles.sectionTitle}>ITENS DO PEDIDO</Text>
-            <FlatList
-              data={itens}
-              renderItem={renderItem}
-              keyExtractor={i => i.id}
-              scrollEnabled={false}
-            />
-            <TouchableOpacity
-              style={[styles.concluirButton, !todosSeparados && styles.concluirButtonDisabled]}
-              disabled={!todosSeparados}
-              onPress={concluir}
-            >
-              <Text style={styles.concluirButtonText}>✅ Separação Pronta</Text>
-            </TouchableOpacity>
+        {!isPendente && (
+          <View style={styles.progressoContainer}>
+            <View style={styles.progressoLabelRow}>
+              <Text style={[styles.progressoLabel, { color: todosSeparados ? colors.sucesso : colors.textoSecundario }]}>
+                {separadosCount} de {totalItens} separados
+              </Text>
+              <Text style={[styles.progressoLabel, { color: todosSeparados ? colors.sucesso : colors.textoSecundario }]}>
+                {percentual}%
+              </Text>
+            </View>
+            <View style={styles.progressoBarraFundo}>
+              <View
+                style={[
+                  styles.progressoBarraPreenchida,
+                  { width: `${percentual}%`, backgroundColor: todosSeparados ? colors.sucesso : colors.andamento },
+                ]}
+              />
+            </View>
           </View>
         )}
+      </View>
 
-        <View style={styles.chatContainer}>
-          <Text style={styles.sectionTitle}>CHAT INTERNO</Text>
-          {mensagens.map(msg => {
-            const isMe = msg.autor_tipo === 'separador';
-            return (
-              <View key={msg.id} style={[styles.msgBubble, isMe ? styles.msgMe : styles.msgOther]}>
-                <Text style={[styles.msgAuthor, isMe ? styles.msgAuthorMe : styles.msgAuthorOther]}>
-                  {isMe ? 'Você' : 'Operador'}
-                </Text>
-                <Text style={[styles.msgText, isMe ? styles.msgTextMe : styles.msgTextOther]}>
-                  {msg.texto}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
-      </ScrollView>
-
-      {!isPendente && (
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.input}
-            placeholder="Digite uma mensagem..."
-            value={novaMensagem}
-            onChangeText={setNovaMensagem}
-          />
-          <TouchableOpacity style={styles.sendButton} onPress={enviarMensagem}>
-            <Text style={styles.sendIcon}>➤</Text>
-          </TouchableOpacity>
-        </View>
+      {/* Bug corrigido (vistoria 19/08): a lista de itens antes só renderizava
+          com `!isPendente` — o separador assumia a solicitação às cegas, sem
+          saber o que ia separar. Agora a FlatList é sempre exibida; o que
+          muda por status é só a ação do footer (Assumir vs Concluir) e a
+          interatividade dos itens (toggleItem/renderItem já bloqueiam toque
+          fora de `em_andamento`, então isso continua seguro aqui). */}
+      {isPendente && (
+        <Text style={styles.pendenteBanner}>
+          Confira os itens abaixo antes de assumir esta solicitação.
+        </Text>
       )}
-    </KeyboardAvoidingView>
+
+      <FlatList
+        data={itens}
+        renderItem={renderItem}
+        keyExtractor={i => i.id}
+        contentContainerStyle={styles.listaContent}
+      />
+
+      <View style={styles.footer}>
+        {isPendente ? (
+          <TouchableOpacity style={styles.assumirButton} onPress={assumir}>
+            <Text style={styles.assumirButtonText}>Assumir Solicitação</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.concluirButton, (!todosSeparados || concluindo) && styles.concluirButtonDisabled]}
+            disabled={!todosSeparados || concluindo}
+            onPress={concluir}
+          >
+            {concluindo ? (
+              <ActivityIndicator color={todosSeparados ? '#fff' : colors.textoDesabilitado} />
+            ) : (
+              <Text style={[styles.concluirButtonText, !todosSeparados && styles.concluirButtonTextDisabled]}>
+                Separação Pronta
+              </Text>
+            )}
+          </TouchableOpacity>
+        )}
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F7FB' },
+  container: { flex: 1, backgroundColor: colors.superficie },
   header: {
-    padding: 20, backgroundColor: '#fff',
-    borderBottomWidth: 1, borderColor: '#E4E8F0',
+    borderBottomWidth: 1, borderColor: colors.borda,
+    paddingTop: 8, paddingBottom: 16,
   },
-  pedidoTitle: { fontSize: 22, fontWeight: '800', color: '#1C2033' },
-  clienteNome: { fontSize: 16, color: '#5B6072', marginTop: 4 },
-  badgeImediata: {
-    backgroundColor: '#FFC72C', paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: 8, alignSelf: 'flex-start', marginTop: 12,
+  headerTopo: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingHorizontal: spacing.xl, paddingBottom: 12,
   },
-  badgeImediataText: { fontSize: 12, fontWeight: '800', color: '#8A5B00' },
-  actionContainer: {
-    padding: 20, backgroundColor: '#fff', marginTop: 16, alignItems: 'center',
+  headerInfo: { flex: 1 },
+  headerTitulo: { fontSize: 16, fontWeight: '800', color: colors.texto },
+  headerSubtitulo: { fontSize: 12, color: colors.textoTerciario, marginTop: 2 },
+  badgeUrgente: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: colors.urgente,
+    paddingHorizontal: 8, paddingVertical: 5, borderRadius: 999,
   },
-  pendenteText: { fontSize: 15, color: '#5B6072', textAlign: 'center', marginBottom: 16 },
+  badgeUrgenteText: { fontSize: 10.5, fontWeight: '800', color: colors.texto },
+  chatButton: { padding: 2 },
+  progressoContainer: { paddingHorizontal: spacing.xl },
+  progressoLabelRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+  progressoLabel: { fontSize: 12.5, fontWeight: '700' },
+  progressoBarraFundo: { height: 8, borderRadius: 4, backgroundColor: colors.divisor, overflow: 'hidden' },
+  progressoBarraPreenchida: { height: '100%', borderRadius: 4 },
+
+  pendenteBanner: {
+    fontSize: 13, color: colors.textoSecundario, textAlign: 'center',
+    paddingHorizontal: spacing.xl, paddingTop: 14,
+  },
   assumirButton: {
-    backgroundColor: '#1B5FAE', paddingVertical: 14, paddingHorizontal: 32,
-    borderRadius: 12, width: '100%', alignItems: 'center',
+    backgroundColor: colors.primary, height: 56,
+    borderRadius: radius.md, justifyContent: 'center', alignItems: 'center',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 14,
+    elevation: 4,
   },
   assumirButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  checklistContainer: { padding: 20, backgroundColor: '#fff', marginTop: 16 },
-  sectionTitle: { fontSize: 12, fontWeight: '800', color: '#8B91A3', marginBottom: 12 },
-  itemRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 12, borderBottomWidth: 1, borderColor: '#F0F2F7',
+
+  listaContent: { padding: spacing.xl, paddingBottom: 8 },
+  itemCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    backgroundColor: colors.superficie,
+    borderWidth: 1.5, borderColor: colors.borda,
+    borderRadius: radius.lg, padding: 14, paddingHorizontal: 16,
+    marginBottom: 10,
   },
-  itemCheckbox: { fontSize: 24, marginRight: 16, color: '#2AA35C' },
-  itemInfo: { flex: 1 },
-  itemNome: { fontSize: 16, color: '#1C2033', fontWeight: '600' },
-  itemNomeSeparado: { textDecorationLine: 'line-through', color: '#8B91A3' },
-  itemQuantidade: { fontSize: 14, color: '#5B6072', marginTop: 4 },
+  itemCardMarcado: {
+    backgroundColor: colors.sucessoFundo,
+    borderColor: colors.sucesso,
+  },
+  itemCheckbox: {
+    width: 28, height: 28, borderRadius: 8,
+    borderWidth: 2, borderColor: colors.bordaCheckbox,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  itemCheckboxMarcado: {
+    backgroundColor: colors.sucesso,
+    borderColor: colors.sucesso,
+  },
+  itemInfo: { flex: 1, minWidth: 0 },
+  itemNome: { fontSize: 15, fontWeight: '700', color: colors.texto },
+  itemQuantidade: { fontSize: 12.5, color: colors.textoSecundario, marginTop: 3 },
+
+  footer: {
+    padding: spacing.xl, paddingTop: 14,
+    borderTopWidth: 1, borderColor: colors.borda,
+  },
   concluirButton: {
-    backgroundColor: '#2AA35C', paddingVertical: 16,
-    borderRadius: 12, alignItems: 'center', marginTop: 24,
+    backgroundColor: colors.primary, height: 56,
+    borderRadius: radius.md, justifyContent: 'center', alignItems: 'center',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 14,
+    elevation: 4,
   },
-  concluirButtonDisabled: { backgroundColor: '#A3D9B8' },
+  concluirButtonDisabled: {
+    backgroundColor: colors.botaoDesabilitadoFundo,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
   concluirButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  chatContainer: { padding: 20, paddingBottom: 40 },
-  msgBubble: { padding: 12, borderRadius: 12, marginBottom: 8, maxWidth: '80%' },
-  msgMe: { backgroundColor: '#1B5FAE', alignSelf: 'flex-end', borderBottomRightRadius: 4 },
-  msgOther: { backgroundColor: '#EAF1FA', alignSelf: 'flex-start', borderBottomLeftRadius: 4 },
-  msgAuthor: { fontSize: 11, fontWeight: '700', marginBottom: 4 },
-  msgAuthorMe: { color: '#C9D9EF' },
-  msgAuthorOther: { color: '#1B5FAE' },
-  msgText: { fontSize: 15 },
-  msgTextMe: { color: '#fff' },
-  msgTextOther: { color: '#1C2033' },
-  inputContainer: {
-    flexDirection: 'row', padding: 12,
-    backgroundColor: '#fff', borderTopWidth: 1, borderColor: '#E4E8F0',
-  },
-  input: {
-    flex: 1, backgroundColor: '#F5F7FB', borderRadius: 20,
-    paddingHorizontal: 16, height: 40, marginRight: 8,
-  },
-  sendButton: {
-    width: 40, height: 40, backgroundColor: '#1B5FAE',
-    borderRadius: 20, justifyContent: 'center', alignItems: 'center',
-  },
-  sendIcon: { color: '#fff', fontSize: 16 },
+  concluirButtonTextDisabled: { color: colors.textoDesabilitado },
 });

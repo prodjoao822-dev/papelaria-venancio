@@ -3,20 +3,36 @@
   "version": "1.0.0",
   "main": "index.js",
   "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-navigation/bottom-tabs": "^7.18.16",
     "@react-navigation/native": "^7.3.16",
     "@react-navigation/native-stack": "^7.18.8",
+    "@supabase/supabase-js": "^2.112.3",
+    "aes-js": "^3.1.2",
     "expo": "~54.0.0",
+    "expo-secure-store": "~15.0.8",
     "expo-status-bar": "~3.0.9",
     "react": "19.1.0",
     "react-native": "0.81.5",
+    "react-native-get-random-values": "~1.11.0",
     "react-native-safe-area-context": "~5.6.0",
-    "react-native-screens": "~4.16.0"
+    "react-native-screens": "~4.16.0",
+    "react-native-svg": "15.12.1"
   },
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "test": "jest"
   },
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "@testing-library/react-native": "^14.0.1",
+    "babel-preset-expo": "^54.0.12",
+    "jest-expo": "^54.0.18"
+  },
+  "jest": {
+    "preset": "jest-expo"
+  }
 }

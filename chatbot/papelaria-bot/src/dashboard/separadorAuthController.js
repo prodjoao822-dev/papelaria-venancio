@@ -1,5 +1,12 @@
-// Login do Separador (código de funcionário + PIN de 6 dígitos) e reset de
-// PIN por um Operador administrativo. Ver decisão de arquitetura no
+// Login de funcionário operacional do app mobile (código de funcionário +
+// PIN de 6 dígitos) e reset de PIN por um Operador administrativo. Nome do
+// módulo/rota ficou "separador" por histórico (era só pro Separador), mas
+// desde o addendum de Entrega/Ocorrência (19/08/2026) o login é genérico
+// pra qualquer funcionário com papel operacional de app mobile — hoje
+// 'separacao' ou 'entrega' em `funcionarios.papeis` (text[], ver
+// PAPEIS_FUNCIONARIO em extensao_entrega_ocorrencia.sql). Novos papéis
+// operacionais entram só adicionando ao array PAPEIS_APP_MOBILE abaixo, sem
+// reescrever a lógica de autenticação. Ver decisão de arquitetura no
 // cabeçalho de supabase/extensao_separacao_delegada.sql: o PIN nunca é
 // armazenado por nós — vira a senha de um usuário Supabase Auth com e-mail
 // sintético (`codigo@venancio.internal`), então quem guarda o hash é o
@@ -18,9 +25,94 @@ const REGEX_PIN = /^\d{6}$/;
 const DOMINIO_SINTETICO = 'venancio.internal';
 const MAX_TENTATIVAS_ANTES_DE_BLOQUEAR = 5;
 const BLOQUEIO_MINUTOS = 15;
+// Papéis operacionais aceitos por este login único do app mobile. Adicionar
+// um novo papel operacional aqui é o único passo pra este endpoint passar a
+// aceitá-lo — não muda a rota nem a resposta genérica de segurança.
+const PAPEIS_APP_MOBILE = ['separacao', 'entrega'];
+
+function temPapelOperacional(funcionario) {
+  const papeis = funcionario.papeis || [];
+  return PAPEIS_APP_MOBILE.some((papel) => papeis.includes(papel));
+}
 
 function emailSintetico(codigoFuncionario) {
   return `${codigoFuncionario}@${DOMINIO_SINTETICO}`;
+}
+
+// createUser + vincular auth_user_id em `funcionarios` não é atômico: se o
+// processo cair (timeout de rede, restart) entre as duas chamadas, sobra um
+// usuário órfão no Supabase Auth com o e-mail sintético já registrado, mas
+// `funcionarios.auth_user_id` continua null. Todo reset seguinte cai de novo
+// no branch de createUser, que passa a falhar pra sempre com "e-mail já
+// registrado" — travando o funcionário. Detectamos esse erro específico
+// aqui pra reaproveitar o usuário órfão em vez de falhar (ver incidente de
+// produção 19/08, funcionários 0810 e 1234).
+const REGEX_ERRO_EMAIL_EXISTENTE = /already.*(registered|exists)|email.*(exists|already)/i;
+
+function ehErroEmailJaExistente(erro) {
+  if (!erro) return false;
+  if (erro.code === 'email_exists') return true;
+  const mensagem = typeof erro.message === 'string' ? erro.message : '';
+  return REGEX_ERRO_EMAIL_EXISTENTE.test(mensagem);
+}
+
+// A Admin API do Supabase Auth não tem "buscar por e-mail" — só listagem
+// paginada. O teto de páginas é só uma proteção contra loop infinito se a
+// paginação se comportar de forma inesperada; na prática o volume de
+// usuários deste projeto (funcionários) nunca chega perto disso.
+async function buscarUsuarioAuthPorEmail(email) {
+  const alvo = email.toLowerCase();
+  const perPage = 200;
+  const MAX_PAGINAS = 50;
+
+  for (let pagina = 1; pagina <= MAX_PAGINAS; pagina += 1) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page: pagina, perPage });
+    if (error) throw error;
+    const usuarios = data?.users || [];
+    const encontrado = usuarios.find((usuario) => (usuario.email || '').toLowerCase() === alvo);
+    if (encontrado) return encontrado;
+    if (usuarios.length < perPage) break; // última página
+  }
+  return null;
+}
+
+// Cria o usuário do Supabase Auth pro primeiro login de um funcionário. Se
+// o e-mail sintético já existir (usuário órfão de uma tentativa anterior
+// que falhou entre createUser e o UPDATE em `funcionarios`), reaproveita
+// esse usuário em vez de deixar o funcionário travado pra sempre: atualiza
+// a senha dele pro PIN novo e devolve o id pra vincular.
+async function provisionarUsuarioAuth(email, pin, funcionarioId) {
+  const { data, error } = await supabase.auth.admin.createUser({
+    email,
+    password: pin,
+    email_confirm: true,
+  });
+
+  if (!error) {
+    return data.user.id;
+  }
+
+  if (!ehErroEmailJaExistente(error)) {
+    throw error;
+  }
+
+  logger.aviso(
+    `E-mail ${email} já existia no Supabase Auth ao provisionar login do funcionário ${funcionarioId} — reaproveitando usuário órfão em vez de falhar`,
+    error,
+  );
+
+  const usuarioOrfao = await buscarUsuarioAuthPorEmail(email);
+  if (!usuarioOrfao) {
+    // Não deveria acontecer (a Admin API acabou de dizer que o e-mail
+    // existe), mas se a listagem não achar, não há o que reaproveitar —
+    // propaga o erro original em vez de mascarar o problema.
+    throw error;
+  }
+
+  const { error: erroUpdate } = await supabase.auth.admin.updateUserById(usuarioOrfao.id, { password: pin });
+  if (erroUpdate) throw erroUpdate;
+
+  return usuarioOrfao.id;
 }
 
 async function registrarTentativaFalha(funcionario) {
@@ -79,7 +171,7 @@ async function login(req, res) {
 
   // Mesma resposta pra "código não existe" e "PIN errado" — não dá pra um
   // atacante confirmar por tentativa e erro quais códigos são válidos.
-  if (!funcionario || !funcionario.ativo || !funcionario.auth_user_id || !(funcionario.papeis || []).includes('separacao')) {
+  if (!funcionario || !funcionario.ativo || !funcionario.auth_user_id || !temPapelOperacional(funcionario)) {
     return respostaInvalida();
   }
 
@@ -105,7 +197,7 @@ async function login(req, res) {
   return res.status(200).json({
     ok: true,
     sessao: { access_token: sessao.access_token, refresh_token: sessao.refresh_token },
-    funcionario: { id: funcionario.id, nome: funcionario.nome },
+    funcionario: { id: funcionario.id, nome: funcionario.nome, papeis: funcionario.papeis || [] },
   });
 }
 
@@ -156,17 +248,18 @@ async function resetPin(req, res) {
       if (error) throw error;
     } else {
       // Primeiro login provisionado: cria o usuário no Supabase Auth com o
-      // e-mail sintético e liga o funcionário a ele.
-      const { data, error } = await supabase.auth.admin.createUser({
-        email: emailSintetico(funcionario.codigo_funcionario),
-        password: pin,
-        email_confirm: true,
-      });
-      if (error) throw error;
+      // e-mail sintético (ou reaproveita um órfão de uma tentativa anterior
+      // que falhou no meio do caminho, ver provisionarUsuarioAuth) e liga o
+      // funcionário a ele.
+      const authUserId = await provisionarUsuarioAuth(
+        emailSintetico(funcionario.codigo_funcionario),
+        pin,
+        funcionarioId,
+      );
 
       const { error: erroVinculo } = await supabase
         .from('funcionarios')
-        .update({ auth_user_id: data.user.id })
+        .update({ auth_user_id: authUserId })
         .eq('id', funcionarioId);
       if (erroVinculo) throw erroVinculo;
     }
