@@ -5,7 +5,38 @@ import { useKpis } from '@/hooks/usePedidos'
 import { STATUS } from '@/utils/status'
 import { operationalQueriesService } from '@/services/operational-queries.service'
 import { demandIntelligenceService } from '@/services/demand-intelligence.service'
+import { ocorrenciasService } from '@/services/ocorrencias.service'
+import { atendimentoService } from '@/services/atendimento.service'
 import { useTheme } from '@/contexts/AppContext'
+
+function useAtendimentosPendentes() {
+  const [count, setCount] = useState(0)
+
+  useEffect(() => {
+    let mounted = true
+    let channel = null
+
+    async function buscar() {
+      try {
+        const n = await atendimentoService.contarAguardandoOperador()
+        if (mounted) setCount(n)
+      } catch { /* sem Supabase */ }
+    }
+
+    buscar()
+
+    try {
+      channel = atendimentoService.subscribeConversas(() => buscar())
+    } catch { channel = null }
+
+    return () => {
+      mounted = false
+      try { channel?.unsubscribe() } catch { /* ignora */ }
+    }
+  }, [])
+
+  return count
+}
 
 function useConsultasPendentes() {
   const [count, setCount] = useState(0)
@@ -25,6 +56,35 @@ function useConsultasPendentes() {
 
     try {
       channel = operationalQueriesService.subscribe(() => buscar())
+    } catch { channel = null }
+
+    return () => {
+      mounted = false
+      try { channel?.unsubscribe() } catch { /* ignora */ }
+    }
+  }, [])
+
+  return count
+}
+
+function useOcorrenciasAbertas() {
+  const [count, setCount] = useState(0)
+
+  useEffect(() => {
+    let mounted = true
+    let channel = null
+
+    async function buscar() {
+      try {
+        const n = await ocorrenciasService.contarAbertas()
+        if (mounted) setCount(n)
+      } catch { /* sem Supabase */ }
+    }
+
+    buscar()
+
+    try {
+      channel = ocorrenciasService.subscribe(() => buscar())
     } catch { channel = null }
 
     return () => {
@@ -71,6 +131,7 @@ const NAV_OPERACOES = [
   { to: '/logistica',   label: 'Logística',     icone: '🛵' },
   { to: '/atendimento', label: 'Atendimento',   icone: '💬', badgeKey: 'atendimentos', badgeAlerta: true },
   { to: '/consultas',   label: 'Consultas IA',  icone: '❓', badgeKey: 'consultas',    badgeAlerta: true },
+  { to: '/ocorrencias', label: 'Ocorrências',   icone: '🧾', badgeKey: 'ocorrencias',  badgeAlerta: true },
 ]
 
 const NAV_CATALOGO = [
@@ -93,7 +154,9 @@ const NAV_SISTEMA = [
 
 export function Sidebar({ aberta, onFechar }) {
   const { kpis }             = useKpis()
+  const atendimentosPendentes = useAtendimentosPendentes()
   const consultasPendentes   = useConsultasPendentes()
+  const ocorrenciasAbertas   = useOcorrenciasAbertas()
   const alertasDemanda       = useAlertasDemanda()
   const { theme, toggleTheme } = useTheme()
 
@@ -107,8 +170,9 @@ export function Sidebar({ aberta, onFechar }) {
 
   const badges = {
     pedidosAtivos:  pedidosAtivos    || null,
-    atendimentos:   null,
+    atendimentos:   atendimentosPendentes || null,
     consultas:      consultasPendentes || null,
+    ocorrencias:    ocorrenciasAbertas || null,
     alertasDemanda: alertasDemanda   || null,
   }
 

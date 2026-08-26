@@ -6,6 +6,7 @@ const TITULOS = {
   '/':              { pai: 'Visão Geral',  atual: 'Dashboard de Operações' },
   '/pedidos':       { pai: 'Operações',    atual: 'Pedidos'                },
   '/logistica':     { pai: 'Operações',    atual: 'Logística'              },
+  '/ocorrencias':   { pai: 'Operações',    atual: 'Ocorrências'            },
   '/atendimento':   { pai: 'Operações',    atual: 'Atendimento'            },
   '/clientes':      { pai: 'Cadastros',    atual: 'Clientes'               },
   '/orcamentos':    { pai: 'Cadastros',    atual: 'Orçamentos'             },

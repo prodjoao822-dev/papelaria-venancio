@@ -21,6 +21,7 @@ import { LogisticaPage } from '@/pages/LogisticaPage'
 import { AtendimentoPage } from '@/pages/AtendimentoPage'
 import { RelatoriosPage } from '@/pages/RelatoriosPage'
 import { ConsultasPage } from '@/pages/ConsultasPage'
+import { OcorrenciasPage } from '@/pages/OcorrenciasPage'
 import { ProductMemoryPage } from '@/pages/ProductMemoryPage'
 import { DemandPage } from '@/pages/DemandPage'
 import { SetupPage } from '@/pages/SetupPage'
@@ -77,6 +78,7 @@ export default function App() {
                   <Route path="demanda"     element={<DemandPage />} />
                   <Route path="relatorios"  element={<RelatoriosPage />} />
                   <Route path="consultas"   element={<ConsultasPage />} />
+                  <Route path="ocorrencias" element={<OcorrenciasPage />} />
                   <Route path="configuracoes" element={<ConfigPage />} />
                 </Route>
               </Routes>
