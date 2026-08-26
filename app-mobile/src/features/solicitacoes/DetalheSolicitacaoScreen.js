@@ -8,6 +8,7 @@ import { radius, spacing } from '../../theme/spacing';
 import { SetaVoltarIcon, ChatIcon, CheckIcon, RaioIcon } from '../../components/icons';
 import { separacaoSeparadorService } from '../../services/separacaoSeparador.service';
 import { separadorSupabase } from '../../supabase/separadorClient';
+import { traduzErroRpc } from '../../utils/traduzErroRpc';
 
 export default function DetalheSolicitacaoScreen({ route, navigation }) {
   const { solicitacaoId } = route.params;
@@ -62,7 +63,7 @@ export default function DetalheSolicitacaoScreen({ route, navigation }) {
     try {
       await separacaoSeparadorService.assumir(solicitacaoId);
     } catch (err) {
-      Alert.alert('Erro ao assumir', err.message);
+      Alert.alert('Erro ao assumir', traduzErroRpc(err));
     }
   };
 
@@ -71,7 +72,7 @@ export default function DetalheSolicitacaoScreen({ route, navigation }) {
     try {
       await separacaoSeparadorService.marcarItem(item.id, !item.separado);
     } catch (err) {
-      Alert.alert('Erro ao marcar item', err.message);
+      Alert.alert('Erro ao marcar item', traduzErroRpc(err));
     }
   };
 
@@ -93,7 +94,7 @@ export default function DetalheSolicitacaoScreen({ route, navigation }) {
         separadosCount: totalItens,
       });
     } catch (err) {
-      Alert.alert('Erro ao concluir', err.message);
+      Alert.alert('Erro ao concluir', traduzErroRpc(err));
     } finally {
       setConcluindo(false);
     }

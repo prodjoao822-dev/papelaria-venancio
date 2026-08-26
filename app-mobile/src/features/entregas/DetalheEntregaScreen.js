@@ -11,6 +11,7 @@ import {
 } from '../../components/icons';
 import { entregaEntregadorService } from '../../services/entregaEntregador.service';
 import { separadorSupabase } from '../../supabase/separadorClient';
+import { traduzErroRpc } from '../../utils/traduzErroRpc';
 
 // tipo_observacao de itens_pedido — só mostra rótulo quando é algo que muda
 // o jeito de manusear/entregar o item ('padrao' e null não geram badge).
@@ -154,7 +155,7 @@ export default function DetalheEntregaScreen({ route, navigation }) {
     try {
       await entregaEntregadorService.assumir(solicitacaoId);
     } catch (err) {
-      Alert.alert('Erro ao aceitar', err.message);
+      Alert.alert('Erro ao aceitar', traduzErroRpc(err));
     } finally {
       setProcessando(false);
     }
@@ -165,7 +166,7 @@ export default function DetalheEntregaScreen({ route, navigation }) {
     try {
       await entregaEntregadorService.iniciarRota(solicitacaoId);
     } catch (err) {
-      Alert.alert('Erro ao iniciar rota', err.message);
+      Alert.alert('Erro ao iniciar rota', traduzErroRpc(err));
     } finally {
       setProcessando(false);
     }
@@ -176,7 +177,7 @@ export default function DetalheEntregaScreen({ route, navigation }) {
     try {
       await entregaEntregadorService.concluir(solicitacaoId);
     } catch (err) {
-      Alert.alert('Erro ao concluir', err.message);
+      Alert.alert('Erro ao concluir', traduzErroRpc(err));
     } finally {
       setProcessando(false);
     }
@@ -191,7 +192,7 @@ export default function DetalheEntregaScreen({ route, navigation }) {
       setModalInsucesso(false);
       setMotivoInsucesso('');
     } catch (err) {
-      Alert.alert('Erro ao registrar insucesso', err.message);
+      Alert.alert('Erro ao registrar insucesso', traduzErroRpc(err));
     } finally {
       setProcessando(false);
     }
@@ -213,7 +214,7 @@ export default function DetalheEntregaScreen({ route, navigation }) {
       setDescricaoOcorrencia('');
       Alert.alert('Ocorrência registrada', 'A loja foi avisada.');
     } catch (err) {
-      Alert.alert('Erro ao registrar ocorrência', err.message);
+      Alert.alert('Erro ao registrar ocorrência', traduzErroRpc(err));
     } finally {
       setEnviandoOcorrencia(false);
     }

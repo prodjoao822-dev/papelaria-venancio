@@ -8,6 +8,7 @@ import { radius, spacing } from '../../theme/spacing';
 import { SetaVoltarIcon, EnviarIcon, PerfilIcon } from '../../components/icons';
 import { separacaoSeparadorService } from '../../services/separacaoSeparador.service';
 import { separadorSupabase } from '../../supabase/separadorClient';
+import { traduzErroRpc } from '../../utils/traduzErroRpc';
 
 function formatHorario(isoString) {
   if (!isoString) return '';
@@ -69,7 +70,7 @@ export default function ChatSolicitacaoScreen({ route, navigation }) {
       setNovaMensagem('');
       await carregar();
     } catch (err) {
-      Alert.alert('Erro ao enviar mensagem', err.message);
+      Alert.alert('Erro ao enviar mensagem', traduzErroRpc(err));
     } finally {
       setEnviando(false);
     }
