@@ -205,14 +205,19 @@ nem humano) interage por `REACTIVATION_TIMEOUT_MINUTES` seguidos.
 
 ## Modelagem das tabelas (Supabase)
 
-SQL completo de criação em [`supabase/schema.sql`](supabase/schema.sql). Resumo das colunas:
+> ⚠️ **Não rode `supabase/schema.sql`.** Até 26/08/2026 esta seção mandava
+> rodá-lo como "SQL completo de criação". Ele é o schema da **primeira**
+> versão do bot (14/07/2026): 4 tabelas e **nenhuma linha de RLS** — quem
+> seguia essa instrução montava um banco com as tabelas abertas. O banco real
+> hoje tem 38 tabelas e 137 policies.
+>
+> **Para montar um banco (novo ou existente), a instrução vale é a de
+> [`supabase/README.md`](supabase/README.md)**, que traz a ordem de aplicação
+> e o baseline extraído da produção
+> (`supabase/baseline_producao_26-08-2026.sql`).
 
-> **Já tem um projeto Supabase rodando de uma versão anterior?** Rode
-> `supabase/schema.sql` de novo no SQL Editor — todo o arquivo é escrito com
-> `if not exists`, então só aplica o que ainda falta (hoje: a coluna
-> `ultima_mensagem_id` em `conversas`). Se pular esse passo antes de atualizar
-> o código, o bot vai falhar ao responder qualquer mensagem (erro ao gravar a
-> conversa, coluna inexistente).
+O resumo de colunas abaixo cobre só as 4 tabelas originais do bot e é material
+de leitura, **não** instrução de criação:
 
 ### `clientes`
 - `id` — identificador único do cliente
@@ -313,8 +318,9 @@ Sem uma instância real da Evolution API e um projeto Supabase configurados, ess
 chamadas devem falhar ao tentar salvar/consultar dados (erro 500 de conexão) — isso já
 confirma que a validação do token, o parsing do payload e o roteamento estão funcionando.
 Para testar o fluxo completo, preencha `SUPABASE_URL`/`SUPABASE_SERVICE_KEY` com um projeto
-real (rodando antes o `supabase/schema.sql`) e `EVOLUTION_API_URL`/`EVOLUTION_API_KEY` com uma
-instância válida.
+real (montado antes seguindo o "Caminho A" de [`supabase/README.md`](supabase/README.md) —
+**não** o `supabase/schema.sql`, que é legado e sem RLS) e
+`EVOLUTION_API_URL`/`EVOLUTION_API_KEY` com uma instância válida.
 
 Também dá pra testar só a máquina de estados, sem subir o servidor nem o Supabase, com o
 simulador de terminal:

@@ -1,4 +1,23 @@
+-- =====================================================================
+-- ⚠️  ARQUIVO LEGADO — NÃO RODE ESTE SQL.  (aviso acrescentado em 26/08/2026)
+-- =====================================================================
+-- Este é o schema da PRIMEIRA versão do bot (14/07/2026): 4 tabelas e
+-- NENHUMA linha de row level security. O banco real hoje tem 38 tabelas e
+-- 137 policies. Quem seguisse a instrução original abaixo montava um banco
+-- com as tabelas ABERTAS — era o que o README do bot mandava fazer até
+-- 26/08/2026 (Bloqueador B6: o repositório não era fonte de verdade do
+-- banco).
+--
+-- Para montar um banco, use `supabase/README.md` -> "Caminho A", que parte
+-- de `supabase/baseline_producao_26-08-2026.sql` (schema + RLS + policies +
+-- grants extraídos da produção).
+--
+-- Mantido no repositório apenas como registro histórico. Substituído por
+-- `squemanovo.sql` já em 31/07/2026.
+-- =====================================================================
+
 -- Schema do papelaria-bot.
+-- [INSTRUÇÃO ORIGINAL, HOJE INVÁLIDA — ver aviso acima]
 -- Rode este arquivo no SQL Editor do Supabase (ou via CLI) para criar as tabelas usadas pelo bot.
 
 create extension if not exists pgcrypto; -- necessária para gen_random_uuid()
