@@ -26,13 +26,15 @@ test('extrai telefone, nome, texto e fromMe de um payload válido', () => {
     texto: 'Olá',
     documentoPdf: null,
     audio: null,
+    imagem: null,
     fromMe: false,
     mensagemId: 'MSG1',
   });
 });
 
-// Áudio: o bot não transcreve, mas precisa reconhecer pra chamar a Vanessa em
-// vez de ignorar em silêncio (bug real de 10/08 — 4 áudios sem resposta).
+// Áudio: transcrito via OpenRouter (ver mediaProcessor.js/webhookController.js)
+// e tratado como texto normal — o parser só reconhece que veio um áudio e
+// guarda o mimetype, quem transcreve é a camada de cima.
 test('reconhece uma nota de voz (ptt) enviada pelo cliente', () => {
   const resultado = parsePayload({
     event: 'messages.upsert',
@@ -43,7 +45,7 @@ test('reconhece uma nota de voz (ptt) enviada pelo cliente', () => {
     },
   });
 
-  assert.deepEqual(resultado.audio, { notaDeVoz: true, duracaoSegundos: 12 });
+  assert.deepEqual(resultado.audio, { notaDeVoz: true, duracaoSegundos: 12, mimetype: 'audio/ogg; codecs=opus' });
   assert.equal(resultado.texto, null);
 });
 
@@ -56,7 +58,34 @@ test('arquivo de áudio anexado (sem ptt) também é reconhecido', () => {
     },
   });
 
-  assert.deepEqual(resultado.audio, { notaDeVoz: false, duracaoSegundos: 30 });
+  assert.deepEqual(resultado.audio, { notaDeVoz: false, duracaoSegundos: 30, mimetype: 'audio/mpeg' });
+});
+
+// Imagem: descrita via OpenRouter (visão) e tratada como texto normal, mesmo
+// princípio do áudio — ver PROMPT-03 Entrega 2.
+test('reconhece uma imagem enviada pelo cliente', () => {
+  const resultado = parsePayload({
+    event: 'messages.upsert',
+    data: {
+      key: { remoteJid: '5527996620160@s.whatsapp.net', fromMe: false, id: 'IMG1' },
+      message: { imageMessage: { mimetype: 'image/jpeg' } },
+    },
+  });
+
+  assert.deepEqual(resultado.imagem, { legenda: null, mimetype: 'image/jpeg' });
+  assert.equal(resultado.texto, null);
+});
+
+test('reconhece a legenda de uma imagem enviada com texto junto', () => {
+  const resultado = parsePayload({
+    event: 'messages.upsert',
+    data: {
+      key: { remoteJid: '5527996620160@s.whatsapp.net', fromMe: false, id: 'IMG2' },
+      message: { imageMessage: { mimetype: 'image/png', caption: 'vocês têm essa mochila?' } },
+    },
+  });
+
+  assert.deepEqual(resultado.imagem, { legenda: 'vocês têm essa mochila?', mimetype: 'image/png' });
 });
 
 // Sem `seconds` o campo vira null em vez de 0 — o texto que a Vanessa recebe
@@ -75,7 +104,7 @@ test('áudio sem duração informada não vira "0s"', () => {
 
 // Figurinha e reação continuam fora: não têm conteúdo pra alguém responder, e
 // notificar a Vanessa a cada emoji seria ruído puro.
-test('figurinha e reação não são confundidas com áudio', () => {
+test('figurinha e reação não são confundidas com áudio nem imagem', () => {
   for (const message of [{ stickerMessage: {} }, { reactionMessage: { text: '👍' } }]) {
     const resultado = parsePayload({
       event: 'messages.upsert',
@@ -83,6 +112,7 @@ test('figurinha e reação não são confundidas com áudio', () => {
     });
 
     assert.equal(resultado.audio, null);
+    assert.equal(resultado.imagem, null);
     assert.equal(resultado.texto, null);
   }
 });
@@ -108,7 +138,9 @@ test('lê texto de extendedTextMessage quando conversation não existe', () => {
   assert.equal(parsePayload(payload).texto, 'resposta a uma mensagem');
 });
 
-test('retorna texto null quando a mensagem não tem conteúdo reconhecível (ex.: mídia)', () => {
+// `texto` continua null pra imagem — o conteúdo reconhecido vai pro campo
+// `imagem` (ver testes de imagem acima), não pra `texto` diretamente.
+test('retorna texto null quando a mensagem é uma imagem (conteúdo vai pro campo imagem)', () => {
   const payload = {
     data: {
       key: { remoteJid: '5511988887777@s.whatsapp.net', fromMe: false, id: 'MSG3' },

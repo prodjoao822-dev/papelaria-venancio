@@ -63,20 +63,33 @@ function extrairDocumentoPdf(mensagem) {
   };
 }
 
-// Áudio (nota de voz ou arquivo) enviado pelo cliente. O bot não transcreve
-// nada — escutar áudio exigiria recurso novo no n8n. Aqui só reconhecemos que
-// veio um, pra chamar a Vanessa em vez de deixar o cliente no vácuo (ver
-// receberAudio no webhookController). Em 10/08 uma cliente mandou 4 áudios
-// seguidos e o bot ignorou os 4 sem dar um pio.
+// Áudio (nota de voz ou arquivo) enviado pelo cliente. Transcrito via
+// OpenRouter (ver src/utils/mediaProcessor.js) e tratado como texto normal —
+// ver PROMPT-03 Entrega 2. Guardamos o mimetype aqui porque é ele quem diz o
+// formato do arquivo (a Evolution API só devolve o base64 puro).
 function extrairAudio(mensagem) {
   const audio = mensagem?.audioMessage;
   if (!audio) return null;
 
   return {
     // `ptt` (push-to-talk) separa nota de voz gravada na hora de um arquivo de
-    // áudio anexado — muda só o texto que a Vanessa recebe.
+    // áudio anexado — muda só o texto do fallback pra Vanessa quando a
+    // transcrição falha (ver receberAudio no webhookController).
     notaDeVoz: Boolean(audio.ptt),
     duracaoSegundos: Number(audio.seconds) || null,
+    mimetype: audio.mimetype || null,
+  };
+}
+
+// Imagem enviada pelo cliente. Descrita via OpenRouter (visão) e tratada como
+// texto normal, igual ao áudio — ver PROMPT-03 Entrega 2.
+function extrairImagem(mensagem) {
+  const imagem = mensagem?.imageMessage;
+  if (!imagem) return null;
+
+  return {
+    legenda: imagem.caption || null,
+    mimetype: imagem.mimetype || null,
   };
 }
 
@@ -91,6 +104,7 @@ function parsePayload(payloadBruto) {
   const texto = extrairTexto(dados.message);
   const documentoPdf = extrairDocumentoPdf(dados.message);
   const audio = extrairAudio(dados.message);
+  const imagem = extrairImagem(dados.message);
 
   if (!telefone) {
     return null;
@@ -102,6 +116,7 @@ function parsePayload(payloadBruto) {
     texto,
     documentoPdf,
     audio,
+    imagem,
     fromMe: Boolean(dados.key.fromMe),
     mensagemId: dados.key.id || null,
   };

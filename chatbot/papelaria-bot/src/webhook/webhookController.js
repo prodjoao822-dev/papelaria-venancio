@@ -11,6 +11,8 @@ const orcamentosService = require('../services/orcamentosService');
 const mensagensService = require('../services/mensagensService');
 const arquivosClienteService = require('../services/arquivosClienteService');
 const evolutionApi = require('../services/evolutionApi');
+const mediaProcessor = require('../utils/mediaProcessor');
+const env = require('../config/env');
 const reativacaoBot = require('../middlewares/reativacaoBot');
 const stateMachine = require('../botEngine/stateMachine');
 const comandosGlobais = require('../botEngine/comandosGlobais');
@@ -19,6 +21,7 @@ const actions = require('../botEngine/actions');
 const n8nClient = require('../integracoes/n8nClient');
 const notifyTargets = require('../config/notifyTargets');
 const analyticsService = require('../services/analyticsService');
+const escalonamentoService = require('../services/escalonamentoService');
 const logger = require('../utils/logger');
 
 const STATUS_PEDIDO_LEGIVEL = {
@@ -80,15 +83,17 @@ const conversasEmFinalizacao = new Set();
 const MENSAGEM_FALLBACK_AGENTE_VENDAS = 'Desculpa a demora! Vou te conectar com nossa equipe agora, um momento.';
 const MENSAGEM_CONFIRMACAO_PDF_RECEBIDO = 'Recebemos seu arquivo! Já encaminhamos pra nossa equipe de vendas dar uma olhada.';
 const MENSAGEM_CONFIRMACAO_AUDIO_RECEBIDO = 'Recebi seu áudio! Já chamei alguém da nossa equipe pra te ouvir e responder por aqui. Só um instante 😊';
+const MENSAGEM_CONFIRMACAO_IMAGEM_RECEBIDA = 'Recebi sua imagem! Já chamei alguém da nossa equipe pra dar uma olhada e responder por aqui. Só um instante 😊';
 
-// Áudio do cliente: o bot não escuta nem transcreve (isso dependeria de recurso
-// novo no n8n), então o objetivo aqui é só não deixar ninguém no vácuo — avisa
-// a Vanessa e confirma o recebimento. `avisarVanessa` vem de `podeResponder`:
-// quando um humano já está tocando a conversa ele já viu o áudio no WhatsApp da
-// loja, e notificar de novo viraria spam (em 10/08 uma cliente mandou 4 áudios
-// seguidos numa conversa que a loja já estava atendendo na mão). Nesse caso só
-// registramos no histórico, pra tela de Atendimento não ficar com um buraco.
-async function receberAudio(mensagem, cliente, conversaId, { avisarVanessa }) {
+// Rede de segurança pra áudio: usada quando a transcrição (OpenRouter, ver
+// mediaProcessor.js) não está configurada ou falhou, e também quando o bot
+// está pausado (a IA não deve responder por cima de um humano já atendendo).
+// `avisarVanessa` vem de `podeResponder`: quando um humano já está tocando a
+// conversa ele já viu o áudio no WhatsApp da loja, e notificar de novo viraria
+// spam (em 10/08 uma cliente mandou 4 áudios seguidos numa conversa que a loja
+// já estava atendendo na mão). Nesse caso só registramos no histórico, pra
+// tela de Atendimento não ficar com um buraco.
+async function receberAudioFallback(mensagem, cliente, conversaId, { avisarVanessa }) {
   const { notaDeVoz, duracaoSegundos } = mensagem.audio;
   const rotulo = notaDeVoz ? 'um áudio' : 'um arquivo de áudio';
   const duracao = duracaoSegundos ? ` de ${duracaoSegundos}s` : '';
@@ -97,7 +102,7 @@ async function receberAudio(mensagem, cliente, conversaId, { avisarVanessa }) {
     await evolutionApi.enviarTexto(
       notifyTargets.vendas,
       `🎧 ${cliente.nome || 'Cliente sem nome'} (${cliente.telefone}) mandou ${rotulo}${duracao} `
-      + 'no WhatsApp da loja. O bot não escuta áudio — esse precisa de atendimento humano.'
+      + 'no WhatsApp da loja. Não deu pra transcrever automaticamente — precisa de atendimento humano.'
     );
     await evolutionApi.enviarTexto(cliente.telefone, MENSAGEM_CONFIRMACAO_AUDIO_RECEBIDO);
   }
@@ -108,6 +113,25 @@ async function receberAudio(mensagem, cliente, conversaId, { avisarVanessa }) {
     await mensagensService.registrarMensagem(conversaId, 'cliente', `Enviou ${rotulo}${duracao}.`);
   } catch (erro) {
     logger.erro(`Áudio de ${cliente.telefone} tratado, mas falhou ao registrar no histórico`, erro);
+  }
+}
+
+// Mesma lógica do áudio, pra quando a descrição da imagem (OpenRouter, ver
+// mediaProcessor.js) não está configurada, falhou, ou o bot está pausado.
+async function receberImagemFallback(mensagem, cliente, conversaId, { avisarVanessa }) {
+  if (avisarVanessa) {
+    await evolutionApi.enviarTexto(
+      notifyTargets.vendas,
+      `🖼️ ${cliente.nome || 'Cliente sem nome'} (${cliente.telefone}) mandou uma imagem `
+      + 'no WhatsApp da loja. Não deu pra descrever automaticamente — precisa de atendimento humano.'
+    );
+    await evolutionApi.enviarTexto(cliente.telefone, MENSAGEM_CONFIRMACAO_IMAGEM_RECEBIDA);
+  }
+
+  try {
+    await mensagensService.registrarMensagem(conversaId, 'cliente', 'Enviou uma imagem.');
+  } catch (erro) {
+    logger.erro(`Imagem de ${cliente.telefone} tratada, mas falhou ao registrar no histórico`, erro);
   }
 }
 
@@ -290,6 +314,7 @@ async function consultarAgenteVendasComRedeDeSeguranca(cliente, conversaId, text
         conversaId
       );
       await reativacaoBot.pausarBot(conversaId, 'timeout/erro ao consultar o Agente de Vendas');
+      await escalonamentoService.verificarEscalonamento(cliente.telefone, evolutionApi.enviarTexto.bind(evolutionApi));
       return { ignorado: false, estadoFinal: null };
     }
 
@@ -318,6 +343,7 @@ async function consultarAgenteVendasComRedeDeSeguranca(cliente, conversaId, text
         conversaId
       );
       await reativacaoBot.pausarBot(conversaId, 'Falha técnica no Agente de Vendas — mensagem escalada pro time de vendas');
+      await escalonamentoService.verificarEscalonamento(cliente.telefone, evolutionApi.enviarTexto.bind(evolutionApi));
       return { ignorado: false, estadoFinal: 'SUBMENU_VENDAS' };
     }
 
@@ -372,8 +398,8 @@ async function receberWebhook(req, res) {
   }
 
   const mensagem = parsePayload(req.body);
-  if (!mensagem || (mensagem.texto === null && !mensagem.documentoPdf && !mensagem.audio)) {
-    logger.info('Payload de webhook ignorado: não é uma mensagem de texto, PDF ou áudio reconhecível.', req.body);
+  if (!mensagem || (mensagem.texto === null && !mensagem.documentoPdf && !mensagem.audio && !mensagem.imagem)) {
+    logger.info('Payload de webhook ignorado: não é uma mensagem de texto, PDF, áudio ou imagem reconhecível.', req.body);
     return res.status(200).json({ ignorado: true });
   }
 
@@ -465,24 +491,105 @@ async function receberWebhook(req, res) {
 
       const { podeResponder, viaGatilhoPedido } = await reativacaoBot.garantirBotAtivo(conversa);
 
-      // Áudio fica aqui, e não junto do PDF lá em cima, justamente pra ter o
-      // `podeResponder` em mãos: é ele que decide entre avisar a Vanessa e só
-      // registrar (ver receberAudio). Não mexe na máquina de estados — o
-      // cliente continua exatamente no passo em que estava.
+      // Áudio/imagem ficam aqui, e não junto do PDF lá em cima, justamente pra
+      // ter o `podeResponder` em mãos: só tentamos transcrever/descrever e
+      // deixar a IA responder quando o bot pode responder de verdade — se um
+      // humano já assumiu a conversa, a IA não deve entrar por cima dele (cai
+      // no fallback de avisar a equipe, mesmo comportamento de sempre).
+      //
+      // PROMPT-03 Entrega 2: em vez de tratar áudio/imagem como um beco sem
+      // saída que só notifica um humano, transcreve/descreve via OpenRouter
+      // (mediaProcessor.js) e trata o resultado como se fosse o texto que o
+      // cliente digitou — segue pro MESMO fluxo normal daqui pra baixo
+      // (Agente de Vendas, menu, etc.), com um prefixo deixando claro a
+      // origem. Só cai no fallback antigo (notificar Vendas) se a transcrição/
+      // descrição falhar ou não estiver configurada (OPENROUTER_API_KEY).
       if (mensagem.audio) {
-        try {
-          await receberAudio(mensagem, cliente, conversa.id, { avisarVanessa: podeResponder });
-        } catch (erro) {
-          logger.erro(`Falha ao tratar áudio recebido do cliente ${mensagem.telefone}`, erro);
+        let textoTranscrito = null;
+
+        if (podeResponder && env.OPENROUTER_API_KEY) {
+          try {
+            const midia = await evolutionApi.baixarMidia(req.body.data);
+            if (midia?.base64) {
+              textoTranscrito = await mediaProcessor.transcreverAudio(midia.base64, mensagem.audio.mimetype);
+            }
+          } catch (erro) {
+            logger.erro(`Falha ao transcrever áudio de ${mensagem.telefone} — caindo no fallback`, erro);
+          }
         }
 
-        await conversasService.atualizarEstadoConversa(
-          conversa.id,
-          conversa.estado_atual,
-          conversa.dados,
-          mensagem.mensagemId
-        );
-        return res.status(200).json({ ok: true, audioRecebido: true });
+        if (textoTranscrito) {
+          // Sem prefixo quando a transcrição é, ela mesma, um comando global
+          // exato ("atendente", "menu", "0"...) — comandosGlobais.identificarComando
+          // exige a mensagem INTEIRA igual à palavra (ver comandosGlobais.js),
+          // e com o prefixo esse comando nunca mais dispararia (ex.: cliente
+          // que manda um áudio só falando "atendente" precisa continuar
+          // escalando pra humano, igual a se tivesse digitado).
+          mensagem.texto = comandosGlobais.identificarComando(textoTranscrito)
+            ? textoTranscrito
+            : `[Áudio transcrito do cliente]: ${textoTranscrito}`;
+          // Não retorna: segue pro fluxo normal abaixo, como se fosse texto.
+        } else {
+          try {
+            await receberAudioFallback(mensagem, cliente, conversa.id, { avisarVanessa: podeResponder });
+          } catch (erro) {
+            logger.erro(`Falha ao tratar áudio recebido do cliente ${mensagem.telefone}`, erro);
+          }
+
+          await conversasService.atualizarEstadoConversa(
+            conversa.id,
+            conversa.estado_atual,
+            conversa.dados,
+            mensagem.mensagemId
+          );
+          return res.status(200).json({ ok: true, audioRecebido: true });
+        }
+      }
+
+      if (mensagem.imagem) {
+        let descricaoImagem = null;
+
+        if (podeResponder && env.OPENROUTER_API_KEY) {
+          try {
+            const midia = await evolutionApi.baixarMidia(req.body.data);
+            if (midia?.base64) {
+              descricaoImagem = await mediaProcessor.descreverImagem(
+                midia.base64,
+                mensagem.imagem.mimetype,
+                mensagem.imagem.legenda
+              );
+            }
+          } catch (erro) {
+            logger.erro(`Falha ao descrever imagem de ${mensagem.telefone} — caindo no fallback`, erro);
+          }
+        }
+
+        if (descricaoImagem) {
+          // Mesma ressalva do áudio: se a LEGENDA (não a descrição da IA) for,
+          // ela mesma, um comando global exato, respeita o comando em vez de
+          // embrulhar em contexto (ex.: imagem mandada com a legenda "menu").
+          if (comandosGlobais.identificarComando(mensagem.imagem.legenda)) {
+            mensagem.texto = mensagem.imagem.legenda;
+          } else {
+            const legendaTexto = mensagem.imagem.legenda ? ` Legenda do cliente: "${mensagem.imagem.legenda}"` : '';
+            mensagem.texto = `[O cliente enviou uma imagem — descrição automática]: ${descricaoImagem}.${legendaTexto}`;
+          }
+          // Não retorna: segue pro fluxo normal abaixo, como se fosse texto.
+        } else {
+          try {
+            await receberImagemFallback(mensagem, cliente, conversa.id, { avisarVanessa: podeResponder });
+          } catch (erro) {
+            logger.erro(`Falha ao tratar imagem recebida do cliente ${mensagem.telefone}`, erro);
+          }
+
+          await conversasService.atualizarEstadoConversa(
+            conversa.id,
+            conversa.estado_atual,
+            conversa.dados,
+            mensagem.mensagemId
+          );
+          return res.status(200).json({ ok: true, imagemRecebida: true });
+        }
       }
 
       if (!podeResponder) {
@@ -623,6 +730,7 @@ async function receberWebhook(req, res) {
       // responde manualmente pelo WhatsApp da loja (fromMe:true).
       if (comandosGlobais.identificarComando(mensagem.texto) === 'ESCALACAO') {
         await reativacaoBot.pausarBot(conversa.id, 'cliente pediu atendimento humano (comando de escalação)');
+        await escalonamentoService.verificarEscalonamento(cliente.telefone, evolutionApi.enviarTexto.bind(evolutionApi));
       }
 
       // CONSULTAR_AGENTE_VENDAS não passa pelo executor genérico de ações
@@ -641,6 +749,7 @@ async function receberWebhook(req, res) {
       const acaoPausar = resultado.acoes.find((acao) => acao.tipo === 'PAUSAR_ATENDIMENTO_AUTOMATICO');
       if (acaoPausar) {
         await reativacaoBot.pausarBot(conversa.id, acaoPausar.dados?.motivo || 'cliente pediu atendimento humano pelo menu');
+        await escalonamentoService.verificarEscalonamento(cliente.telefone, evolutionApi.enviarTexto.bind(evolutionApi));
       }
 
       const demaisAcoes = resultado.acoes.filter(

@@ -81,6 +81,12 @@ module.exports = {
   // credential Header Auth correspondente no n8n — ver AGENTE_VENDAS.json,
   // node "Webhook · Agente Vendas"). Configure os dois lados com o mesmo valor.
   N8N_VENDAS_WEBHOOK_TOKEN: process.env.N8N_VENDAS_WEBHOOK_TOKEN,
+  // Chave da OpenRouter usada por src/utils/mediaProcessor.js pra transcrever
+  // áudio e descrever imagem recebidos do cliente (PROMPT-03, Entrega 2).
+  // Opcional: sem ela, o bot cai automaticamente no fallback de sempre
+  // (avisar a equipe de vendas) em vez de travar — ver aviso em
+  // mediaProcessor.js.
+  OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
 };
 
 // Aviso de boot para variáveis do Agente de Vendas (n8n) — achado A5 do
