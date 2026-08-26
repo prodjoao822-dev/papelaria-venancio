@@ -37,3 +37,14 @@
 # não resolvia o .env do servidor quando o Claude Code sobe o processo stdio.
 # Nunca versionar.
 /.mcp.json
+
+# Clone de terceiros do supabase-mcp-server (ferramenta local de MCP, ~24 MB com
+# node_modules, e contém um .env real com credencial do Supabase). Fica no disco
+# porque o .mcp.json aponta pra cá, mas nunca entra no versionamento do monorepo.
+/servidor supabase/
+
+# Export de workflow n8n de exemplo (material de aula de terceiros). NÃO versionar:
+# o bloco pinData carrega uma chave real da Evolution API em texto plano
+# ("apikey" do host iasemlimites-evolution.cloudfy.live) — exatamente o mesmo tipo
+# de vazamento do incidente de 07/08/2026 (commit b604523). Mantido só localmente.
+/WORKFLOW EXEMPLO.JSON

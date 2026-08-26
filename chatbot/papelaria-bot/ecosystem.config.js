@@ -1,3 +1,19 @@
+// ============================================================================
+// OBSOLETO (desde 14/08/2026) — NÃO USAR.
+//
+// O dono abandonou o modelo PM2 + túnel ngrok para rodar o bot direto no
+// terminal (`node src/index.js`) e acompanhar logs ao vivo. Este arquivo é
+// mantido apenas por referência histórica (há um comentário em src/index.js
+// que ainda cita "ver ecosystem.config.js" ao explicar o motivo de
+// process.exit em uncaughtException — não reescreva esse arquivo baseado
+// nisso).
+//
+// O plano de deploy real é Docker em VM Oracle Cloud, descrito em
+// "PLANEJAMENTOS E IMPLEMENTAÇÕES/PLANO_DEPLOY_DOCKER_ORACLE.md" (Fase 8 do
+// plano mestre, ainda não executada). Não reative este arquivo sem o dono
+// pedir explicitamente.
+// ============================================================================
+//
 // Configuração do pm2 (blindagem operacional, ver AUDITORIA_INTEGRACAO.md /
 // análise de instabilidade de 29/07/2026). Antes disso, tanto o bot quanto o
 // túnel ngrok rodavam soltos em terminais manuais — se um dos dois caísse
