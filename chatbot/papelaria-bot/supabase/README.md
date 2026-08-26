@@ -37,8 +37,10 @@ Rode **nesta ordem**, tudo no SQL Editor do Supabase (ou via `psql`):
 | 3 | `extensao_seguranca_p1_status_pedido.sql` | Fecha o problema P1 (`atualizar_status_pedido` executável por `anon` sem checagem de identidade). Mesmo motivo do item 2: ainda não estava em produção quando o baseline foi gerado. |
 | 4 | `seed_escolas.sql` | Dado de catálogo: as 25 escolas. |
 | 5 | `seed_produtos_orcamentos2026.sql` | Dado de catálogo: produtos. |
+| 6 | `extensao_p5_orcamento_ativo_correto.sql` | Fecha o problema P5 (`orcamento_ativo_cliente` devolvia o rascunho mais recente em vez do que tinha itens). Ainda não estava em produção quando o baseline foi gerado. |
+| 7 | `extensao_p5_indice_unico_rascunho_conversa.sql` | Rede de segurança de P5: índice único parcial (1 rascunho por `conversa_id`). **Falha de propósito** se ainda houver rascunhos duplicados por conversa não resolvidos pela tarefa T2.4 — leia o cabeçalho antes de rodar. |
 
-Depois disso o banco novo é equivalente ao de produção **mais** os itens 2 e 3.
+Depois disso o banco novo é equivalente ao de produção **mais** os itens 2, 3, 6 e 7.
 
 ### O que o baseline NÃO cobre
 
@@ -81,8 +83,11 @@ Em produção, aplique **só o arquivo novo da mudança**, e registre a migraç�
 3. Valide com uma consulta de leitura que o efeito foi o esperado.
 4. Commite o `.sql`. **Migração que existe só no banco é exatamente o B6.**
 
-Pendente em 26/08/2026: os itens 2 e 3 da tabela do Caminho A **ainda não
-foram aplicados em produção**.
+Pendente em 26/08/2026: os itens 2, 3, 6 e 7 da tabela do Caminho A **ainda
+não foram aplicados em produção**. Os itens 6 e 7 (P5) foram escritos por um
+agente sem `execute_sql`/`apply_migration` disponíveis na sessão — ver a nota
+de execução no final de cada arquivo. O item 7 também depende da tarefa T2.4
+(limpeza de rascunhos duplicados) ainda não feita.
 
 ---
 
