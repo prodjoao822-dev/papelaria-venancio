@@ -39,8 +39,9 @@ Rode **nesta ordem**, tudo no SQL Editor do Supabase (ou via `psql`):
 | 5 | `seed_produtos_orcamentos2026.sql` | Dado de catálogo: produtos. |
 | 6 | `extensao_p5_orcamento_ativo_correto.sql` | Fecha o problema P5 (`orcamento_ativo_cliente` devolvia o rascunho mais recente em vez do que tinha itens). Ainda não estava em produção quando o baseline foi gerado. |
 | 7 | `extensao_p5_indice_unico_rascunho_conversa.sql` | Rede de segurança de P5: índice único parcial (1 rascunho por `conversa_id`). **Falha de propósito** se ainda houver rascunhos duplicados por conversa não resolvidos pela tarefa T2.4 — leia o cabeçalho antes de rodar. |
+| 8 | `extensao_push_tokens.sql` | Fecha o problema P20 (RF-08): tabela `push_tokens` + RPC `registrar_push_token`, fundação de banco para push. Ainda não estava em produção quando o baseline foi gerado. |
 
-Depois disso o banco novo é equivalente ao de produção **mais** os itens 2, 3, 6 e 7.
+Depois disso o banco novo é equivalente ao de produção **mais** os itens 2, 3, 6, 7 e 8.
 
 ### O que o baseline NÃO cobre
 
@@ -88,6 +89,11 @@ não foram aplicados em produção**. Os itens 6 e 7 (P5) foram escritos por um
 agente sem `execute_sql`/`apply_migration` disponíveis na sessão — ver a nota
 de execução no final de cada arquivo. O item 7 também depende da tarefa T2.4
 (limpeza de rascunhos duplicados) ainda não feita.
+
+Também pendente: `extensao_push_tokens.sql` (T3.3, problema P20 — tabela
+`push_tokens` + RPC `registrar_push_token`, fundação de banco do RF-08).
+Mesma limitação de ferramentas (sessão só com `list_tables`) — ver a nota de
+execução no final do arquivo antes de aplicar.
 
 ---
 

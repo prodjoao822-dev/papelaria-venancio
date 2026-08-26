@@ -6,6 +6,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { separadorSupabase } from '../supabase/separadorClient'
 import { separadorAuthService } from '../services/separadorAuth.service'
+import { pushNotificationsService } from '../services/pushNotifications.service'
 
 const SeparadorAuthContext = createContext(null)
 
@@ -54,6 +55,11 @@ export function SeparadorAuthProvider({ children }) {
 
   const login = useCallback(async (codigoFuncionario, pin) => {
     await separadorAuthService.login(codigoFuncionario, pin)
+    // Best-effort e não-bloqueante por design: pedir permissão de push e
+    // registrar o token nunca deve atrasar a navegação pós-login nem
+    // derrubar o login se falhar (rede instável da loja, permissão negada,
+    // RPC ainda não existir no banco). Ver pushNotifications.service.js.
+    pushNotificationsService.registrarAposLogin().catch(() => {})
   }, [])
 
   const logout = useCallback(async () => {
