@@ -44,7 +44,13 @@ const ESTADOS_QUE_PODEM_PRECISAR_DE_ESCOLAS = ['SUBMENU_VENDAS', 'LISTA_ESCOLAR_
 // 0 do cadastro fiscal, ver Claudeinstruções.md seção 4) ou se precisa entrar
 // no formulário de cadastro fiscal. Mesma lógica de prefetch de acima: a
 // checagem em si é I/O, então roda aqui antes de chamar a stateMachine pura.
-const ESTADOS_QUE_PODEM_PRECISAR_DE_CADASTRO_COMPLETO = ['COTACAO_EMPRESA_OBSERVACAO', 'LISTA_ESCOLAR_OBSERVACAO'];
+// LISTA_ESCOLAR_OBSERVACAO saiu daqui em 27/08/2026: o caminho de "escola fora
+// do catálogo" não passa mais pelo cadastro fiscal (decisão do dono — pedir
+// CPF/CNPJ pra uma família comprando material escolar era burocracia
+// decorativa, ver listaEscolar.js), então esse estado nunca mais usa
+// `contexto.cadastroCompleto` — manter aqui só geraria uma consulta ao
+// Supabase sem efeito nenhum a cada lista escolar concluída.
+const ESTADOS_QUE_PODEM_PRECISAR_DE_CADASTRO_COMPLETO = ['COTACAO_EMPRESA_OBSERVACAO'];
 
 // Só detecta "quero fechar/pagar" nesses dois estados: são exatamente onde o
 // cliente cai depois que um pedido/orçamento já foi confirmado (menu principal
@@ -485,7 +491,24 @@ async function receberWebhook(req, res) {
 
   const mensagem = parsePayload(req.body);
   if (!mensagem || (mensagem.texto === null && !mensagem.documentoPdf && !mensagem.audio && !mensagem.imagem)) {
-    logger.info('Payload de webhook ignorado: não é uma mensagem de texto, PDF, áudio ou imagem reconhecível.', req.body);
+    // Diagnóstico (27/08/2026): uma mensagem de cliente sumiu por completo — sem
+    // linha em `mensagens`, sem mudança de estado — depois deste mesmo `return`
+    // silencioso (incidente PED-2026-0221, ver memória de sessão). Não dá pra
+    // provar de onde veio (Evolution API pode nunca ter recebido a mensagem do
+    // lado do cliente, ou o payload chegou com um formato de `message.*` que
+    // `payloadParser.js` ainda não reconhece), mas dava pra saber MUITO menos do
+    // que precisava: o log antigo aqui era nível INFO com o payload bruto
+    // inteiro, fácil de se perder no meio do volume normal de tráfego. Sobe pra
+    // AVISO e loga só as chaves de `message` (ex.: "stickerMessage",
+    // "reactionMessage" — que são o caso normal e esperado de ignorar — ou algo
+    // inesperado, que é o sinal de que falta suporte em payloadParser.js) em vez
+    // do corpo inteiro, que já inclui o texto do cliente.
+    const tiposDeMensagem = Object.keys(req.body?.data?.message || {});
+    logger.aviso(
+      'Payload de webhook ignorado: não é uma mensagem de texto, PDF, áudio ou imagem reconhecível '
+      + `(tipo(s) em message: ${tiposDeMensagem.length ? tiposDeMensagem.join(', ') : 'nenhum — sem "message" no payload'}).`,
+      { mensagemId: req.body?.data?.key?.id || null, remoteJid: req.body?.data?.key?.remoteJid || null }
+    );
     return res.status(200).json({ ignorado: true });
   }
 

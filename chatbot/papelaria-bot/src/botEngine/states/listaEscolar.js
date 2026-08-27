@@ -6,16 +6,23 @@
 //     ENVIAR_ARQUIVO); de qualquer forma, sempre notifica a Vanessa com o
 //     pedido completo (escola, ano, período e observação);
 //   - "outra escola" (não está na lista carregada): não há PDF automático pra
-//     buscar, então em vez de só notificar, o fluxo segue pro cadastro fiscal
-//     (cadastroFiscal.js) e cria um orçamento formal, igual à cotação pra
-//     empresa.
+//     buscar, então (desde 27/08/2026) o bot só notifica a Vanessa com os
+//     dados coletados (escola/ano/lista de material/observação), igual à
+//     escola conhecida — sem orçamento formal nem cadastro fiscal. Até
+//     27/08/2026 este caminho seguia pro cadastro fiscal (cadastroFiscal.js) e
+//     criava um orçamento formal, igual à cotação pra empresa; o dono achou
+//     isso burocrático demais pra uma família comprando material escolar (o
+//     cadastro fiscal continua fazendo sentido só pra Cotação pra Empresa,
+//     que emite nota fiscal de verdade — ver cotacaoEmpresa.js). Criar um
+//     orçamento/protocolo formal pra esse caminho, sem os dados fiscais, fica
+//     pra quando o contrato do Agente de Orçamento pra esse caso estiver
+//     definido — por enquanto é decisão de quem lê a notificação (Vanessa).
 //
 // É um módulo com vários estados (em vez de 1) porque o fluxo tem várias
 // perguntas em sequência. Por isso exporta `estados: [...]` em vez de um único
 // `{ STATE, mensagem, processar }` — a stateMachine sabe registrar os dois formatos.
 
 const fallback = require('./fallback');
-const cadastroFiscal = require('./cadastroFiscal');
 const materiaisEscolares = require('../../config/materiaisEscolares');
 const { parseOpcaoNumerica } = require('../validadores');
 const { primeiroNome, mensagemAguardarAtendimento } = require('../mensagensComuns');
@@ -271,29 +278,30 @@ function processarObservacao(textoRecebido, sessao, contexto = {}) {
   } = sessao.dados;
   const dados = { ...sessao.dados, observacao };
 
-  // "Outra escola" (não está na lista carregada): não há PDF automático pra
-  // buscar aqui — em vez de só notificar, cria orçamento formal e segue pro
-  // cadastro fiscal, igual à cotação pra empresa. `itensTexto` usa a lista de
-  // material real coletada em ESTADO_ESCOLA_OUTRA_LISTA_MATERIAL, com a
-  // escola/ano como cabeçalho pra dar contexto pro Agente de Orçamento.
+  // "Outra escola" (não está na lista carregada): não há PDF nem preço
+  // automático pra buscar — só notifica a Vanessa com o que foi coletado
+  // (escola/ano/lista de material/observação), mesmo critério de "escola
+  // conhecida" logo abaixo. Sem cadastro fiscal e sem orçamento/pedido
+  // formal: pedir CPF/CNPJ, endereço e forma de entrega pra uma família
+  // comprando material escolar era burocracia decorativa (removida em
+  // 27/08/2026 — ver comentário no topo do arquivo).
   if (!escolaSelecionada) {
-    const origemOrcamento = {
-      tipo: 'lista_escolar',
-      escolaId: null,
-      itensTexto: `Escola: ${escolaOutraNome} (${anoSelecionado})\n${listaMaterialOutraEscola}`,
-      observacoes: observacao,
+    return {
+      estado: ESTADO_SUBMENU_VENDAS,
+      dados,
+      resposta: mensagemAguardarAtendimento(contexto.nomeCliente),
+      acoes: [{
+        tipo: 'NOTIFICAR_HUMANO',
+        alvo: 'vendas',
+        dados: {
+          intencao: 'lista escolar (escola fora do catálogo)',
+          escola: escolaOutraNome,
+          ano: anoSelecionado,
+          listaMaterial: listaMaterialOutraEscola,
+          observacao,
+        },
+      }],
     };
-
-    if (contexto.cadastroCompleto) {
-      return {
-        estado: ESTADO_SUBMENU_VENDAS,
-        dados,
-        resposta: cadastroFiscal.MENSAGEM_CONFIRMANDO_PEDIDO,
-        acoes: [cadastroFiscal.montarAcaoFechamento(origemOrcamento, null)],
-      };
-    }
-
-    return { estado: cadastroFiscal.ESTADO_ATALHO, dados: { ...dados, origemOrcamento } };
   }
 
   const nomeEscola = escolaSelecionada.nome;

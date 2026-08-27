@@ -564,34 +564,29 @@ describe('fluxo completo de lista escolar', () => {
 
     ({ sessao } = processarMensagem(sessao, '3')); // "1º ano - Fundamental"
     // pula período (sem dado de variação pra escola desconhecida) e pede a lista de material,
-    // que é o dado principal pro Agente de Orçamento — sem isso não tem o que cotar.
+    // que é o dado principal pra Vanessa atender esse pedido.
     assert.equal(sessao.estado, 'LISTA_ESCOLAR_ESCOLA_OUTRA_LISTA_MATERIAL');
 
     ({ sessao } = processarMensagem(sessao, '5 cadernos, 2 lápis, 1 estojo'));
     assert.equal(sessao.estado, 'LISTA_ESCOLAR_OBSERVACAO');
     assert.equal(sessao.dados.listaMaterialOutraEscola, '5 cadernos, 2 lápis, 1 estojo');
 
+    // Escola fora do catálogo: sem cadastro fiscal (removido em 27/08/2026,
+    // era burocracia decorativa pra uma família comprando material escolar) —
+    // notifica a Vanessa direto com o que foi coletado, igual à escola
+    // conhecida, e volta pro submenu de Vendas.
     const final = processarMensagem(sessao, 'sem observação');
-    assert.equal(final.sessao.estado, 'CADASTRO_FISCAL_ATALHO');
-    assert.deepEqual(final.sessao.dados.origemOrcamento, {
-      tipo: 'lista_escolar',
-      escolaId: null,
-      itensTexto: 'Escola: Colégio Novo (1º ano - Fundamental)\n5 cadernos, 2 lápis, 1 estojo',
-      observacoes: 'sem observação',
-    });
-  });
-
-  test('opção "outra escola" com cadastro fiscal já completo pula direto pro fechamento', () => {
-    let { sessao } = processarMensagem(irParaListaEscolar(), OPCAO_OUTRA_ESCOLA);
-    ({ sessao } = processarMensagem(sessao, 'Colégio Novo'));
-    ({ sessao } = processarMensagem(sessao, '3'));
-    ({ sessao } = processarMensagem(sessao, '5 cadernos'));
-
-    const final = processarMensagem(sessao, 'sem obs', { cadastroCompleto: true });
     assert.equal(final.sessao.estado, 'SUBMENU_VENDAS');
-    assert.equal(final.acoes[0].tipo, 'FINALIZAR_CADASTRO_E_PEDIDO');
-    assert.equal(final.acoes[0].dados.cadastroFiscal, null);
-    assert.equal(final.acoes[0].dados.origemOrcamento.tipo, 'lista_escolar');
+    assert.equal(final.acoes.length, 1);
+    assert.equal(final.acoes[0].tipo, 'NOTIFICAR_HUMANO');
+    assert.equal(final.acoes[0].alvo, 'vendas');
+    assert.deepEqual(final.acoes[0].dados, {
+      intencao: 'lista escolar (escola fora do catálogo)',
+      escola: 'Colégio Novo',
+      ano: '1º ano - Fundamental',
+      listaMaterial: '5 cadernos, 2 lápis, 1 estojo',
+      observacao: 'sem observação',
+    });
   });
 });
 
