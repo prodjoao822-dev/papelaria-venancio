@@ -12,6 +12,12 @@ name: Testes
 # — por isso cada um usa um `.env.test` versionado com valores FALSOS,
 # criado em 27/08/2026 (T4.3) especificamente para o CI. O app mobile nao
 # precisou disso: os testes ja setam/limpam as env vars que usam.
+#
+# Node 22 (nao 18/20): @supabase/supabase-js (bot e dashboard) precisa de
+# WebSocket nativo do runtime, que so existe de forma estavel a partir do
+# Node 22 — em Node 20 o import falha com "Node.js detected but native
+# WebSocket not found" (achado ao vivo na primeira rodada do pipeline,
+# 27/08/2026: a maquina de dev roda Node 24 e mascarava isso localmente).
 on:
   push:
   pull_request:
@@ -27,7 +33,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
           cache-dependency-path: chatbot/papelaria-bot/package-lock.json
       - run: npm ci
@@ -45,7 +51,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
           cache-dependency-path: venancio-ai-ops/package-lock.json
       - run: npm ci
@@ -64,7 +70,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
           cache-dependency-path: app-mobile/package-lock.json
       - run: npm ci
