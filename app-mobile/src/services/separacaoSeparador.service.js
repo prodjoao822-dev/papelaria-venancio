@@ -115,11 +115,20 @@ export const separacaoSeparadorService = {
     return data
   },
 
-  async listarNotificacoes({ apenasNaoLidas = false } = {}) {
+  // destinatarioTipos: lista de `destinatario_tipo` a trazer (ex.:
+  // ['separador'], ['entregador'], ou os dois para quem acumula os dois
+  // papéis — ver app-mobile/src/utils/mapearPapeisNotificacao.js, que
+  // traduz `funcionarios.papeis` para este vocabulário). Default
+  // `['separador']` preserva o comportamento anterior para quem não
+  // informar o parâmetro. Lista vazia (funcionário sem papel mapeável)
+  // devolve `[]` sem nem consultar o banco — não é erro.
+  async listarNotificacoes({ apenasNaoLidas = false, destinatarioTipos = ['separador'] } = {}) {
+    if (destinatarioTipos.length === 0) return []
+
     let query = separadorSupabase
       .from('notificacoes_internas')
       .select('*')
-      .eq('destinatario_tipo', 'separador')
+      .in('destinatario_tipo', destinatarioTipos)
       .order('criado_em', { ascending: false })
       .limit(50)
     if (apenasNaoLidas) query = query.eq('lida', false)

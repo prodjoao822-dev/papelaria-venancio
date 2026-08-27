@@ -1,26 +1,33 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { separacaoSeparadorService } from '../../services/separacaoSeparador.service';
 import { separadorSupabase } from '../../supabase/separadorClient';
+import { useSeparadorAuth } from '../../contexts/SeparadorAuthContext';
+import { mapearPapeisParaDestinatarioTipos } from '../../utils/mapearPapeisNotificacao';
 import { AlertaIcon, RecarregarIcon } from '../../components/icons';
 
-// NOTA (vistoria 19/08): `listarNotificacoes` filtra por
-// `destinatario_tipo = 'separador'` — hoje é a única opção válida do CHECK
-// de `notificacoes_internas` além de 'operador' (ver addendum
-// Requisitos_Addendum_Entrega_Ocorrencia.md, pendência conhecida: papel
-// Entregador ainda não tem tipo de notificação próprio nem gatilho que as
-// gere). Ou seja, um funcionário só-Entregador sempre vê esta tela vazia —
-// não é um bug desta tela, é um schema/gatilho que falta (fora do escopo
-// deste agente).
+// T3.5 (26/08): `destinatario_tipo` não é mais fixo em 'separador'. Um
+// funcionário pode ter os papéis `['separacao']`, `['entrega']` ou os
+// dois (`funcionarios.papeis`) — traduzidos aqui para os `destinatario_
+// tipo` correspondentes ('separador'/'entregador') via
+// mapearPapeisParaDestinatarioTipos. Funcionário sem papel mapeável (ex.:
+// só admin, ou ainda carregando) resulta em lista vazia — a tela mostra
+// "Nenhuma notificação" sem erro (ver listarNotificacoes no service).
 export default function NotificacoesScreen() {
+  const { funcionario } = useSeparadorAuth();
   const [notificacoes, setNotificacoes] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState(null);
 
+  const destinatarioTipos = useMemo(
+    () => mapearPapeisParaDestinatarioTipos(funcionario?.papeis),
+    [funcionario?.papeis]
+  );
+
   const carregar = useCallback(async () => {
     setErro(null);
     try {
-      setNotificacoes(await separacaoSeparadorService.listarNotificacoes());
+      setNotificacoes(await separacaoSeparadorService.listarNotificacoes({ destinatarioTipos }));
     } catch (err) {
       // Bug corrigido (vistoria 19/08): o erro era engolido pelo try/finally
       // (mesma classe de bug já corrigida em PainelScreen.js) — a tela caía
@@ -29,7 +36,7 @@ export default function NotificacoesScreen() {
     } finally {
       setCarregando(false);
     }
-  }, []);
+  }, [destinatarioTipos]);
 
   useEffect(() => { carregar(); }, [carregar]);
 

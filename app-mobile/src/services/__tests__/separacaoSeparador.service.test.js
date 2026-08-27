@@ -155,14 +155,39 @@ describe('RPCs de mutação', () => {
 });
 
 describe('listarNotificacoes', () => {
-  it('filtra destinatario_tipo=separador e limita a 50', async () => {
+  it('sem destinatarioTipos informado, usa [separador] por padrão (compat) e limita a 50', async () => {
     const builder = criarBuilder({ data: [], error: null });
     separadorSupabase.from.mockReturnValue(builder);
 
     await separacaoSeparadorService.listarNotificacoes();
 
-    expect(builder.eq).toHaveBeenCalledWith('destinatario_tipo', 'separador');
+    expect(builder.in).toHaveBeenCalledWith('destinatario_tipo', ['separador']);
     expect(builder.limit).toHaveBeenCalledWith(50);
+  });
+
+  it('filtra só por entregador quando destinatarioTipos = [entregador]', async () => {
+    const builder = criarBuilder({ data: [], error: null });
+    separadorSupabase.from.mockReturnValue(builder);
+
+    await separacaoSeparadorService.listarNotificacoes({ destinatarioTipos: ['entregador'] });
+
+    expect(builder.in).toHaveBeenCalledWith('destinatario_tipo', ['entregador']);
+  });
+
+  it('filtra pelos dois tipos quando o funcionário acumula os dois papéis', async () => {
+    const builder = criarBuilder({ data: [], error: null });
+    separadorSupabase.from.mockReturnValue(builder);
+
+    await separacaoSeparadorService.listarNotificacoes({ destinatarioTipos: ['separador', 'entregador'] });
+
+    expect(builder.in).toHaveBeenCalledWith('destinatario_tipo', ['separador', 'entregador']);
+  });
+
+  it('não consulta o banco quando destinatarioTipos é uma lista vazia (funcionário sem papel mapeável)', async () => {
+    const resultado = await separacaoSeparadorService.listarNotificacoes({ destinatarioTipos: [] });
+
+    expect(separadorSupabase.from).not.toHaveBeenCalled();
+    expect(resultado).toEqual([]);
   });
 
   it('aplica o filtro de não lidas quando pedido', async () => {
