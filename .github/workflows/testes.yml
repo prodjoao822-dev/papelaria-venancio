@@ -1,0 +1,71 @@
+name: Testes
+
+# Roda as 3 suites do monorepo (bot, dashboard, app mobile) a cada push e a
+# cada PR. Os 3 projetos sao independentes (cada um com seu proprio
+# package-lock.json, sem workspaces na raiz) — por isso 3 jobs paralelos,
+# cada um instalando dependencias so do seu proprio diretorio.
+#
+# Nenhum segredo real e usado aqui: os 3 suites ja rodam com Supabase/
+# Evolution API/n8n mockados (nenhuma chamada de rede real em teste). O bot
+# e o dashboard tem uma validacao de variaveis de ambiente obrigatorias no
+# import (falha rapido se faltar algo) e/ou testes que leem import.meta.env
+# — por isso cada um usa um `.env.test` versionado com valores FALSOS,
+# criado em 27/08/2026 (T4.3) especificamente para o CI. O app mobile nao
+# precisou disso: os testes ja setam/limpam as env vars que usam.
+on:
+  push:
+  pull_request:
+
+jobs:
+  bot:
+    name: Bot (chatbot/papelaria-bot)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: chatbot/papelaria-bot
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: chatbot/papelaria-bot/package-lock.json
+      - run: npm ci
+      - name: Usa .env.test (valores falsos, so pra passar na validacao de boot)
+        run: cp .env.test .env
+      - run: npm test
+
+  dashboard:
+    name: Dashboard (venancio-ai-ops)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: venancio-ai-ops
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: venancio-ai-ops/package-lock.json
+      - run: npm ci
+      # Nao precisa copiar pra .env: Vitest roda em mode "test" por padrao e
+      # o Vite ja carrega .env.test automaticamente (verificado ao vivo em
+      # 27/08/2026 rodando sem nenhum .env presente).
+      - run: npm test
+
+  mobile:
+    name: App Mobile (app-mobile)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app-mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: app-mobile/package-lock.json
+      - run: npm ci
+      - run: npm test
