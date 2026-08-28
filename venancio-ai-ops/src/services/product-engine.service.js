@@ -44,7 +44,7 @@ export function extrairDisponibilidadeDeTexto(texto) {
 // livre — normaliza pro nome do operador só pra exibição.
 const SELECT_MEMORIA = `
   *,
-  produto_ref:produtos(id, nome, preco, estoque, categoria),
+  produto_ref:produtos(id, nome, preco, estoque),
   confirmado_por_op:operadores!confirmado_por(nome),
   confirmacoes:confirmacoes_produto(id, disponibilidade, preco_confirmado, criado_em, operador:operadores(nome))
 `
