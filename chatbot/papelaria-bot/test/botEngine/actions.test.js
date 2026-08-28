@@ -231,3 +231,88 @@ test('executarAcoes: uma ação de tipo desconhecido é ignorada sem quebrar as 
 
   assert.equal(enviadas.length, 2, 'a ação seguinte (finalizar pedido) ainda roda normalmente');
 });
+
+// --- CRIAR_ORCAMENTO_LISTA_ESCOLAR (lista escolar de "outra escola", 28/08/2026) ---
+//
+// Diferente de FINALIZAR_CADASTRO_E_PEDIDO: cria só o ORÇAMENTO (fica em
+// 'rascunho', nunca chama aceitarOrcamento) e não grava cadastro fiscal
+// nenhum. O fechamento de verdade (forma de entrega, endereço) é feito depois
+// pelo Agente de Vendas, quando o cliente voltar a falar.
+
+function acaoCriarOrcamentoListaEscolar({ origemOrcamento } = {}) {
+  return {
+    tipo: 'CRIAR_ORCAMENTO_LISTA_ESCOLAR',
+    dados: {
+      origemOrcamento: {
+        tipo: 'lista_escolar',
+        escolaId: null,
+        itensTexto: 'Escola: Colégio Novo (1º ano - Fundamental)\n5 cadernos, 2 lápis, 1 estojo',
+        observacoes: 'sem observação',
+        ...origemOrcamento,
+      },
+    },
+  };
+}
+
+test('CRIAR_ORCAMENTO_LISTA_ESCOLAR: cria o orçamento, notifica vendas, aciona o Agente de Orçamento e pausa a conversa — sem aceitar o orçamento nem gravar cadastro fiscal', async () => {
+  resetar();
+
+  await executarAcoes([acaoCriarOrcamentoListaEscolar()], CLIENTE, CONVERSA_ID);
+
+  assert.equal(chamadasCadastroFiscal.length, 0, 'lista escolar "outra escola" nunca grava cadastro fiscal');
+
+  assert.equal(enviadas.length, 1, 'só o aviso pra vendas — nenhuma mensagem de protocolo de pedido pro cliente aqui');
+  assert.equal(enviadas[0].telefone, process.env.PHONE_VANESSA);
+  assert.match(enviadas[0].texto, /ORC-2026-0001/);
+  assert.match(enviadas[0].texto, /Agente de Orçamento já foi acionado/);
+
+  assert.equal(chamadasNotificarAgenteOrcamento.length, 1);
+  assert.deepEqual(chamadasNotificarAgenteOrcamento[0], {
+    cliente_id: CLIENTE.id,
+    orcamento_id: 'orcamento-1',
+    protocolo: 'ORC-2026-0001',
+    tipo: 'lista_escolar',
+    payload: {
+      itens: 'Escola: Colégio Novo (1º ano - Fundamental)\n5 cadernos, 2 lápis, 1 estojo',
+      observacoes: 'sem observação',
+    },
+  });
+
+  // É essa pausa que garante a retomada: o orçamento fica em 'rascunho',
+  // orcamento_ativo_cliente já trata isso como "ativo", e a próxima mensagem
+  // do cliente é roteada pro Agente de Vendas em vez do menu principal (ver
+  // reativacaoBot.garantirBotAtivo + webhookController.receberWebhook).
+  assert.deepEqual(chamadasPausarPosPedido, [CONVERSA_ID]);
+});
+
+test('CRIAR_ORCAMENTO_LISTA_ESCOLAR: falha ao criar o orçamento avisa vendas e NÃO notifica o Agente de Orçamento nem pausa a conversa', async () => {
+  resetar();
+  comportamentoCriarOrcamento = async () => { throw new Error('Supabase fora do ar'); };
+
+  await executarAcoes([acaoCriarOrcamentoListaEscolar()], CLIENTE, CONVERSA_ID);
+
+  assert.equal(enviadas.length, 1);
+  assert.equal(enviadas[0].telefone, process.env.PHONE_VANESSA);
+  assert.match(enviadas[0].texto, /FALHA ao criar orçamento de lista escolar/);
+  assert.match(enviadas[0].texto, /Colégio Novo/);
+
+  assert.equal(chamadasNotificarAgenteOrcamento.length, 0);
+  assert.equal(chamadasPausarPosPedido.length, 0);
+  assert.equal(chamadasCadastroFiscal.length, 0);
+});
+
+test('CRIAR_ORCAMENTO_LISTA_ESCOLAR: falha ao notificar vendas não impede a notificação ao Agente de Orçamento nem a pausa (best-effort)', async () => {
+  resetar();
+  const evolutionApi = require('../../src/services/evolutionApi');
+  const enviarTextoOriginal = evolutionApi.enviarTexto;
+  evolutionApi.enviarTexto = async () => { throw new Error('ECONNRESET'); };
+
+  try {
+    await executarAcoes([acaoCriarOrcamentoListaEscolar()], CLIENTE, CONVERSA_ID);
+  } finally {
+    evolutionApi.enviarTexto = enviarTextoOriginal;
+  }
+
+  assert.equal(chamadasNotificarAgenteOrcamento.length, 1, 'best-effort: continua mesmo com a notificação de vendas falhando');
+  assert.deepEqual(chamadasPausarPosPedido, [CONVERSA_ID]);
+});

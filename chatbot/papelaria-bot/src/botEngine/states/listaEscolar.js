@@ -6,17 +6,28 @@
 //     ENVIAR_ARQUIVO); de qualquer forma, sempre notifica a Vanessa com o
 //     pedido completo (escola, ano, período e observação);
 //   - "outra escola" (não está na lista carregada): não há PDF automático pra
-//     buscar, então (desde 27/08/2026) o bot só notifica a Vanessa com os
-//     dados coletados (escola/ano/lista de material/observação), igual à
-//     escola conhecida — sem orçamento formal nem cadastro fiscal. Até
-//     27/08/2026 este caminho seguia pro cadastro fiscal (cadastroFiscal.js) e
-//     criava um orçamento formal, igual à cotação pra empresa; o dono achou
-//     isso burocrático demais pra uma família comprando material escolar (o
-//     cadastro fiscal continua fazendo sentido só pra Cotação pra Empresa,
-//     que emite nota fiscal de verdade — ver cotacaoEmpresa.js). Criar um
-//     orçamento/protocolo formal pra esse caminho, sem os dados fiscais, fica
-//     pra quando o contrato do Agente de Orçamento pra esse caso estiver
-//     definido — por enquanto é decisão de quem lê a notificação (Vanessa).
+//     buscar. Desde 28/08/2026, assim que o cliente manda a lista de
+//     material, o bot cria um ORÇAMENTO de verdade (status 'rascunho', ação
+//     CRIAR_ORCAMENTO_LISTA_ESCOLAR em actions.js) e dispara o Agente de
+//     Orçamento (n8n) pra precificar os itens em segundo plano — sem pedir
+//     CPF/CNPJ/razão social (cadastro fiscal continua fazendo sentido só pra
+//     Cotação pra Empresa, que emite nota fiscal de verdade — ver
+//     cotacaoEmpresa.js) e SEM perguntar forma de entrega/endereço aqui: isso
+//     é um orçamento em rascunho, não um pedido fechado, e quem conduz o
+//     fechamento de verdade (incluindo entrega/endereço, com a regra dos
+//     R$100 pra entrega própria) é o Agente de Vendas, quando o cliente
+//     voltar a falar — a conversa é pausada (pausarPosPedido) e o orçamento
+//     em rascunho já é reconhecido como "ativo" por orcamento_ativo_cliente,
+//     então o webhookController roteia a próxima mensagem do cliente direto
+//     pro Agente de Vendas em vez do menu principal (mesmo mecanismo já usado
+//     pra pedidos fechados, ver reativacaoBot.garantirBotAtivo). Entre
+//     27/08/2026 e 28/08/2026 este caminho só notificava a Vanessa e pedia
+//     pro cliente aguardar atendimento humano, sem orçamento nenhum — o dono
+//     decidiu que isso deixava a família esperando à toa por algo que o
+//     Agente de Orçamento já consegue cotar sozinho. Uma versão intermediária
+//     chegou a ser cogitada perguntando retirada/entrega antes de criar o
+//     orçamento, mas foi descartada no mesmo dia: essa pergunta só faz
+//     sentido na hora de FECHAR o pedido, não na hora de só orçar.
 //
 // É um módulo com vários estados (em vez de 1) porque o fluxo tem várias
 // perguntas em sequência. Por isso exporta `estados: [...]` em vez de um único
@@ -279,28 +290,30 @@ function processarObservacao(textoRecebido, sessao, contexto = {}) {
   const dados = { ...sessao.dados, observacao };
 
   // "Outra escola" (não está na lista carregada): não há PDF nem preço
-  // automático pra buscar — só notifica a Vanessa com o que foi coletado
-  // (escola/ano/lista de material/observação), mesmo critério de "escola
-  // conhecida" logo abaixo. Sem cadastro fiscal e sem orçamento/pedido
-  // formal: pedir CPF/CNPJ, endereço e forma de entrega pra uma família
-  // comprando material escolar era burocracia decorativa (removida em
-  // 27/08/2026 — ver comentário no topo do arquivo).
+  // automático pra buscar. Desde 28/08/2026 cria direto um orçamento em
+  // rascunho (ação CRIAR_ORCAMENTO_LISTA_ESCOLAR, ver actions.js) e dispara o
+  // Agente de Orçamento em segundo plano — sem cadastro fiscal e sem
+  // perguntar entrega/endereço aqui (ver comentário no topo do arquivo). O
+  // header "Escola: ... (ano)" como PRIMEIRA linha de itensTexto não é
+  // estético: é o contrato com o node "É Cabeçalho de Escola?" do workflow
+  // n8n "Agente Orçamento", que pula essa linha na hora de precificar — não
+  // mude esse prefixo sem checar o workflow.
   if (!escolaSelecionada) {
+    const origemOrcamento = {
+      tipo: 'lista_escolar',
+      escolaId: null,
+      itensTexto: `Escola: ${escolaOutraNome} (${anoSelecionado})\n${listaMaterialOutraEscola}`,
+      observacoes: observacao,
+    };
+    const nome = primeiroNome(contexto.nomeCliente);
+    const abertura = nome ? `${nome}, r` : 'R';
+
     return {
       estado: ESTADO_SUBMENU_VENDAS,
       dados,
-      resposta: mensagemAguardarAtendimento(contexto.nomeCliente),
-      acoes: [{
-        tipo: 'NOTIFICAR_HUMANO',
-        alvo: 'vendas',
-        dados: {
-          intencao: 'lista escolar (escola fora do catálogo)',
-          escola: escolaOutraNome,
-          ano: anoSelecionado,
-          listaMaterial: listaMaterialOutraEscola,
-          observacao,
-        },
-      }],
+      resposta: `${abertura}ecebemos sua lista de material! Vamos calcular os preços e te avisamos `
+        + 'por aqui assim que estiver pronto.',
+      acoes: [{ tipo: 'CRIAR_ORCAMENTO_LISTA_ESCOLAR', dados: { origemOrcamento } }],
     };
   }
 

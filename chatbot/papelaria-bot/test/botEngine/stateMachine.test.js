@@ -571,22 +571,23 @@ describe('fluxo completo de lista escolar', () => {
     assert.equal(sessao.estado, 'LISTA_ESCOLAR_OBSERVACAO');
     assert.equal(sessao.dados.listaMaterialOutraEscola, '5 cadernos, 2 lápis, 1 estojo');
 
-    // Escola fora do catálogo: sem cadastro fiscal (removido em 27/08/2026,
-    // era burocracia decorativa pra uma família comprando material escolar) —
-    // notifica a Vanessa direto com o que foi coletado, igual à escola
-    // conhecida, e volta pro submenu de Vendas.
+    // Escola fora do catálogo (desde 28/08/2026): sem cadastro fiscal e sem
+    // perguntar entrega/endereço (isso é responsabilidade do Agente de Vendas
+    // lá na frente, quando o cliente voltar a falar) — cria direto um
+    // orçamento em rascunho com o header "Escola: ..." (contrato com o n8n)
+    // e volta pro submenu de Vendas.
     const final = processarMensagem(sessao, 'sem observação');
     assert.equal(final.sessao.estado, 'SUBMENU_VENDAS');
     assert.equal(final.acoes.length, 1);
-    assert.equal(final.acoes[0].tipo, 'NOTIFICAR_HUMANO');
-    assert.equal(final.acoes[0].alvo, 'vendas');
-    assert.deepEqual(final.acoes[0].dados, {
-      intencao: 'lista escolar (escola fora do catálogo)',
-      escola: 'Colégio Novo',
-      ano: '1º ano - Fundamental',
-      listaMaterial: '5 cadernos, 2 lápis, 1 estojo',
-      observacao: 'sem observação',
+    assert.equal(final.acoes[0].tipo, 'CRIAR_ORCAMENTO_LISTA_ESCOLAR');
+    assert.deepEqual(final.acoes[0].dados.origemOrcamento, {
+      tipo: 'lista_escolar',
+      escolaId: null,
+      itensTexto: 'Escola: Colégio Novo (1º ano - Fundamental)\n5 cadernos, 2 lápis, 1 estojo',
+      observacoes: 'sem observação',
     });
+    assert.match(final.resposta, /calcular os preços/i);
+    assert.doesNotMatch(final.resposta, /aguard/i);
   });
 });
 

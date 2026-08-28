@@ -1,7 +1,10 @@
-// Ações reutilizáveis disparadas pelos estados do bot: notificar um humano ou
-// enviar um arquivo (ex.: PDF de lista de material) direto para o cliente.
-// Os estados (botEngine/states/*) só descrevem a intenção da ação (função pura,
-// sem I/O); é aqui que ela vira uma chamada real à Evolution API.
+// Ações reutilizáveis disparadas pelos estados do bot: notificar um humano,
+// enviar um arquivo (ex.: PDF de lista de material) direto para o cliente,
+// fechar um pedido de verdade (FINALIZAR_CADASTRO_E_PEDIDO) ou criar só um
+// orçamento em rascunho pro Agente de Orçamento precificar em segundo plano
+// (CRIAR_ORCAMENTO_LISTA_ESCOLAR). Os estados (botEngine/states/*) só
+// descrevem a intenção da ação (função pura, sem I/O); é aqui que ela vira
+// uma chamada real à Evolution API/Supabase/n8n.
 
 const notifyTargets = require('../config/notifyTargets');
 const evolutionApi = require('../services/evolutionApi');
@@ -132,6 +135,78 @@ async function rodarEtapaBestEffort(descricaoErro, cliente, etapa) {
   }
 }
 
+// Mensagem pro grupo de vendas quando a lista escolar de "outra escola" (fora
+// do catálogo) já virou um orçamento em rascunho — ver criarOrcamentoListaEscolar.
+function mensagemNovoOrcamentoListaEscolar(cliente, orcamento, origemOrcamento) {
+  const linhas = [
+    'Nova lista escolar (escola fora do catálogo) virou orçamento pelo bot:',
+    `Cliente: ${cliente.nome || 'sem nome'} (${cliente.telefone})`,
+    `Protocolo do orçamento: ${orcamento.protocolo}`,
+    `Itens:\n${origemOrcamento.itensTexto}`,
+  ];
+
+  if (origemOrcamento.observacoes) linhas.push(`Observações: ${origemOrcamento.observacoes}`);
+  linhas.push('(o Agente de Orçamento já foi acionado pra calcular os preços)');
+
+  return linhas.join('\n');
+}
+
+function mensagemFalhaOrcamentoListaEscolar(cliente, origemOrcamento) {
+  const linhas = [
+    'FALHA ao criar orçamento de lista escolar (escola fora do catálogo) pelo bot — precisa de atenção manual:',
+    `Cliente: ${cliente.nome || 'sem nome'} (${cliente.telefone})`,
+    `Itens:\n${origemOrcamento.itensTexto}`,
+  ];
+
+  if (origemOrcamento.observacoes) linhas.push(`Observações: ${origemOrcamento.observacoes}`);
+
+  return linhas.join('\n');
+}
+
+// Lista escolar de "outra escola" (fora do catálogo, ver
+// src/botEngine/states/listaEscolar.js): cria só o ORÇAMENTO (fica em
+// 'rascunho', nunca vira pedido aqui) e dispara o Agente de Orçamento no n8n
+// pra precificar em segundo plano. Sem cadastro fiscal, sem pergunta de
+// entrega/endereço — isso tudo é responsabilidade do Agente de Vendas quando
+// o cliente voltar a falar (ferramenta "Fechar Orçamento" já existente no
+// n8n, com a regra dos R$100 e tudo). A pausa no fim (pausarPosPedido) é o
+// que garante essa retomada: o orçamento nasce em 'rascunho', que
+// orcamento_ativo_cliente já trata como "ativo" — quando o cliente volta a
+// falar, reativacaoBot.garantirBotAtivo detecta o gatilho e o
+// webhookController manda a mensagem direto pro Agente de Vendas em vez do
+// menu principal (mesmo mecanismo de finalizarCadastroEPedido, sem pedido
+// nenhum aqui).
+async function criarOrcamentoListaEscolar(acao, cliente, conversaId) {
+  const { origemOrcamento } = acao.dados;
+  let orcamento;
+
+  try {
+    orcamento = await orcamentosService.criarOrcamentoComItens({ clienteId: cliente.id, conversaId, ...origemOrcamento });
+  } catch (erro) {
+    logger.erro(`Falha ao criar orçamento de lista escolar do cliente ${cliente.telefone}`, erro);
+    await rodarEtapaBestEffort('Falha ao avisar vendas sobre falha ao criar orçamento de lista escolar', cliente, () => evolutionApi.enviarTexto(
+      notifyTargets.vendas,
+      mensagemFalhaOrcamentoListaEscolar(cliente, origemOrcamento)
+    ));
+    return;
+  }
+
+  await rodarEtapaBestEffort('Falha ao notificar vendas sobre o novo orçamento de lista escolar', cliente, () => evolutionApi.enviarTexto(
+    notifyTargets.vendas,
+    mensagemNovoOrcamentoListaEscolar(cliente, orcamento, origemOrcamento)
+  ));
+
+  await rodarEtapaBestEffort('Falha ao notificar o Agente de Orçamento', cliente, () => n8nClient.notificarAgenteOrcamento({
+    cliente_id: cliente.id,
+    orcamento_id: orcamento.id,
+    protocolo: orcamento.protocolo,
+    tipo: origemOrcamento.tipo,
+    payload: { itens: origemOrcamento.itensTexto, observacoes: origemOrcamento.observacoes },
+  }));
+
+  await rodarEtapaBestEffort('Falha ao pausar o bot após criar o orçamento da lista escolar', cliente, () => conversasService.pausarPosPedido(conversaId));
+}
+
 // Fecha o ciclo do cadastro fiscal (ver src/botEngine/states/cadastroFiscal.js):
 // grava o cadastro fiscal coletado (quando houver), cria o orçamento com os
 // itens, aceita direto (vira pedido) e avisa cliente + grupo de vendas.
@@ -191,6 +266,7 @@ const EXECUTORES_POR_TIPO = {
   NOTIFICAR_HUMANO: notificarHumano,
   ENVIAR_ARQUIVO: enviarArquivoParaCliente,
   FINALIZAR_CADASTRO_E_PEDIDO: finalizarCadastroEPedido,
+  CRIAR_ORCAMENTO_LISTA_ESCOLAR: criarOrcamentoListaEscolar,
 };
 
 async function executarAcoes(acoes, cliente, conversaId) {
