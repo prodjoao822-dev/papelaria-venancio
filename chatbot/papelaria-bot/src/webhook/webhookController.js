@@ -92,6 +92,19 @@ const conversasComAgenteVendasEmAndamento = new Set();
 // duas entradas no mesmo `finally`, então nada fica crescendo em memória.
 const conversasJaAvisadasDeConcorrencia = new Set();
 
+// Fila de mensagens que chegaram durante o lock de `conversasComAgenteVendasEmAndamento`
+// (29/08/2026): substitui o comportamento de "descarta e só avisa" adotado em
+// 26/08/2026 (ver comentário de `avisarMensagemConcorrente`). Teste real nesse
+// dia mostrou o problema de verdade: cliente mandou "sim" (confirmando um item)
+// e logo em seguida "quero pilot gel tbm" — o "sim" foi processado normal, mas
+// o "pilot gel" ficou só registrado no histórico e nunca chegou a ser
+// respondido; o cliente teve que perceber sozinho e pedir de novo. Cada entrada
+// é um array de textos CRUS (na ordem de chegada) — quem esvazia é o `finally`
+// de consultarAgenteVendasComRedeDeSeguranca, assim que o lock daquela conversa
+// é liberado (ver reprocessarFilaConcorrente). Mesma limitação de memória de
+// processo dos outros locks deste arquivo.
+const filaDeMensagensConcorrentes = new Map();
+
 // Lock por conversa: impede segunda mensagem disparar FINALIZAR_CADASTRO_E_PEDIDO
 // enquanto a primeira ainda está processando (ver diagnóstico A1).
 const conversasEmFinalizacao = new Set();
@@ -287,8 +300,13 @@ async function prefixarPedidoAtivo(texto, clienteId) {
 // PROCESSAMENTO (não vira uma segunda chamada ao agente), mas deixa de sumir:
 // o cliente sabe que ela chegou e o operador consegue lê-la.
 //
-// Não é fila: a mensagem descartada não é reprocessada quando a anterior
-// termina. Enfileirar é funcionalidade nova, fora do escopo desta correção.
+// Desde 29/08/2026 a mensagem TAMBÉM é reprocessada: fica empilhada em
+// `filaDeMensagensConcorrentes` e o `finally` de
+// consultarAgenteVendasComRedeDeSeguranca a entrega de volta ao Agente de
+// Vendas assim que o lock desta conversa é liberado (ver
+// reprocessarFilaConcorrente). Antes disso a mensagem ficava só registrada no
+// histórico e nunca era respondida de verdade — o cliente tinha que perceber
+// sozinho e repetir o pedido.
 //
 // Tudo best-effort, mesmo critério do PDF/áudio: este caminho já é um
 // fallback, uma falha aqui não pode virar 500 e fazer a Evolution API reenviar
@@ -296,11 +314,18 @@ async function prefixarPedidoAtivo(texto, clienteId) {
 //
 // `textoDoCliente` vem null quando quem chama já registrou a fala do cliente no
 // histórico — registrar de novo aqui duplicaria a linha na tela do operador.
+// Nesse caso também não há o que empilhar: não existe texto cru pra reprocessar.
 async function avisarMensagemConcorrente(cliente, conversaId, textoDoCliente) {
   // Antes do envio, e FORA do dedup abaixo: TODA fala do cliente entra no
   // histórico, mesmo a quinta seguida. É o núcleo desta correção — o operador
   // precisa ver todas. O registro também independe de a Evolution API estar de pé.
   await registrarNoHistorico(conversaId, 'cliente', textoDoCliente);
+
+  if (textoDoCliente) {
+    const filaAtual = filaDeMensagensConcorrentes.get(conversaId) || [];
+    filaAtual.push(textoDoCliente);
+    filaDeMensagensConcorrentes.set(conversaId, filaAtual);
+  }
 
   // Dedup do aviso (26/08/2026): a fala do cliente é sempre registrada, mas o
   // aviso sai no máximo uma vez por janela de lock. Repetir só geraria spam pro
@@ -439,7 +464,71 @@ async function consultarAgenteVendasComRedeDeSeguranca(
     // Fim da janela: o dedup do aviso não pode sobreviver ao lock que o
     // justifica — a próxima janela precisa voltar a avisar.
     conversasJaAvisadasDeConcorrencia.delete(conversaId);
+
+    // Drena a fila de mensagens concorrentes (29/08/2026, ver
+    // filaDeMensagensConcorrentes): retira e limpa ANTES de disparar o
+    // reprocessamento, pra uma mensagem nova que chegar enquanto ele roda cair
+    // numa fila nova, não na lista que já está sendo drenada aqui.
+    const mensagensPendentes = filaDeMensagensConcorrentes.get(conversaId);
+    if (mensagensPendentes && mensagensPendentes.length > 0) {
+      filaDeMensagensConcorrentes.delete(conversaId);
+      // Junta tudo numa única string, na ordem de chegada — trata como se o
+      // cliente tivesse mandado tudo de uma vez, é o comportamento mais natural.
+      const textoCombinado = mensagensPendentes.join('\n');
+
+      // Fire-and-forget de propósito: sem `await` aqui, ou atrasaria a resposta
+      // que já está prestes a sair pro chamador desta função. `.catch` só pra
+      // nunca virar unhandled rejection — a própria rede de segurança desta
+      // função já cobre timeout/erro do agente.
+      reprocessarFilaConcorrente(cliente, conversaId, textoCombinado).catch((erro) => {
+        logger.erro(`Falha ao reprocessar mensagem(ns) concorrente(s) da conversa ${conversaId}`, erro);
+      });
+    }
   }
+}
+
+// Reprocessa, depois que o lock da conversa foi liberado, as mensagens que
+// chegaram durante a janela de concorrência anterior (ver
+// avisarMensagemConcorrente e filaDeMensagensConcorrentes). Chamada como
+// fire-and-forget de dentro do `finally` acima — por isso não recebe a
+// `conversa` do request original e busca de novo o estado atual pra atualizar
+// no final.
+async function reprocessarFilaConcorrente(cliente, conversaId, textoCombinado) {
+  // Mesmo tratamento que a mensagem original teria recebido no caminho
+  // AGENTE_VENDAS_ATIVO: sem isso o agente perde o fio do pedido/orçamento
+  // ativo (ver prefixarPedidoAtivo).
+  const textoPrefixado = await prefixarPedidoAtivo(textoCombinado, cliente.id);
+
+  const { ignorado, estadoFinal } = await consultarAgenteVendasComRedeDeSeguranca(
+    cliente,
+    conversaId,
+    textoPrefixado,
+    // `textoDoCliente: null`: a fala já foi registrada no histórico quando
+    // entrou na fila (ver avisarMensagemConcorrente) — registrar de novo aqui
+    // duplicaria a linha na tela do operador.
+    { textoDoCliente: null }
+  );
+
+  if (ignorado) {
+    // Só acontece se uma NOVA mensagem concorrente tiver chegado bem no meio
+    // deste reprocessamento e encontrado o lock ocupado de novo — ela mesma
+    // reenfileirou e vai disparar o próprio reprocessamento quando o lock
+    // liberar de novo. Nada a fazer aqui.
+    return;
+  }
+
+  // Sem acesso à `conversa` do request original (esta função roda fora do
+  // ciclo de vida do webhook) — busca de novo pra pegar estado_atual/dados
+  // frescos. `mensagemId: null` porque não há um mensagemId de webhook
+  // específico associado a este reprocessamento: é uma consolidação de
+  // mensagens já recebidas.
+  const conversaAtual = await conversasService.buscarOuCriarConversa(cliente.id);
+  await conversasService.atualizarEstadoConversa(
+    conversaId,
+    estadoFinal || conversaAtual.estado_atual,
+    conversaAtual.dados,
+    null
+  );
 }
 
 // Cliente já tem pedido/orçamento e pergunta sobre fechar/pagar (ver

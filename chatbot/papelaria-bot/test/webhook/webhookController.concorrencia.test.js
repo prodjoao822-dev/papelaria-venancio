@@ -38,11 +38,21 @@ const enviadas = [];
 let conversaAtual;
 let pedidoAtivo;
 let chamadasAoAgente;
-// Deferido que simula o Agente de Vendas demorando: a primeira mensagem fica
-// dentro do n8nClient até o teste chamar `liberarAgente()`.
-let liberarAgente;
-let agenteEntrou;
-let avisarAgenteEntrou;
+
+// Deferido que simula o Agente de Vendas demorando: SÓ a chamada "armada" por
+// `abrirJanela` fica pendurada dentro do n8nClient até o teste chamar
+// `liberarAgente()`. Isso importa desde 29/08/2026: mensagem concorrente agora
+// é reprocessada de verdade quando o lock libera (ver fila em
+// webhookController.js), o que gera uma SEGUNDA chamada real ao mock — se ela
+// também ficasse pendurada por padrão, vazaria uma promise pendente pro
+// próximo teste (que reusa as mesmas variáveis de módulo), travando a suíte.
+// Por isso só a chamada explicitamente armada trava; qualquer outra responde
+// na hora.
+let travaArmada = null; // { promise } | null — consumida pela PRÓXIMA chamada ao mock
+let avisarAgenteEntrou = null; // resolve da promise que sinaliza "a chamada armada começou"
+let chamadasPayload; // payload completo de cada chamada a n8nClient.consultarAgenteVendas, em ordem
+let respostasConfiguradas; // fila de respostas customizadas pra próximas chamadas (default se vazia)
+let chamadasAtualizarEstado; // registro de cada chamada a conversasService.atualizarEstadoConversa
 
 function dubla(caminhoRelativo, exports) {
   const caminho = require.resolve(caminhoRelativo);
@@ -57,7 +67,11 @@ dubla('../../src/services/clientesService', {
 });
 dubla('../../src/services/conversasService', {
   buscarOuCriarConversa: async () => conversaAtual,
-  atualizarEstadoConversa: async () => {},
+  atualizarEstadoConversa: async (conversaId, estado, dados, mensagemId) => {
+    chamadasAtualizarEstado.push({
+      conversaId, estado, dados, mensagemId,
+    });
+  },
 });
 dubla('../../src/services/mensagensService', {
   registrarMensagem: async (conversaId, remetente, conteudo) => {
@@ -85,11 +99,25 @@ dubla('../../src/services/arquivosClienteService', { salvarPdfRecebido: async ()
 dubla('../../src/botEngine/actions', { executarAcoes: async () => {} });
 dubla('../../src/services/escalonamentoService', { verificarEscalonamento: async () => {} });
 dubla('../../src/integracoes/n8nClient', {
-  consultarAgenteVendas: async () => {
+  consultarAgenteVendas: async (payload) => {
     chamadasAoAgente += 1;
-    avisarAgenteEntrou();
-    await new Promise((resolve) => { liberarAgente = resolve; });
-    return { resposta: 'Temos sim! Quer que eu separe?' };
+    chamadasPayload.push(payload);
+
+    if (travaArmada) {
+      const trava = travaArmada;
+      travaArmada = null; // só ESTA chamada trava; a próxima (reprocessamento) responde na hora
+      if (avisarAgenteEntrou) {
+        const avisar = avisarAgenteEntrou;
+        avisarAgenteEntrou = null;
+        avisar();
+      }
+      await trava.promise;
+    }
+
+    const resposta = respostasConfiguradas.length > 0
+      ? respostasConfiguradas.shift()
+      : 'Temos sim! Quer que eu separe?';
+    return { resposta };
   },
   notificarAgenteOrcamento: async () => null,
 });
@@ -101,8 +129,11 @@ function reset({ estado = 'AGENTE_VENDAS_ATIVO' } = {}) {
   enviadas.length = 0;
   pedidoAtivo = null;
   chamadasAoAgente = 0;
-  liberarAgente = null;
-  armarAgenteEntrou();
+  travaArmada = null;
+  avisarAgenteEntrou = null;
+  chamadasPayload = [];
+  respostasConfiguradas = [];
+  chamadasAtualizarEstado = [];
   conversaAtual = {
     id: 'conversa-1',
     estado_atual: estado,
@@ -114,10 +145,16 @@ function reset({ estado = 'AGENTE_VENDAS_ATIVO' } = {}) {
   };
 }
 
-// Rearma o deferido de "o agente começou a processar". Precisa ser rearmável
-// porque os testes de dedup abrem MAIS DE UMA janela de processamento seguidas.
-function armarAgenteEntrou() {
-  agenteEntrou = new Promise((resolve) => { avisarAgenteEntrou = resolve; });
+// Aguarda todas as microtarefas pendentes se resolverem — usado depois de
+// fechar uma janela pra dar tempo do reprocessamento fire-and-forget (ver
+// filaDeMensagensConcorrentes/reprocessarFilaConcorrente em
+// webhookController.js) terminar antes do teste seguinte rodar `reset()`. Sem
+// isso, uma reprocessamento ainda em voo vazaria efeitos (chamada ao mock,
+// `enviadas`, `historico`) pro próximo teste. `setImmediate` só roda depois que
+// TODAS as microtarefas (promises) pendentes no momento já foram drenadas —
+// suficiente aqui porque nenhum dublê usa timer/I/O real.
+function aguardarReprocessamento() {
+  return new Promise((resolve) => { setImmediate(resolve); });
 }
 
 function respostaFalsa() {
@@ -145,12 +182,15 @@ function webhookDeTexto(texto, id) {
 // fecha a janela — liberando o agente e aguardando a primeira concluir, pra não
 // vazar promise pendente entre os testes.
 async function abrirJanela(idDaPrimeira = 'MSG-1') {
-  armarAgenteEntrou();
+  let liberar;
+  travaArmada = { promise: new Promise((resolve) => { liberar = resolve; }) };
+  const agenteEntrou = new Promise((resolve) => { avisarAgenteEntrou = resolve; });
+
   const primeira = receberWebhook(webhookDeTexto('tem caderno universitário?', idDaPrimeira), respostaFalsa());
   await agenteEntrou;
 
   return async function fecharJanela() {
-    liberarAgente();
+    liberar();
     await primeira;
   };
 }
@@ -167,6 +207,10 @@ async function segundaMensagemDurantePrimeira(textoSegunda) {
   const fecharJanela = await abrirJanela();
   const resposta = await mensagemConcorrente(textoSegunda, 'MSG-2');
   await fecharJanela();
+  // Drena o reprocessamento fire-and-forget da mensagem enfileirada (ver
+  // aguardarReprocessamento) antes de devolver o controle pro teste — senão
+  // vazaria pro próximo teste.
+  await aguardarReprocessamento();
 
   return resposta;
 }
@@ -182,7 +226,12 @@ test('mensagem concorrente recebe resposta ao cliente em vez de sumir', async ()
   const resposta = await segundaMensagemDurantePrimeira('de 200 folhas?');
 
   assert.equal(resposta.statusCode, 200);
-  assert.equal(chamadasAoAgente, 1, 'a segunda mensagem não pode virar uma segunda chamada ao agente');
+  // Desde 29/08/2026 (fila de reprocessamento) a segunda mensagem GERA uma
+  // segunda chamada ao agente — só que depois que o lock libera, nunca
+  // enquanto a primeira ainda está em andamento (isso continua proibido; ver
+  // os testes de reprocessamento mais abaixo, que travam explicitamente pra
+  // provar que as duas chamadas nunca se sobrepõem).
+  assert.equal(chamadasAoAgente, 2, 'a mensagem enfileirada precisa ser reprocessada, não só descartada');
 
   const avisoDeEspera = enviadas.find((e) => /ainda estou vendo sua mensagem anterior/i.test(e.texto));
   assert.ok(avisoDeEspera, `o cliente ficou sem resposta; enviadas: ${JSON.stringify(enviadas)}`);
@@ -280,6 +329,7 @@ test('várias mensagens na mesma janela geram um único aviso, mas todas entram 
   await mensagemConcorrente('e quanto custa?', 'MSG-4');
 
   await fecharJanela();
+  await aguardarReprocessamento();
 
   assert.equal(avisosEnviados().length, 1, `3 mensagens viraram ${avisosEnviados().length} avisos ao cliente`);
   assert.equal(avisosNoHistorico().length, 1, 'o aviso repetido poluiria a tela do operador');
@@ -301,6 +351,7 @@ test('reenvio do mesmo webhook pela Evolution API não repete o aviso', async ()
   await mensagemConcorrente('de 200 folhas?', 'MSG-2'); // retry idêntico
 
   await fecharJanela();
+  await aguardarReprocessamento();
 
   assert.equal(avisosEnviados().length, 1);
   assert.equal(avisosNoHistorico().length, 1);
@@ -312,10 +363,17 @@ test('numa janela seguinte o aviso volta a ser enviado (o dedup não é permanen
   const fecharPrimeiraJanela = await abrirJanela('MSG-1');
   await mensagemConcorrente('de 200 folhas?', 'MSG-2');
   await fecharPrimeiraJanela();
+  // Drena o reprocessamento da primeira janela ANTES de abrir a segunda: sem
+  // isso a chamada de reprocessamento (fire-and-forget) poderia consumir a
+  // trava armada pela segunda janela, quebrando o teste por uma corrida de
+  // fato inexistente em produção (o lock real já garante essa ordem sozinho;
+  // aqui é só o dublê que precisa da ajuda).
+  await aguardarReprocessamento();
 
   const fecharSegundaJanela = await abrirJanela('MSG-3');
   await mensagemConcorrente('e caneta, tem?', 'MSG-4');
   await fecharSegundaJanela();
+  await aguardarReprocessamento();
 
   assert.equal(avisosEnviados().length, 2, 'o dedup morre junto com o lock que o justifica');
   assert.equal(avisosNoHistorico().length, 2);
@@ -343,10 +401,67 @@ test('aviso que falhou ao ser enviado não bloqueia a tentativa da mensagem segu
     await mensagemConcorrente('capa dura', 'MSG-3');
 
     await fecharJanela();
+    await aguardarReprocessamento();
 
     assert.equal(avisosEnviados().length, 1, 'a segunda mensagem precisa reaproveitar a tentativa perdida');
     assert.deepEqual(falasDoCliente(), ['de 200 folhas?', 'capa dura']);
   } finally {
     evolutionApi.enviarTexto = original;
   }
+});
+
+// --- fila de reprocessamento (29/08/2026) ---
+//
+// Teste real neste dia: um cliente confirmou um item com "sim" e, antes da
+// resposta do agente voltar, mandou "quero pilot gel tbm". O "sim" foi
+// processado normal, mas o "pilot gel" ficou só registrado no histórico e
+// nunca foi respondido — o cliente teve que perceber sozinho e pedir de novo.
+// A fila resolve isso: em vez de só avisar e descartar (26/08/2026), a
+// mensagem enfileirada é reprocessada de verdade assim que o lock desta
+// conversa é liberado.
+
+test('mensagem enfileirada é reprocessada pelo agente e o cliente recebe uma segunda resposta, sem precisar mandar de novo', async () => {
+  reset();
+  respostasConfiguradas = ['Show, já anotei o primeiro item!', 'Temos pilot gel sim, quer que eu inclua?'];
+
+  const fecharJanela = await abrirJanela(); // "primeira" mensagem: "tem caderno universitário?"
+  const respostaDaConcorrente = await mensagemConcorrente('quero pilot gel tbm', 'MSG-2');
+
+  // Enquanto o lock está de pé, a mensagem não pode ter gerado uma segunda
+  // chamada ao agente nem uma segunda resposta de verdade — só o aviso.
+  assert.equal(chamadasAoAgente, 1, 'nenhuma chamada concorrente pode acontecer enquanto o lock está de pé');
+  assert.equal(respostaDaConcorrente.statusCode, 200);
+
+  await fecharJanela();
+  await aguardarReprocessamento();
+
+  // Agora sim: o lock foi liberado e a mensagem enfileirada foi reprocessada
+  // como uma chamada de verdade ao Agente de Vendas.
+  assert.equal(chamadasAoAgente, 2, 'a mensagem enfileirada precisa virar uma segunda chamada real ao agente');
+  assert.equal(
+    chamadasPayload[1].texto,
+    'quero pilot gel tbm',
+    'o texto reprocessado precisa ser a fala crua que ficou pendurada, não o aviso nem a primeira mensagem'
+  );
+
+  // O cliente recebe: o aviso de espera, a resposta da primeira mensagem, e
+  // por fim a resposta de verdade pra mensagem que tinha ficado pendurada —
+  // sem precisar mandar "quero pilot gel tbm" de novo.
+  assert.deepEqual(
+    enviadas.map((e) => e.texto),
+    [
+      'Só um instante, ainda estou vendo sua mensagem anterior 😊',
+      'Show, já anotei o primeiro item!',
+      'Temos pilot gel sim, quer que eu inclua?',
+    ]
+  );
+
+  // O estado da conversa reflete o reprocessamento, não só a mensagem original:
+  // a última chamada a atualizarEstadoConversa é a do reprocessamento
+  // (mensagemId null, porque não existe um mensagemId de webhook associado a
+  // essa consolidação — ver reprocessarFilaConcorrente).
+  const ultimaAtualizacao = chamadasAtualizarEstado[chamadasAtualizarEstado.length - 1];
+  assert.equal(ultimaAtualizacao.conversaId, 'conversa-1');
+  assert.equal(ultimaAtualizacao.estado, 'AGENTE_VENDAS_ATIVO');
+  assert.equal(ultimaAtualizacao.mensagemId, null);
 });
