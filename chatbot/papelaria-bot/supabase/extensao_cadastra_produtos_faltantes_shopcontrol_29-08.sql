@@ -1,0 +1,180 @@
+-- Cadastro dos produtos que a loja vende mas nao existiam no catalogo,
+-- identificados no cruzamento com os 24 recibos de venda reais do Shop
+-- Control (25-29/08/2026, ver extensao_ajusta_precos_e_sku_auditoria_shopcontrol_29-08.sql).
+-- Dos 188 itens unicos vendidos, 42 ja bateram por nome exato (migration
+-- anterior); estes 145 sao os que nao existiam de jeito nenhum ou so
+-- pareciam parecidos com um produto diferente ja cadastrado (cor/tamanho/
+-- modelo distinto -- ex.: "CANETA BIC CRISTAL PRETA" != "...AZUL" ja
+-- cadastrada, codigos do Shop Control diferentes confirmam que sao SKUs
+-- distintos).
+--
+-- Ficou de fora 1 candidato adicional (codigo 425, "LAPIS FABER CASTELL
+-- ECOLAPIS MAX N 2", sem cor especificada): mesmo preco e nome subconjunto
+-- exato do "...N 2 AZUL" ja cadastrado, sem nenhum atributo que os
+-- diferencie -- tratado como o mesmo produto, nao um SKU novo.
+--
+-- sku = codigo real do Shop Control (confirmado confiavel pelo dono da
+-- loja). categoria_id classificado com a mesma regra de palavra-chave das
+-- migrations de categoria (extensao_categorias_*), 4 excecoes ajustadas
+-- manualmente por colisao de palavra-chave ou por nao caber em nenhuma
+-- categoria:
+--   - 783 "SERVICO XEROX / IMPRESSAO..." -> Outros (e servico, nao produto fisico)
+--   - 65520 "BLOCO LAYOUT..." -> Papeis especiais
+--   - 14902 "QUADRO BRANCO MADEIRA..." -> Escritorio e Organizacao
+--   - 61935 "POST-IT 3M MARCADORES BANDERITAS..." -> Escritorio e Organizacao
+--     (a palavra "MARCADORES" aqui e de bandeirinha adesiva, nao caneta)
+--   - 49896 "TRAVA BRACADEIRA KIT..." fica SEM categoria (abracadeira/
+--     organizador de cabo, nao se encaixa em nenhuma categoria existente)
+--
+-- estoque = 10 (mesmo valor placeholder usado em 572 dos 577 produtos ja
+-- cadastrados -- o catalogo nao rastreia estoque real por unidade, ver
+-- politica-produto-nao-encontrado). ativo = true.
+--
+-- Nao mexe em nenhum produto existente, so INSERT de linha nova.
+
+insert into produtos (nome, preco, sku, categoria_id, estoque, ativo) values
+  ('ISOPOR PLACA 50CM X 1M - 20MM ESPESSURA', 9.99, '4000', (select id from categorias where nome = 'Artes Manuais'), 10, true),
+  ('FITA CREPE 3M SCOTCH T 18MMX50M 101LA', 6.99, '61902', (select id from categorias where nome = 'Fitas e Adesivos'), 10, true),
+  ('POST-IT 3M MARCADORES BANDERITAS NEON 100F 12X43MM', 24.99, '61935', (select id from categorias where nome = 'Escritório e Organização'), 10, true),
+  ('GIZ DE CERA JUMBO RETRATIL FABER CASTELL 6 CORES', 24.99, '66176', (select id from categorias where nome = 'Giz de Cera'), 10, true),
+  ('ESTILETE PLASTICO LARGO 18MM LEONORA', 4.99, '16457', (select id from categorias where nome = 'Instrumentos de Desenho'), 10, true),
+  ('FITA ADESIVA DUREX 3M TRANSPARENTE 12X30M INDIV', 3.99, '64460', (select id from categorias where nome = 'Fitas e Adesivos'), 10, true),
+  ('LAPISEIRA BLOOM TILIBRA 0.7 CORES', 9.99, '43312', (select id from categorias where nome = 'Lápiseira'), 10, true),
+  ('LAPISEIRA SKYPAPER MIKRO 0.7', 6.99, '77010', (select id from categorias where nome = 'Lápiseira'), 10, true),
+  ('PINCEL CONDOR 471 16', 7.99, '21828', (select id from categorias where nome = 'Tintas e Pincéis'), 10, true),
+  ('PINCEL CONDOR 471 6', 5.49, '21824', (select id from categorias where nome = 'Tintas e Pincéis'), 10, true),
+  ('TINTA PVA ACRILEX VERDE ESMERALDA 571 37ML', 5.99, '19735', (select id from categorias where nome = 'Tintas e Pincéis'), 10, true),
+  ('TINTA PVA ACRILEX VERDE OLIVA 545 37ML', 5.99, '19758', (select id from categorias where nome = 'Tintas e Pincéis'), 10, true),
+  ('TINTA PVA ACRILEX MARROM 531 37ML', 5.99, '19748', (select id from categorias where nome = 'Tintas e Pincéis'), 10, true),
+  ('TINTA PVA ACRILEX CHOCOLATE 814 37ML', 5.99, '18822', (select id from categorias where nome = 'Tintas e Pincéis'), 10, true),
+  ('TINTA PVA ACRILEX SEPIA 551 37ML', 5.99, '40376', (select id from categorias where nome = 'Tintas e Pincéis'), 10, true),
+  ('CANETA POSCA UNI PC-8K BRANCO', 44.99, '36936', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('FITA CREPE 3M SCOTCH T 48MMX50M 101LA', 18.99, '71902', (select id from categorias where nome = 'Fitas e Adesivos'), 10, true),
+  ('CAIXA PAPEL A4 REPORT C/10 RESMAS', 295.99, '30517', (select id from categorias where nome = 'Papéis'), 10, true),
+  ('PASTA ABA C/ELASTICO ACP PLASTICA PRETA REF.1021', 3.99, '70249', (select id from categorias where nome = 'Escritório e Organização'), 10, true),
+  ('ENVELOPE AMARELO KO32 229X324mm C/10UN SCRITY', 8.99, '28217', (select id from categorias where nome = 'Escritório e Organização'), 10, true),
+  ('CLIPS 3/0 50 UND ACC', 5.99, '7415', (select id from categorias where nome = 'Escritório e Organização'), 10, true),
+  ('ELASTICO MERCUR SUPER AMARELO N.18 100UND', 9.99, '6553', (select id from categorias where nome = 'Escritório e Organização'), 10, true),
+  ('ALMOFADA P/CARIMBO VERMELHO Nº 3 CARBRINK', 7.99, '25956', (select id from categorias where nome = 'Escritório e Organização'), 10, true),
+  ('TINTA P/ CARIMBO PILOT TC42 42ML AZUL', 14.99, '29147', (select id from categorias where nome = 'Tintas e Pincéis'), 10, true),
+  ('MARCA TEXTO MAXPRINT NEEDS ROSA', 2.99, '65280', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('MARCA TEXTO BRW DASHLIGHT AMARELO CA2201', 2.99, '65699', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('MARCA TEXTO LEONORA LARANJA', 2.99, '47007', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('COLA BASTAO MAXPRINT 10G 742314', 4.99, '67980', (select id from categorias where nome = 'Cola'), 10, true),
+  ('SERVICO XEROX / IMPRESSAO PRETO E BRANCO', 1.00, '783', (select id from categorias where nome = 'Outros'), 10, true),
+  ('MASSA P/ BISCUIT ACRILEX NATURAL 500G 07455', 34.99, '74480', (select id from categorias where nome = 'Artes Manuais'), 10, true),
+  ('CANETA GEL PILOT POP''LOL 0.7 VERDE METALICA', 9.99, '72237', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('CANETA GEL PILOT POP''LOL 0.7 AZUL METALICA', 9.99, '72239', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('CANETA GEL PILOT POP''LOL 0.7 PINK-RX PASTEL', 9.99, '72241', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('BLOCO LAYOUT 180GM 20FLS JANDAIA ARTS', 14.99, '65520', (select id from categorias where nome = 'Papeis especiais'), 10, true),
+  ('FITA CREPE 3M SCOTCH T 24MMX50M 101LA', 9.99, '61906', (select id from categorias where nome = 'Fitas e Adesivos'), 10, true),
+  ('TELA DE PINTURA 30X40 YINS PAPER YP9405', 14.99, '73367', (select id from categorias where nome = 'Artes Manuais'), 10, true),
+  ('CANETA GEL PILOT POP''LOL 0.7 DOURADA', 9.99, '45986', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('MARCA TEXTO STABILO BOSS CORES', 12.99, '42233', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('CANETA ESF BRW 4 CORES BASICAS 1.0 CA0520', 9.99, '62176', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('CANETA CIS SPIRO 0.7 AZUL', 4.99, '22830', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('CANETA CIS SPIRO 0.7 CORES', 4.99, '65991', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('FITA ADESIVA 3M SCOTCH 45MMX100M C/ 4UND', 29.99, '67800', (select id from categorias where nome = 'Fitas e Adesivos'), 10, true),
+  ('CLIPS 4/0 50 UND ACC', 5.99, '3478', (select id from categorias where nome = 'Escritório e Organização'), 10, true),
+  ('REGUA TRANSPARENTE 40CM YINS PAPER YP7892', 5.99, '73392', (select id from categorias where nome = 'Instrumentos de Desenho'), 10, true),
+  ('FITA ADESIVA DUREX 3M TRANSPARENTE 12X50M INDIV', 4.99, '64459', (select id from categorias where nome = 'Fitas e Adesivos'), 10, true),
+  ('CAIXA CANETA COMPACTOR 0.7 AZUL/PRETA 50 UND', 54.99, '5033', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('ENVELOPE P/PASTA CATALOGO 4F 25UND. MEDIO DAC', 19.99, '32011', (select id from categorias where nome = 'Escritório e Organização'), 10, true),
+  ('PAPEL REPORT PREMIUM A4 90G/M² 500 FOLHAS', 44.99, '36140', (select id from categorias where nome = 'Papéis'), 10, true),
+  ('ESTOJO TRIPLO REPUBLIC VIX PRETO CG32307', 39.99, '47626', (select id from categorias where nome = 'Mochilas e Estojos'), 10, true),
+  ('CADERNO MEIA PAUTA TILIBRA SPICE 40FLS', 32.99, '72688', (select id from categorias where nome = 'Cadernos'), 10, true),
+  ('CADERNO UNIV. ESPIRAL TILIBRA 10 MAT VIBE MAS 160F', 24.99, '72127', (select id from categorias where nome = 'Cadernos'), 10, true),
+  ('CADERNO UNIVERSITARIO TILIBRA HIT MASC 10MT 160F', 19.99, '65985', (select id from categorias where nome = 'Cadernos'), 10, true),
+  ('COLA BASTAO ACRILEX 20G 02720', 9.99, '12068', (select id from categorias where nome = 'Cola'), 10, true),
+  ('APONTADOR FABER CASTELL NEON C/ DEPOSITO', 5.99, '22706', (select id from categorias where nome = 'Borrachas e Corretivos'), 10, true),
+  ('BORRACHA FABER CASTELL FC MAX COLORIDA', 4.99, '522', (select id from categorias where nome = 'Borrachas e Corretivos'), 10, true),
+  ('CANETA PILOT 0.7 AZ/PT/VM SUPER GRIP', 9.99, '72226', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('CANETA COMPACTOR ECONOMIC FINA PRETA', 1.99, '69976', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('BORRACHA SKY PAPER FLAMENGO FL0202', 7.99, '67863', (select id from categorias where nome = 'Borrachas e Corretivos'), 10, true),
+  ('CORRETIVO CANETA TILIBRA 2 EM 1 18ML', 14.99, '61834', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('CANETA COMPACTOR 0.7 AZUL', 1.99, '649', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('CANETA COMPACTOR 0.7 PRETA', 1.99, '663', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('CANETA COMPACTOR 0.7 VERMELHO', 1.99, '643', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('PASTA SANFONADA A4 C/12 DIV. PLASCONY', 22.99, '5256', (select id from categorias where nome = 'Escritório e Organização'), 10, true),
+  ('ISOPOR PLACA 50CM X 1M - 10MM ESPESSURA', 5.99, '3999', (select id from categorias where nome = 'Artes Manuais'), 10, true),
+  ('CADERNO 10 MAT TILIBRA HAPPY 160FLS', 39.99, '5917', (select id from categorias where nome = 'Cadernos'), 10, true),
+  ('PASTA CATALOGO TRANSPARENTE C/30 ENV. ACP 1038AZ', 19.99, '72287', (select id from categorias where nome = 'Escritório e Organização'), 10, true),
+  ('ESTILETE METAL LARGO 18MM LEONORA 91421', 24.99, '42773', (select id from categorias where nome = 'Instrumentos de Desenho'), 10, true),
+  ('TINTA PVA ACRILEX ROMA 827 37ML', 5.99, '19749', (select id from categorias where nome = 'Tintas e Pincéis'), 10, true),
+  ('FITA EMPACOTAMENTO 3M SCOTCH UN TRANSP. 45MMX45MM', 8.99, '61893', (select id from categorias where nome = 'Fitas e Adesivos'), 10, true),
+  ('ISOPOR BOLA 90MM', 7.99, '21115', (select id from categorias where nome = 'Artes Manuais'), 10, true),
+  ('CADERNO 1 MAT TILIBRA ORGANIZER 80 FLS', 39.99, '34659', (select id from categorias where nome = 'Cadernos'), 10, true),
+  ('AGENDA ESPIRAL TILIBRA SPICE PRETA M3', 19.99, '68848', (select id from categorias where nome = 'Agendas e Planners'), 10, true),
+  ('AGENDA TILIBRA ESPIRAL NAPOLI 200FLS', 99.99, '74460', (select id from categorias where nome = 'Agendas e Planners'), 10, true),
+  ('AGENDA ESP. PLANNER TILIBRA LUME M7', 99.99, '61825', (select id from categorias where nome = 'Agendas e Planners'), 10, true),
+  ('CADERNO ESPIRAL TILIBRA CD 1/8 ZIP PRETO 80FLS', 9.99, '70078', (select id from categorias where nome = 'Cadernos'), 10, true),
+  ('FITA EMPAC. 3M SCOTCH TRANSP. 45MMX45MM C/4 ROLOS', 14.50, '71893', (select id from categorias where nome = 'Fitas e Adesivos'), 10, true),
+  ('TELA VIRADA 15X15 SOUZA', 9.99, '357589', (select id from categorias where nome = 'Artes Manuais'), 10, true),
+  ('TESOURA S/ PONTA PARA CANHOTOS CIS KS-269L', 9.99, '42786', (select id from categorias where nome = 'Instrumentos de Desenho'), 10, true),
+  ('CORRETIVO MERCUR 18ML', 3.99, '4249', (select id from categorias where nome = 'Borrachas e Corretivos'), 10, true),
+  ('BORRACHA MERCUR CORACAO CORES', 4.99, '62469', (select id from categorias where nome = 'Borrachas e Corretivos'), 10, true),
+  ('LAPIS GRAFITE SKYPAPER UNICORNIO UND', 1.99, '77012', (select id from categorias where nome = 'Lápiseira'), 10, true),
+  ('AVENTAL BRW MAGIC CACHORRO 48X39CM AV1002', 14.99, '62204', (select id from categorias where nome = 'Artes Manuais'), 10, true),
+  ('BORRACHA MERCUR PONTEIRA BRANCA 6 UND BLIST', 3.99, '10070', (select id from categorias where nome = 'Borrachas e Corretivos'), 10, true),
+  ('REGUA DE ACO INOX 30CM YINS PAPER YP7403', 7.99, '73389', (select id from categorias where nome = 'Instrumentos de Desenho'), 10, true),
+  ('CANETA CIS SPIRO 0.7 GLOW PRETA', 4.99, '46676', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('CANETA CIS SPIRO RT 0.7', 5.99, '72712', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('CALCULADORA DE BOLSO ELGIN 8 DIGITOS AZUL', 12.99, '65613', (select id from categorias where nome = 'Informática e Eletrônicos'), 10, true),
+  ('CADERNO 10 MAT TILIBRA PEPPER FEM 160FLS', 19.99, '38453', (select id from categorias where nome = 'Cadernos'), 10, true),
+  ('PAPEL A3 BRANCO 75G/M² 10FLS', 5.00, '11541', (select id from categorias where nome = 'Papéis'), 10, true),
+  ('MOCHILA CLIO STYLE CF2016', 39.99, '61082', (select id from categorias where nome = 'Mochilas e Estojos'), 10, true),
+  ('LAPIS DE COR SEXTAVADO SKY PAPER 24 CORES', 12.99, '72568', (select id from categorias where nome = 'Lápis'), 10, true),
+  ('CANETAS COMPACTOR TOP 2000 6AZ/1VM/3PT', 19.99, '66857', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('CANETINHA HIDROCOR COMPACTOR 24 CORES', 24.99, '4257', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('MOUSE SEM FIO MAXPRINT AIRY PRETO', 24.99, '65289', (select id from categorias where nome = 'Informática e Eletrônicos'), 10, true),
+  ('TECLADO BRIGHT USB PRETO REF 0014', 29.99, '470791', (select id from categorias where nome = 'Informática e Eletrônicos'), 10, true),
+  ('COMPASSO ESCOLAR SKY PAPER REF.SK0701', 14.99, '72567', (select id from categorias where nome = 'Instrumentos de Desenho'), 10, true),
+  ('CADERNO UNIV. ESPIRAL TILIBRA 10 MAT VIBE FEM 160F', 24.99, '72126', (select id from categorias where nome = 'Cadernos'), 10, true),
+  ('PORTA DOCUMENTO ICOVERS RG/CNH', 7.99, '36135', (select id from categorias where nome = 'Escritório e Organização'), 10, true),
+  ('TESOURA TILIBRA MULTIUSO T401', 14.99, '12518', (select id from categorias where nome = 'Instrumentos de Desenho'), 10, true),
+  ('LIVRO ATA TILIBRA 200FLS', 39.99, '61826', (select id from categorias where nome = 'Livros e Revistas'), 10, true),
+  ('LAPIS FABER CASTELL ECOLAPIS PEROLA 2B CORES', 1.99, '38293', (select id from categorias where nome = 'Lápis'), 10, true),
+  ('MARCA TEXTO COMPACTOR DESTAQ AMARELO', 4.99, '25885', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('CANETA COMPACTOR 1.2 AZUL', 1.99, '32466', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('LAPISEIRA TECNICA PENTEL 0.3 P203-E', 29.99, '35250', (select id from categorias where nome = 'Lápiseira'), 10, true),
+  ('LAPISEIRA PENTEL SHARP 0.7 AZUL SM/P207-C', 29.99, '35257', (select id from categorias where nome = 'Lápiseira'), 10, true),
+  ('COMPASSO ESCOLAR SKY PAPER + GRAFITE EXTRA SK0702', 19.99, '68797', (select id from categorias where nome = 'Instrumentos de Desenho'), 10, true),
+  ('GRAFITE BRW 0.3 HB 12 MINAS', 1.99, '29034', (select id from categorias where nome = 'Lápiseira'), 10, true),
+  ('REFIL CADERNO INTELIGENTE G PAUTADO 100FLS 90G', 49.99, '72772', (select id from categorias where nome = 'Cadernos'), 10, true),
+  ('PASTA C/ELASTICO DE PAPEL BRANCO', 3.99, '3703', (select id from categorias where nome = 'Escritório e Organização'), 10, true),
+  ('CADERNO UNIV. ESPIRAL TILIBRA 1 MAT VIBE 80FLS', 10.99, '72124', (select id from categorias where nome = 'Cadernos'), 10, true),
+  ('CADERNO 10 MAT TILIBRA ZIP PRETO 160 FLS', 19.99, '66099', (select id from categorias where nome = 'Cadernos'), 10, true),
+  ('CANETA CIS SPIRO GLOW 0.7 VERMELHA', 4.99, '36951', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('LAPISEIRA BRW 2.0MM SOUL TOM PASTEL LP2024', 6.99, '46398', (select id from categorias where nome = 'Lápiseira'), 10, true),
+  ('LAPIS PRETO FABER CASTELL METALLIC', 1.99, '28489', (select id from categorias where nome = 'Lápis'), 10, true),
+  ('LAPIS FABER CASTELL ECOLAPIS GRIP 2B CORES', 2.99, '10326', (select id from categorias where nome = 'Lápis'), 10, true),
+  ('CANETA BIC CRISTAL PRETA', 1.99, '237', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('PINCEL CONDOR 456 20', 11.99, '2632', (select id from categorias where nome = 'Tintas e Pincéis'), 10, true),
+  ('PISTOLA COLA QUENTE JOCAR OFFICE GRANDE 15W', 29.99, '31706', (select id from categorias where nome = 'Cola'), 10, true),
+  ('ACETATO PLASCONY 72X50CM 18MM', 9.99, '46762', (select id from categorias where nome = 'Papéis'), 10, true),
+  ('E.V.A ATOALHADO TEXTURA/FELPUDO 2MM 400X600MM', 7.99, '15216', (select id from categorias where nome = 'Artes Manuais'), 10, true),
+  ('GRAMPEADOR RISOVIT FGR3929', 19.99, '74532', (select id from categorias where nome = 'Escritório e Organização'), 10, true),
+  ('GRAMPO 26/6 5000UND RISOVIT FGR106', 5.99, '74539', (select id from categorias where nome = 'Escritório e Organização'), 10, true),
+  ('MARCA TEXTO PILOT 200-SL AMARELA', 4.99, '12073', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('MARCA TEXTO PILOT 200-SL VERDE', 4.99, '40973', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('TELA VIRADA 15X20 SKY PAPER', 12.99, '72588', (select id from categorias where nome = 'Artes Manuais'), 10, true),
+  ('ISOPOR BOLA 150MM', 14.99, '153', (select id from categorias where nome = 'Artes Manuais'), 10, true),
+  ('ISOPOR BOLA 125MM', 12.99, '21120', (select id from categorias where nome = 'Artes Manuais'), 10, true),
+  ('ISOPOR BOLA 100MM', 9.99, '1004', (select id from categorias where nome = 'Artes Manuais'), 10, true),
+  ('ESTILETE ESTREITO BRW 9MM CORES', 2.99, '39148', (select id from categorias where nome = 'Instrumentos de Desenho'), 10, true),
+  ('MINI PISTOLA COLA QUENTE BRANCA YINS PAPER YP7022', 29.99, '73323', (select id from categorias where nome = 'Cola'), 10, true),
+  ('TRAVA BRACADEIRA KIT 2,5X200MM 100UND 436284', 19.99, '49896', null, 10, true),
+  ('TELA VIRADA SOUZA/ROMA 20X20', 9.99, '10603', (select id from categorias where nome = 'Artes Manuais'), 10, true),
+  ('PAPEL ALMACO TILIBRA QUADRICULADO 1.0 PCT 16FLS', 9.99, '62818', (select id from categorias where nome = 'Papéis'), 10, true),
+  ('LAPIS FABER CASTELL N°2 GRIP 2001 CORES', 2.99, '62882', (select id from categorias where nome = 'Lápis'), 10, true),
+  ('CANETA COMPACTOR MICROLINE 0.4 ROSA PASTEL', 5.99, '72366', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('CANETA COMPACTOR MICROLINE 0.4 PRETA', 5.99, '357562', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('CANETA COMPACTOR MICROLINE 0.4 AZUL CLARO', 5.99, '357565', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('CANETA CIS LOLLIPOP 0.5 SORTIDO', 4.99, '61209', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('PINCEL CONDOR 471 2', 4.49, '21822', (select id from categorias where nome = 'Tintas e Pincéis'), 10, true),
+  ('CANETA FABER CASTELL FINE PEN 0.4 VERMELHA', 8.99, '27901', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('QUADRO BRANCO MADEIRA 60X40 SOUZA', 39.99, '14902', (select id from categorias where nome = 'Escritório e Organização'), 10, true),
+  ('MARCADOR QUADRO BRANCO SLIM JOCAR OFFICE AZUL', 2.99, '22758', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('MARCADOR QUADRO BRANCO SLIM JOCAR OFFICE PRETO', 2.99, '22755', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('MARCADOR QUADRO BRANCO SLIM JOCAR OFFICE VERMELHO', 2.99, '22756', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true),
+  ('MARCADOR QUADRO BRANCO SLIM JOCAR OFFICE VERDE', 2.99, '45257', (select id from categorias where nome = 'Canetas e Marcadores'), 10, true);
