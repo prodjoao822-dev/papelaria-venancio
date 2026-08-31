@@ -1,0 +1,55 @@
+# Deploy do JS Bot (papelaria-bot) numa VM Oracle Cloud Always Free Tier,
+# conforme PLANEJAMENTOS E IMPLEMENTAÇÕES/PLANO_DEPLOY_DOCKER_ORACLE.md.
+#
+# Roda a partir desta pasta (deploy/): docker compose up -d --build
+#
+# Antes de subir: copiar chatbot/papelaria-bot/.env.example para
+# deploy/.env (mesma pasta deste arquivo) e preencher os valores reais —
+# NUNCA commitar esse .env (já coberto pelo .gitignore raiz do bot, mas
+# confirme antes de subir pra produção).
+services:
+  bot:
+    build:
+      context: ../chatbot/papelaria-bot
+      dockerfile: Dockerfile
+    container_name: venancio-bot
+    restart: always
+    env_file:
+      - .env
+    # Sem publicar a porta pro host diretamente -- só o Caddy fala com o
+    # bot, pela rede interna do compose (nome do serviço = hostname).
+    expose:
+      - "3000"
+    volumes:
+      # .cache/ (dedupe de eco do bot) e logs/ (persistência de log,
+      # 01/09/2026) sobrevivem a um restart/rebuild do container.
+      - bot-cache:/app/.cache
+      - bot-logs:/app/logs
+    networks:
+      - venancio
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: venancio-caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - venancio
+    depends_on:
+      - bot
+
+networks:
+  venancio:
+    driver: bridge
+
+volumes:
+  bot-cache:
+  bot-logs:
+  caddy-data:
+  caddy-config:

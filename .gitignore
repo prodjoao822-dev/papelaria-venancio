@@ -1,6 +1,11 @@
 # Monorepo: papelaria-bot (chatbot) + venancio-ai-ops (dashboard).
 # Cada subprojeto tem seu próprio .gitignore (node_modules, dist, .env, etc.).
 
+# deploy/ (01/09/2026, Docker + Oracle Cloud): não tem .gitignore próprio
+# porque não é um subprojeto Node — o .env real com credenciais de
+# produção vive só aqui, nunca commitado.
+/deploy/.env
+
 # Notas pessoais / configs locais fora do escopo dos dois projetos versionados
 # (mesmos arquivos hoje organizados em SKILLS/ — regra estendida para acompanhar)
 /frontend.md

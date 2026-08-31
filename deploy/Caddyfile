@@ -1,0 +1,9 @@
+# Reverse proxy + HTTPS automático (Let's Encrypt, renovação sozinha) pro
+# subdomínio DuckDNS configurado apontando pro IP público reservado da VM
+# Oracle. Troque "SEU-SUBDOMINIO" pelo subdomínio real assim que ele
+# existir (ex.: venancio-bot.duckdns.org) — Caddy só emite certificado
+# real depois que o DNS já estiver resolvendo pra este IP.
+
+SEU-SUBDOMINIO.duckdns.org {
+	reverse_proxy bot:3000
+}
