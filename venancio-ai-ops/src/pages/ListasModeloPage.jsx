@@ -104,6 +104,9 @@ export function ListasModeloPage() {
 
         {/* Coluna 2: listas (anos/séries) da escola selecionada */}
         <section className="listas-modelo-anos">
+          <h3 className="listas-modelo-anos-titulo">
+            {escolas.find((e) => e.id === escolaSelecionada)?.nome ?? 'Listas'}
+          </h3>
           {carregandoListas ? (
             <LoadingSpinner mensagem="Carregando..." />
           ) : listas.length === 0 ? (
