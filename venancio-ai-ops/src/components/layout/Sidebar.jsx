@@ -128,6 +128,11 @@ function useAlertasDemanda() {
 const NAV_OPERACOES = [
   { to: '/',            label: 'Dashboard',     icone: '◈',  exact: true },
   { to: '/pedidos',     label: 'Pedidos',       icone: '📦', badgeKey: 'pedidosAtivos' },
+  // Existia sem link nenhum no menu (achado 01/09): só dava pra chegar
+  // clicando "Delegar" numa linha específica de PedidosPage. É por isso
+  // que a tela com chat (SolicitacaoDetalheModal) nunca foi usada de
+  // verdade em produção -- não é bug de código, era invisibilidade de nav.
+  { to: '/separacao',   label: 'Separação',     icone: '📬' },
   { to: '/logistica',   label: 'Logística',     icone: '🛵' },
   { to: '/atendimento', label: 'Atendimento',   icone: '💬', badgeKey: 'atendimentos', badgeAlerta: true },
   { to: '/consultas',   label: 'Consultas IA',  icone: '❓', badgeKey: 'consultas',    badgeAlerta: true },
