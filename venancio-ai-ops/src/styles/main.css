@@ -4476,4 +4476,186 @@ select.input option { background: var(--bg-card-2); color: var(--text-1); }
   }
 }
 
+/* ===================== Listas Modelo (01/09) ===================== */
+
+.listas-modelo-layout {
+  display: grid;
+  grid-template-columns: 220px 260px 1fr;
+  gap: 16px;
+  align-items: start;
+  min-height: 60vh;
+}
+
+.listas-modelo-escolas,
+.listas-modelo-anos,
+.listas-modelo-detalhe {
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 12px;
+}
+
+.listas-modelo-escolas {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 75vh;
+  overflow-y: auto;
+}
+
+.listas-modelo-escola-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.listas-modelo-escola-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-1);
+}
+
+.listas-modelo-escola-item--ativa {
+  background: var(--bg-active);
+  color: var(--text-1);
+  font-weight: 600;
+}
+
+.listas-modelo-escola-badge {
+  font-size: 11px;
+  color: var(--text-3);
+  background: var(--bg-card-2);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
+.listas-modelo-anos {
+  max-height: 75vh;
+  overflow-y: auto;
+}
+
+.listas-modelo-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.listas-modelo-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-card-2);
+  color: var(--text-1);
+  text-align: left;
+  cursor: pointer;
+}
+
+.listas-modelo-card:hover {
+  background: var(--bg-hover);
+}
+
+.listas-modelo-card--ativo {
+  border-color: var(--border-focus);
+  background: var(--bg-active);
+}
+
+.listas-modelo-card-ano {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.listas-modelo-card-info {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.listas-modelo-card-valor {
+  font-size: 12px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.listas-modelo-detalhe {
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+}
+
+.listas-modelo-detalhe-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.listas-modelo-detalhe-titulo {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-1);
+  margin: 0 0 2px;
+}
+
+.listas-modelo-detalhe-subtitulo {
+  font-size: 12px;
+  color: var(--text-3);
+  margin: 0;
+}
+
+.listas-modelo-itens-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+
+.listas-modelo-item-linha {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  padding: 7px 4px;
+  font-size: 13px;
+  color: var(--text-2);
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.listas-modelo-item-qtd {
+  color: var(--text-3);
+  text-align: center;
+}
+
+.listas-modelo-item-valor {
+  color: var(--text-1);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  min-width: 64px;
+}
+
+@media (max-width: 900px) {
+  .listas-modelo-layout {
+    grid-template-columns: 1fr;
+  }
+  .listas-modelo-escolas {
+    max-height: 160px;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .listas-modelo-anos {
+    max-height: none;
+  }
+}
+
 

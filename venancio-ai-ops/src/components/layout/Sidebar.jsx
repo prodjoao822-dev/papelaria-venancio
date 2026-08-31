@@ -142,9 +142,10 @@ const NAV_CATALOGO = [
 ]
 
 const NAV_CADASTROS = [
-  { to: '/clientes',      label: 'Clientes',      icone: '👥' },
-  { to: '/orcamentos',    label: 'Orçamentos',    icone: '📋' },
-  { to: '/funcionarios',  label: 'Funcionários',  icone: '🧑‍🤝‍🧑' },
+  { to: '/clientes',        label: 'Clientes',        icone: '👥' },
+  { to: '/orcamentos',      label: 'Orçamentos',      icone: '📋' },
+  { to: '/listas-prontas',  label: 'Listas Prontas',  icone: '🎒' },
+  { to: '/funcionarios',    label: 'Funcionários',    icone: '🧑‍🤝‍🧑' },
 ]
 
 const NAV_SISTEMA = [
