@@ -1,8 +1,35 @@
 -- =====================================================================
 -- VENÂNCIO — Fechamento do problema P1 (auditoria de 25/08/2026)
 -- =====================================================================
--- Aplicado em produção em 26/08/2026 via migração
--- `seguranca_p1_fecha_atualizar_status_pedido`.
+-- CORREÇÃO DE REGISTRO (31/08/2026, sessão do agente de banco): a linha
+-- abaixo, presente desde a criação deste arquivo (commit 57921b8,
+-- 25/08/2026), afirmava "Aplicado em produção em 26/08/2026" — isso NUNCA
+-- foi confirmado e as evidências apontam o contrário. O
+-- `baseline_producao_26-08-2026.sql`, gerado por introspecção de produção
+-- no MESMO commit que criou este arquivo, mostra `atualizar_status_pedido`
+-- ainda SEM o portão de identidade no corpo e com `EXECUTE` ainda
+-- concedido a `anon`, `authenticated` e `public` (ver linhas ~1866 e
+-- ~4142-4146 desse arquivo). O `README.md` deste diretório, escrito no
+-- mesmo dia num commit posterior (44f9f65), também lista este item como
+-- "Pendente em 26/08/2026: ainda não foi aplicado em produção". Nenhum
+-- commit ou evidência posterior (até 31/08/2026) indica que isso mudou.
+-- Sessão de 31/08/2026 não tinha `execute_query`/`execute_mutation`/
+-- `apply_migration` disponíveis (só `list_tables`) para confirmar contra
+-- produção HOJE — então não dá pra afirmar 100% que segue pendente, só que
+-- a evidência disponível não mostra aplicação. Ação: alguém com
+-- `apply_migration` ou acesso ao SQL Editor precisa RODAR este arquivo e
+-- então confirmar (ver query de verificação no rodapé) antes de marcar T1
+-- como fechado de verdade.
+--
+-- FECHAMENTO (31/08/2026, sessão seguinte, com `execute_sql` de verdade):
+-- rodei as 3 queries de verificação do rodapé contra produção. Resultado:
+-- o portão já estava lá (`auth.role() <> 'service_role' and
+-- eh_operador_ativo() is not true`), `anon`/`authenticated` já sem EXECUTE,
+-- `service_role` continua funcionando. T1 estava aplicado de verdade em
+-- produção — só a nota deste cabeçalho é que ficou desatualizada/incorreta
+-- (provavelmente aplicado manualmente pelo SQL Editor em algum momento
+-- entre 26/08 e 31/08 sem deixar rastro de commit). Fechado, não reabrir.
+-- =====================================================================
 --
 -- ── O INCIDENTE ──────────────────────────────────────────────────────
 -- `atualizar_status_pedido(uuid, status_pedido, text)` era, em 25/08/2026,
@@ -163,3 +190,20 @@ $$;
 revoke execute on function atualizar_status_pedido(uuid, status_pedido, text) from public;
 revoke execute on function atualizar_status_pedido(uuid, status_pedido, text) from anon;
 revoke execute on function atualizar_status_pedido(uuid, status_pedido, text) from authenticated;
+
+-- =====================================================================
+-- VERIFICAÇÃO (rodar depois de aplicar, antes de marcar T1 como fechado)
+-- =====================================================================
+-- 1. Corpo tem o portão (deve aparecer "auth.role() <> 'service_role'"):
+--   select pg_get_functiondef('public.atualizar_status_pedido(uuid, status_pedido, text)'::regprocedure);
+--
+-- 2. anon e authenticated (e PUBLIC, via herança) não têm mais EXECUTE:
+--   select has_function_privilege('anon', 'public.atualizar_status_pedido(uuid, status_pedido, text)', 'EXECUTE'),
+--          has_function_privilege('authenticated', 'public.atualizar_status_pedido(uuid, status_pedido, text)', 'EXECUTE');
+--   -- as duas têm que voltar `false`.
+--
+-- 3. service_role continua funcionando (não deve levantar exceção):
+--   set local role service_role;
+--   -- chamar atualizar_status_pedido(<uuid de um pedido em 'confirmado'>, 'em_separacao', 'teste_verificacao');
+--   reset role;
+-- =====================================================================
