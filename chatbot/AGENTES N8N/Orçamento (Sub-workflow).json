@@ -1,29 +1,24 @@
 {
-  "name": "Orçamento (Sub-workflow)",
   "nodes": [
     {
-      "parameters": {
-        "content": "## Sub-workflow · Orçamento (consolidado)\nCriado em 27/07/2026 pra caber no limite de workflows do plano de n8n do dono do projeto (ver AUDITORIA_INTEGRACAO.md). Substitui os 3 arquivos separados:\n- \"Buscar ou Criar Orçamento (Sub-workflow).json\"\n- \"Adicionar Item ao Orçamento (Sub-workflow).json\"\n- \"Fechar Orçamento (Sub-workflow).json\"\n\n(os 3 foram removidos do repo — a lógica de cada um está aqui dentro, sem nenhuma mudança de comportamento, só reorganizada em 3 'raias' dentro do mesmo workflow.)\n\nEntrada: { acao, conversa_id, cliente_id, orcamento_id, produto_id, quantidade } — só os campos relevantes pra cada ação precisam vir preenchidos (ver cada raia abaixo). 'acao' vale 'buscar_ou_criar' | 'adicionar_item' | 'fechar'.\n\nNo AGENTE_VENDAS.json, as 3 ferramentas (\"Criar Orçamento\", \"Adicionar Item ao Orçamento\", \"Fechar Orçamento\") continuam existindo como 3 tools separadas pra IA (o prompt não muda) — cada uma só chama ESTE MESMO workflow, com 'acao' fixa diferente.\n\nAÇÃO MANUAL AO IMPORTAR: (1) importe este workflow; (2) nos 3 tool nodes do AGENTE_VENDAS.json, aponte o campo 'Source' pra ele; (3) se 'Fechar Orçamento (Sub-workflow)' antigo já estava importado no seu n8n (tinha virado produção), pode excluir ele DEPOIS de confirmar que o novo está funcionando — libera 1 slot do seu plano.",
-        "height": 640,
-        "width": 1000,
-        "color": "#162D15"
-      },
+      "parameters": { "content": "## Sub-workflow · Orçamento (consolidado)\nCriado em 27/07/2026.", "height": 640, "width": 1000, "color": "#162D15" },
       "id": "c7c7c7c7-0000-4a00-8000-000000000001",
       "name": "Nota · Sub-workflow Consolidado",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-1720, -320]
+      "position": [-2096, -1488]
     },
     {
       "parameters": {
         "workflowInputs": {
           "values": [
-            { "name": "acao", "type": "string" },
-            { "name": "conversa_id", "type": "string" },
-            { "name": "cliente_id", "type": "string" },
-            { "name": "orcamento_id", "type": "string" },
-            { "name": "produto_id", "type": "string" },
-            { "name": "quantidade", "type": "number" }
+            { "name": "acao" },
+            { "name": "conversa_id" },
+            { "name": "cliente_id" },
+            { "name": "orcamento_id" },
+            { "name": "produto_id" },
+            { "name": "quantidade", "type": "number" },
+            { "name": "nome_produto" }
           ]
         }
       },
@@ -31,7 +26,7 @@
       "name": "Recebe do Agente de Vendas",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
-      "position": [-1680, 400]
+      "position": [-2000, -496]
     },
     {
       "parameters": {
@@ -41,29 +36,30 @@
             { "id": "2", "name": "conversa_id", "value": "={{ $json.conversa_id ? $json.conversa_id.trim() : $json.conversa_id }}", "type": "string" },
             { "id": "3", "name": "cliente_id", "value": "={{ $json.cliente_id ? $json.cliente_id.trim() : $json.cliente_id }}", "type": "string" },
             { "id": "4", "name": "orcamento_id", "value": "={{ $json.orcamento_id ? $json.orcamento_id.trim() : $json.orcamento_id }}", "type": "string" },
-            { "id": "5", "name": "produto_id", "value": "={{ $json.produto_id ? $json.produto_id.trim() : $json.produto_id }}", "type": "string" }
+            { "id": "5", "name": "produto_id", "value": "={{ $json.produto_id ? $json.produto_id.trim() : $json.produto_id }}", "type": "string" },
+            { "id": "6", "name": "quantidade", "value": "={{ $json.quantidade }}", "type": "number" },
+            { "id": "7", "name": "forma_entrega", "value": "={{ $json.forma_entrega ? $json.forma_entrega.trim() : $json.forma_entrega }}", "type": "string" },
+            { "id": "8", "name": "endereco_entrega", "value": "={{ $json.endereco_entrega ? $json.endereco_entrega.trim() : $json.endereco_entrega }}", "type": "string" },
+            { "id": "9", "name": "horario_retirada_desejado", "value": "={{ $json.horario_retirada_desejado ? $json.horario_retirada_desejado.trim() : $json.horario_retirada_desejado }}", "type": "string" },
+            { "id": "10", "name": "nome_produto", "value": "={{ $json.nome_produto ? $json.nome_produto.trim() : $json.nome_produto }}", "type": "string" }
           ]
         },
-        "options": { "includeOtherFields": true }
+        "options": {}
       },
       "id": "c7c7c7c7-0000-4a00-8000-00000000001a",
       "name": "Normaliza Entrada",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-1600, 400],
-      "notes": "Achado real (30/07/2026): o valor de 'acao' chegava como ' buscar_ou_criar' (com espaço na frente), vindo do campo fixo do tool node em AGENTE_VENDAS.json — qualquer comparação exata (If OU Switch) falha com isso. Corrige aqui, uma vez só, pra todos os campos de string em vez de confiar que cada comparação lá na frente vai lidar com espaço sozinha."
+      "position": [-1760, -496]
     },
     {
       "parameters": {
-        "mode": "rules",
         "rules": {
           "values": [
             {
               "conditions": {
                 "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
-                "conditions": [
-                  { "id": "r1", "leftValue": "={{ $json.acao }}", "rightValue": "buscar_ou_criar", "operator": { "type": "string", "operation": "equals" } }
-                ],
+                "conditions": [{ "id": "r1", "leftValue": "={{ $json.acao }}", "rightValue": "buscar_ou_criar", "operator": { "type": "string", "operation": "equals" } }],
                 "combinator": "and"
               },
               "renameOutput": true,
@@ -72,9 +68,7 @@
             {
               "conditions": {
                 "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
-                "conditions": [
-                  { "id": "r1", "leftValue": "={{ $json.acao }}", "rightValue": "adicionar_item", "operator": { "type": "string", "operation": "equals" } }
-                ],
+                "conditions": [{ "id": "r1", "leftValue": "={{ $json.acao }}", "rightValue": "adicionar_item", "operator": { "type": "string", "operation": "equals" } }],
                 "combinator": "and"
               },
               "renameOutput": true,
@@ -83,9 +77,7 @@
             {
               "conditions": {
                 "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
-                "conditions": [
-                  { "id": "r1", "leftValue": "={{ $json.acao }}", "rightValue": "fechar", "operator": { "type": "string", "operation": "equals" } }
-                ],
+                "conditions": [{ "id": "r1", "leftValue": "={{ $json.acao }}", "rightValue": "fechar", "operator": { "type": "string", "operation": "equals" } }],
                 "combinator": "and"
               },
               "renameOutput": true,
@@ -93,24 +85,20 @@
             }
           ]
         },
-        "options": {
-          "fallbackOutput": "extra",
-          "renameFallbackOutput": "acao_desconhecida"
-        }
+        "options": { "fallbackOutput": "extra", "renameFallbackOutput": "acao_desconhecida" }
       },
       "id": "c7c7c7c7-0000-4a00-8000-000000000003",
       "name": "Roteador · Ação",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
-      "position": [-1520, 400],
-      "notes": "Substitui a cadeia de 3 IFs encadeados (É Buscar ou Criar? → É Adicionar Item? → É Fechar?) por um roteamento único — mais fácil de ler e de adicionar uma 4ª ação depois sem tocar nas anteriores."
+      "position": [-1504, -528]
     },
     {
       "parameters": {
         "assignments": {
           "assignments": [
             { "id": "1", "name": "sucesso", "value": "={{ false }}", "type": "boolean" },
-            { "id": "2", "name": "motivo", "value": "Ação desconhecida recebida pelo sub-workflow de orçamento (esperado: buscar_ou_criar, adicionar_item ou fechar).", "type": "string" }
+            { "id": "2", "name": "motivo", "value": "Ação desconhecida recebida pelo sub-workflow de orçamento.", "type": "string" }
           ]
         },
         "options": {}
@@ -119,39 +107,37 @@
       "name": "Set · Resultado Ação Desconhecida",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-1360, 1420]
+      "position": [-1088, -448]
     },
-
-    { "parameters": { "content": "## Raia 1 · Buscar ou Criar Orçamento\nEquivalente ao antigo \"Buscar ou Criar Orçamento (Sub-workflow).json\". Entrada usada: conversa_id, cliente_id.", "height": 260, "width": 1400, "color": 4 }, "id": "c7c7c7c7-0000-4a00-8000-000000000007", "name": "Nota · Raia Buscar/Criar", "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [-1360, -240] },
-
+    {
+      "parameters": { "content": "## Raia 1 · Buscar ou Criar Orçamento", "height": 388, "width": 1576, "color": 4 },
+      "id": "c7c7c7c7-0000-4a00-8000-000000000007",
+      "name": "Nota · Raia Buscar/Criar",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-1488, -272]
+    },
     {
       "parameters": {
         "operation": "getAll",
         "tableId": "orcamentos",
-        "returnAll": false,
         "limit": 1,
-        "alwaysOutputData": true,
-        "filters": {
-          "conditions": [
-            { "keyName": "conversa_id", "condition": "eq", "keyValue": "={{ $json.conversa_id }}" },
-            { "keyName": "status", "condition": "eq", "keyValue": "rascunho" }
-          ]
-        }
+        "filters": { "conditions": [{ "keyName": "conversa_id", "condition": "eq", "keyValue": "={{ $json.conversa_id }}" }] }
       },
+      "alwaysOutputData": true,
       "id": "e5e5e5e5-0001-4a00-8000-000000000001",
       "name": "Supabase · Buscar Orçamento Aberto",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [-1360, -40],
-      "credentials": { "supabaseApi": { "id": "IlPIhLKj72bLR8RD", "name": "Supabase account" } },
-      "notes": "alwaysOutputData:true garante que, mesmo sem achar nada, o item de entrada (conversa_id/cliente_id) passa adiante em vez de travar o fluxo."
+      "position": [-1296, -160],
+      "credentials": { "supabaseApi": { "id": "IlPIhLKj72bLR8RD", "name": "Supabase account" } }
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "options": { "version": 2, "leftValue": "", "caseSensitive": true, "typeValidation": "strict" },
           "conditions": [
-            { "id": "c1", "leftValue": "={{ $json.id }}", "rightValue": "", "operator": { "type": "string", "operation": "notEmpty" } }
+            { "id": "c1", "leftValue": "={{ !!$json.id && $json.status === 'rascunho' && $json.conversa_id === $('Normaliza Entrada').item.json.conversa_id }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } }
           ],
           "combinator": "and"
         },
@@ -161,7 +147,7 @@
       "name": "Já Existe Orçamento Aberto?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [-1200, -40]
+      "position": [-1104, -160]
     },
     {
       "parameters": {
@@ -169,7 +155,8 @@
           "assignments": [
             { "id": "1", "name": "orcamento_id", "value": "={{ $json.id }}", "type": "string" },
             { "id": "2", "name": "protocolo", "value": "={{ $json.protocolo }}", "type": "string" },
-            { "id": "3", "name": "novo", "value": "={{ false }}", "type": "boolean" }
+            { "id": "3", "name": "novo", "value": "={{ false }}", "type": "boolean" },
+            { "id": "4", "name": "itens", "value": "={{ $json.itens }}", "type": "array" }
           ]
         },
         "options": {}
@@ -178,15 +165,15 @@
       "name": "Set · Resultado Reaproveitado",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-1040, -120]
+      "position": [-528, -240]
     },
     {
       "parameters": {
         "tableId": "orcamentos",
         "fieldsUi": {
           "fieldValues": [
-            { "fieldId": "cliente_id", "fieldValue": "={{ $json.cliente_id }}" },
-            { "fieldId": "conversa_id", "fieldValue": "={{ $json.conversa_id }}" },
+            { "fieldId": "cliente_id", "fieldValue": "={{ $('Normaliza Entrada').item.json.cliente_id }}" },
+            { "fieldId": "conversa_id", "fieldValue": "={{ $('Normaliza Entrada').item.json.conversa_id }}" },
             { "fieldId": "tipo", "fieldValue": "venda_geral" },
             { "fieldId": "status", "fieldValue": "rascunho" }
           ]
@@ -196,9 +183,8 @@
       "name": "Supabase · Cria Orçamento Novo",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [-1040, 40],
-      "credentials": { "supabaseApi": { "id": "IlPIhLKj72bLR8RD", "name": "Supabase account" } },
-      "notes": "cliente_id/conversa_id vêm do passthrough do trigger (branch 'não achou nada'), não de $fromAI."
+      "position": [-912, -80],
+      "credentials": { "supabaseApi": { "id": "IlPIhLKj72bLR8RD", "name": "Supabase account" } }
     },
     {
       "parameters": {
@@ -206,7 +192,8 @@
           "assignments": [
             { "id": "1", "name": "orcamento_id", "value": "={{ $('Supabase · Cria Orçamento Novo').first().json.id }}", "type": "string" },
             { "id": "2", "name": "protocolo", "value": "={{ $('Supabase · Cria Orçamento Novo').first().json.protocolo }}", "type": "string" },
-            { "id": "3", "name": "novo", "value": "={{ true }}", "type": "boolean" }
+            { "id": "3", "name": "novo", "value": "={{ true }}", "type": "boolean" },
+            { "id": "4", "name": "itens", "value": "={{ [] }}", "type": "array" }
           ]
         },
         "options": {}
@@ -215,18 +202,21 @@
       "name": "Set · Resultado Criado",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-880, 40]
+      "position": [-720, -80]
     },
-
-    { "parameters": { "content": "## Raia 2 · Adicionar Item ao Orçamento\nEquivalente ao antigo \"Adicionar Item ao Orçamento (Sub-workflow).json\". Entrada usada: orcamento_id, produto_id, quantidade, conversa_id. valor_unitario NUNCA vem da IA — é sempre lido de produtos.preco.", "height": 260, "width": 1900, "color": 4 }, "id": "c7c7c7c7-0000-4a00-8000-000000000008", "name": "Nota · Raia Adicionar Item", "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [-1360, 300] },
-
+    {
+      "parameters": { "content": "## Raia 2 · Adicionar Item ao Orçamento", "height": 260, "width": 2348, "color": 4 },
+      "id": "c7c7c7c7-0000-4a00-8000-000000000008",
+      "name": "Nota · Raia Adicionar Item",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-1488, 272]
+    },
     {
       "parameters": {
         "conditions": {
           "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict", "version": 2 },
-          "conditions": [
-            { "id": "v1", "leftValue": "={{ $json.orcamento_id }}", "rightValue": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", "operator": { "type": "string", "operation": "regex" } }
-          ],
+          "conditions": [{ "id": "v1", "leftValue": "={{ $json.orcamento_id }}", "rightValue": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", "operator": { "type": "string", "operation": "regex" } }],
           "combinator": "and"
         },
         "options": {}
@@ -235,14 +225,14 @@
       "name": "orcamento_id é um UUID Válido? · Adicionar Item",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [-1360, 480]
+      "position": [-1488, 368]
     },
     {
       "parameters": {
         "assignments": {
           "assignments": [
             { "id": "1", "name": "sucesso", "value": "={{ false }}", "type": "boolean" },
-            { "id": "2", "name": "motivo", "value": "O identificador de orçamento informado não é um ID válido (pode ser o protocolo, ex. ORC-2026-0034, e não o ID interno). Não confirme o item como adicionado.", "type": "string" }
+            { "id": "2", "name": "motivo", "value": "O identificador de orçamento informado não é um ID válido.", "type": "string" }
           ]
         },
         "options": {}
@@ -251,35 +241,28 @@
       "name": "Set · Resultado Orçamento ID Inválido · Adicionar Item",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-1360, 700]
+      "position": [-1488, 880]
     },
     {
       "parameters": {
         "operation": "getAll",
         "tableId": "orcamentos",
-        "returnAll": false,
         "limit": 1,
-        "alwaysOutputData": true,
-        "filters": {
-          "conditions": [
-            { "keyName": "id", "condition": "eq", "keyValue": "={{ $json.orcamento_id }}" }
-          ]
-        }
+        "filters": { "conditions": [{ "keyName": "id", "condition": "eq", "keyValue": "={{ $json.orcamento_id }}" }] }
       },
+      "alwaysOutputData": true,
       "id": "d4d4d4d4-0001-4a00-8000-000000000005",
       "name": "Supabase · Buscar Orçamento · Adicionar Item",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [-1200, 480],
+      "position": [-1296, 368],
       "credentials": { "supabaseApi": { "id": "IlPIhLKj72bLR8RD", "name": "Supabase account" } }
     },
     {
       "parameters": {
         "conditions": {
           "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
-          "conditions": [
-            { "id": "c1", "leftValue": "={{ $json.status }}", "rightValue": "", "operator": { "type": "string", "operation": "notEmpty" } }
-          ],
+          "conditions": [{ "id": "c1", "leftValue": "={{ $json.status }}", "rightValue": "", "operator": { "type": "string", "operation": "notEmpty" } }],
           "combinator": "and"
         },
         "options": {}
@@ -288,7 +271,7 @@
       "name": "Orçamento Encontrado? · Adicionar Item",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [-1040, 480]
+      "position": [-1104, 368]
     },
     {
       "parameters": {
@@ -304,15 +287,13 @@
       "name": "Set · Resultado Orçamento Não Encontrado · Adicionar Item",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-1040, 700]
+      "position": [-560, 1008]
     },
     {
       "parameters": {
         "conditions": {
           "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
-          "conditions": [
-            { "id": "c1", "leftValue": "={{ $json.conversa_id }}", "rightValue": "={{ $('Normaliza Entrada').item.json.conversa_id }}", "operator": { "type": "string", "operation": "equals" } }
-          ],
+          "conditions": [{ "id": "c1", "leftValue": "={{ $json.conversa_id }}", "rightValue": "={{ $('Normaliza Entrada').item.json.conversa_id }}", "operator": { "type": "string", "operation": "equals" } }],
           "combinator": "and"
         },
         "options": {}
@@ -321,15 +302,14 @@
       "name": "Pertence a Esta Conversa?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [-880, 480],
-      "notes": "Compara o conversa_id do orçamento encontrado com o conversa_id real desta execução (contexto do sistema, não $fromAI) — evita que um orcamento_id de outra conversa receba item."
+      "position": [-912, 368]
     },
     {
       "parameters": {
         "assignments": {
           "assignments": [
             { "id": "1", "name": "sucesso", "value": "={{ false }}", "type": "boolean" },
-            { "id": "2", "name": "motivo", "value": "Este orçamento não pertence a esta conversa — não é possível adicionar item nele.", "type": "string" }
+            { "id": "2", "name": "motivo", "value": "Este orçamento não pertence a esta conversa.", "type": "string" }
           ]
         },
         "options": {}
@@ -338,15 +318,13 @@
       "name": "Set · Resultado Outra Conversa",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-880, 700]
+      "position": [-912, 880]
     },
     {
       "parameters": {
         "conditions": {
           "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
-          "conditions": [
-            { "id": "c1", "leftValue": "={{ $json.status }}", "rightValue": "rascunho", "operator": { "type": "string", "operation": "equals" } }
-          ],
+          "conditions": [{ "id": "c1", "leftValue": "={{ $json.status }}", "rightValue": "rascunho", "operator": { "type": "string", "operation": "equals" } }],
           "combinator": "and"
         },
         "options": {}
@@ -355,14 +333,14 @@
       "name": "Ainda em Rascunho? · Adicionar Item",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [-720, 480]
+      "position": [-720, 368]
     },
     {
       "parameters": {
         "assignments": {
           "assignments": [
             { "id": "1", "name": "sucesso", "value": "={{ false }}", "type": "boolean" },
-            { "id": "2", "name": "motivo", "value": "Este orçamento já não está mais em rascunho — não é possível adicionar item nele.", "type": "string" }
+            { "id": "2", "name": "motivo", "value": "Este orçamento já não está mais em rascunho.", "type": "string" }
           ]
         },
         "options": {}
@@ -371,15 +349,13 @@
       "name": "Set · Resultado Já Fechado · Adicionar Item",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-720, 700]
+      "position": [-720, 880]
     },
     {
       "parameters": {
         "conditions": {
           "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict", "version": 2 },
-          "conditions": [
-            { "id": "v1", "leftValue": "={{ $('Normaliza Entrada').item.json.produto_id }}", "rightValue": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", "operator": { "type": "string", "operation": "regex" } }
-          ],
+          "conditions": [{ "id": "v1", "leftValue": "={{ $('Normaliza Entrada').item.json.produto_id }}", "rightValue": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", "operator": { "type": "string", "operation": "regex" } }],
           "combinator": "and"
         },
         "options": {}
@@ -388,7 +364,7 @@
       "name": "produto_id é um UUID Válido?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [-560, 480]
+      "position": [-336, 368]
     },
     {
       "parameters": {
@@ -404,15 +380,13 @@
       "name": "Set · Resultado Produto ID Inválido",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-560, 700]
+      "position": [-336, 880]
     },
     {
       "parameters": {
         "conditions": {
           "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
-          "conditions": [
-            { "id": "c1", "leftValue": "={{ $('Normaliza Entrada').item.json.quantidade }}", "rightValue": 0, "operator": { "type": "number", "operation": "gt" } }
-          ],
+          "conditions": [{ "id": "c1", "leftValue": "={{ $('Normaliza Entrada').item.json.quantidade }}", "rightValue": 0, "operator": { "type": "number", "operation": "gt" } }],
           "combinator": "and"
         },
         "options": {}
@@ -421,8 +395,7 @@
       "name": "Quantidade É Válida?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [-400, 480],
-      "notes": "Único IF desta raia com comparação numérica — confira este node após reimportar."
+      "position": [-144, 368]
     },
     {
       "parameters": {
@@ -438,36 +411,28 @@
       "name": "Set · Resultado Quantidade Inválida",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-400, 700]
+      "position": [-144, 880]
     },
     {
       "parameters": {
         "operation": "getAll",
         "tableId": "produtos",
-        "returnAll": false,
         "limit": 1,
-        "alwaysOutputData": true,
-        "filters": {
-          "conditions": [
-            { "keyName": "id", "condition": "eq", "keyValue": "={{ $('Normaliza Entrada').item.json.produto_id }}" }
-          ]
-        }
+        "filters": { "conditions": [{ "keyName": "id", "condition": "eq", "keyValue": "={{ $('Normaliza Entrada').item.json.produto_id }}" }] }
       },
+      "alwaysOutputData": true,
       "id": "d4d4d4d4-0001-4a00-8000-000000000010",
       "name": "Supabase · Buscar Produto",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [-240, 480],
-      "credentials": { "supabaseApi": { "id": "IlPIhLKj72bLR8RD", "name": "Supabase account" } },
-      "notes": "É AQUI que o preço real é obtido — valor_unitario nunca vem de $fromAI(), vem de produtos.preco."
+      "position": [48, 368],
+      "credentials": { "supabaseApi": { "id": "IlPIhLKj72bLR8RD", "name": "Supabase account" } }
     },
     {
       "parameters": {
         "conditions": {
           "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
-          "conditions": [
-            { "id": "c1", "leftValue": "={{ $json.nome }}", "rightValue": "", "operator": { "type": "string", "operation": "notEmpty" } }
-          ],
+          "conditions": [{ "id": "c1", "leftValue": "={{ $json.nome }}", "rightValue": "", "operator": { "type": "string", "operation": "notEmpty" } }],
           "combinator": "and"
         },
         "options": {}
@@ -476,14 +441,14 @@
       "name": "Produto Encontrado?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [-80, 480]
+      "position": [240, 368]
     },
     {
       "parameters": {
         "assignments": {
           "assignments": [
             { "id": "1", "name": "sucesso", "value": "={{ false }}", "type": "boolean" },
-            { "id": "2", "name": "motivo", "value": "Não encontrei esse produto no catálogo — confirme o produto pela ferramenta de consulta antes de adicionar.", "type": "string" }
+            { "id": "2", "name": "motivo", "value": "Não encontrei esse produto no catálogo.", "type": "string" }
           ]
         },
         "options": {}
@@ -492,15 +457,15 @@
       "name": "Set · Resultado Produto Não Encontrado",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-80, 700]
+      "position": [432, 880]
     },
     {
       "parameters": {
         "tableId": "itens_orcamento",
         "fieldsUi": {
           "fieldValues": [
-            { "fieldId": "orcamento_id", "fieldValue": "={{ $('Normaliza Entrada').item.json.orcamento_id }}" },
-            { "fieldId": "produto_id", "fieldValue": "={{ $('Normaliza Entrada').item.json.produto_id }}" },
+            { "fieldId": "orcamento_id", "fieldValue": "={{ $('Set · orcamento_id Resolvido · Adicionar Item').item.json.orcamento_id_resolvido }}" },
+            { "fieldId": "produto_id", "fieldValue": "={{ $json.id }}" },
             { "fieldId": "quantidade", "fieldValue": "={{ $('Normaliza Entrada').item.json.quantidade }}" },
             { "fieldId": "valor_unitario", "fieldValue": "={{ $json.preco }}" }
           ]
@@ -510,9 +475,8 @@
       "name": "Supabase · Insere Item",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [80, 480],
-      "credentials": { "supabaseApi": { "id": "IlPIhLKj72bLR8RD", "name": "Supabase account" } },
-      "notes": "valor_unitario = $json.preco (de 'Supabase · Buscar Produto') — nunca um valor vindo da IA."
+      "position": [432, 368],
+      "credentials": { "supabaseApi": { "id": "IlPIhLKj72bLR8RD", "name": "Supabase account" } }
     },
     {
       "parameters": {
@@ -530,18 +494,21 @@
       "name": "Set · Resultado Sucesso · Adicionar Item",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [240, 480]
+      "position": [624, 368]
     },
-
-    { "parameters": { "content": "## Raia 3 · Fechar Orçamento\nEquivalente ao antigo \"Fechar Orçamento (Sub-workflow).json\". Entrada usada: orcamento_id. Reproduz com nós nativos exatamente o que aceitar_orcamento() fazia no banco.", "height": 260, "width": 1900, "color": 4 }, "id": "c7c7c7c7-0000-4a00-8000-000000000009", "name": "Nota · Raia Fechar", "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [-1360, 1000] },
-
+    {
+      "parameters": { "content": "## Raia 3 · Fechar Orçamento", "height": 260, "width": 1900, "color": 4 },
+      "id": "c7c7c7c7-0000-4a00-8000-000000000009",
+      "name": "Nota · Raia Fechar",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-1504, 1216]
+    },
     {
       "parameters": {
         "conditions": {
           "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict", "version": 2 },
-          "conditions": [
-            { "id": "v1", "leftValue": "={{ $json.orcamento_id }}", "rightValue": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", "operator": { "type": "string", "operation": "regex" } }
-          ],
+          "conditions": [{ "id": "v1", "leftValue": "={{ $json.orcamento_id }}", "rightValue": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", "operator": { "type": "string", "operation": "regex" } }],
           "combinator": "and"
         },
         "options": {}
@@ -550,14 +517,14 @@
       "name": "orcamento_id é um UUID Válido? · Fechar",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [-1360, 1180]
+      "position": [-1456, 1312]
     },
     {
       "parameters": {
         "assignments": {
           "assignments": [
             { "id": "1", "name": "sucesso", "value": "={{ false }}", "type": "boolean" },
-            { "id": "2", "name": "motivo", "value": "O identificador informado não é um ID de orçamento válido (parece ser o protocolo, ex. ORC-2026-0034, e não o ID interno). Não confirme o pedido — avise o cliente que houve um problema técnico e que a equipe vai verificar manualmente.", "type": "string" }
+            { "id": "2", "name": "motivo", "value": "O identificador informado não é um ID de orçamento válido.", "type": "string" }
           ]
         },
         "options": {}
@@ -566,35 +533,28 @@
       "name": "Set · Resultado Orçamento ID Inválido · Fechar",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-1360, 1400]
+      "position": [-1488, 1600]
     },
     {
       "parameters": {
         "operation": "getAll",
         "tableId": "orcamentos",
-        "returnAll": false,
         "limit": 1,
-        "alwaysOutputData": true,
-        "filters": {
-          "conditions": [
-            { "keyName": "id", "condition": "eq", "keyValue": "={{ $json.orcamento_id }}" }
-          ]
-        }
+        "filters": { "conditions": [{ "keyName": "id", "condition": "eq", "keyValue": "={{ $json.orcamento_id }}" }] }
       },
+      "alwaysOutputData": true,
       "id": "f6f6f6f6-0001-4a00-8000-000000000003",
       "name": "Supabase · Buscar Orçamento · Fechar",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [-1200, 1180],
+      "position": [-1280, 1296],
       "credentials": { "supabaseApi": { "id": "IlPIhLKj72bLR8RD", "name": "Supabase account" } }
     },
     {
       "parameters": {
         "conditions": {
           "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
-          "conditions": [
-            { "id": "c1", "leftValue": "={{ $json.status }}", "rightValue": "", "operator": { "type": "string", "operation": "notEmpty" } }
-          ],
+          "conditions": [{ "id": "c1", "leftValue": "={{ $json.status }}", "rightValue": "", "operator": { "type": "string", "operation": "notEmpty" } }],
           "combinator": "and"
         },
         "options": {}
@@ -603,14 +563,14 @@
       "name": "Orçamento Encontrado? · Fechar",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [-1040, 1180]
+      "position": [-1104, 1296]
     },
     {
       "parameters": {
         "assignments": {
           "assignments": [
             { "id": "1", "name": "sucesso", "value": "={{ false }}", "type": "boolean" },
-            { "id": "2", "name": "motivo", "value": "Não encontrei nenhum orçamento com esse ID. Pode ter sido removido ou o ID pode estar desatualizado — não confirme nenhum pedido, avise o cliente que houve um problema técnico e será verificado manualmente.", "type": "string" }
+            { "id": "2", "name": "motivo", "value": "Não encontrei nenhum orçamento com esse ID.", "type": "string" }
           ]
         },
         "options": {}
@@ -619,15 +579,13 @@
       "name": "Set · Resultado Orçamento Não Encontrado · Fechar",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-1040, 1400]
+      "position": [-1104, 1600]
     },
     {
       "parameters": {
         "conditions": {
           "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
-          "conditions": [
-            { "id": "c1", "leftValue": "={{ $json.status }}", "rightValue": "rascunho", "operator": { "type": "string", "operation": "equals" } }
-          ],
+          "conditions": [{ "id": "c1", "leftValue": "={{ $json.status }}", "rightValue": "rascunho", "operator": { "type": "string", "operation": "equals" } }],
           "combinator": "and"
         },
         "options": {}
@@ -636,7 +594,7 @@
       "name": "Ainda em Rascunho? · Fechar",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [-880, 1180]
+      "position": [-928, 1280]
     },
     {
       "parameters": {},
@@ -644,14 +602,14 @@
       "name": "Já Fechado (Ignorado) · Fechar",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
-      "position": [-880, 1340]
+      "position": [-912, 1600]
     },
     {
       "parameters": {
         "assignments": {
           "assignments": [
             { "id": "1", "name": "sucesso", "value": "={{ false }}", "type": "boolean" },
-            { "id": "2", "name": "motivo", "value": "Este orçamento já não está mais em rascunho (já foi fechado antes ou está noutro estado).", "type": "string" }
+            { "id": "2", "name": "motivo", "value": "Este orçamento já não está mais em rascunho.", "type": "string" }
           ]
         },
         "options": {}
@@ -660,51 +618,44 @@
       "name": "Set · Resultado Já Fechado · Fechar",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-880, 1480]
+      "position": [-912, 1760]
     },
     {
       "parameters": {
         "operation": "getAll",
         "tableId": "itens_orcamento",
-        "returnAll": false,
         "limit": 1,
-        "alwaysOutputData": true,
-        "filters": {
-          "conditions": [
-            { "keyName": "orcamento_id", "condition": "eq", "keyValue": "={{ $('Supabase · Buscar Orçamento · Fechar').item.json.id }}" }
-          ]
-        }
+        "filters": { "conditions": [{ "keyName": "orcamento_id", "condition": "eq", "keyValue": "={{ $('Supabase · Buscar Orçamento · Fechar').item.json.id }}" }] }
       },
+      "alwaysOutputData": true,
       "id": "f6f6f6f6-0001-4a00-8000-000000000009",
       "name": "Verifica Existência de Itens",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [-720, 1060],
+      "position": [-752, 1264],
       "credentials": { "supabaseApi": { "id": "IlPIhLKj72bLR8RD", "name": "Supabase account" } }
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
-          "conditions": [
-            { "id": "c1", "leftValue": "={{ $json.quantidade }}", "rightValue": "", "operator": { "type": "string", "operation": "notEmpty" } }
-          ],
+          "options": { "version": 2, "leftValue": "", "caseSensitive": true, "typeValidation": "strict" },
+          "conditions": [{ "id": "c1", "leftValue": "={{ $json.quantidade !== undefined && $json.quantidade !== null }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } }],
           "combinator": "and"
         },
         "options": {}
       },
-      "id": "f6f6f6f6-0001-4a00-8000-00000000010",
+      "id": "f6f6f6f6-0001-4a00-8000-00000010",
       "name": "Tem Pelo Menos 1 Item?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [-560, 1180]
+      "position": [-576, 1264]
     },
     {
       "parameters": {
         "assignments": {
           "assignments": [
             { "id": "1", "name": "sucesso", "value": "={{ false }}", "type": "boolean" },
-            { "id": "2", "name": "motivo", "value": "Este orçamento ainda não tem nenhum item adicionado — não é possível fechar um pedido vazio.", "type": "string" }
+            { "id": "2", "name": "motivo", "value": "Este orçamento ainda não tem nenhum item adicionado.", "type": "string" }
           ]
         },
         "options": {}
@@ -713,15 +664,13 @@
       "name": "Set · Resultado Sem Itens",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-560, 1400]
+      "position": [-528, 1600]
     },
     {
       "parameters": {
         "conditions": {
           "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
-          "conditions": [
-            { "id": "c1", "leftValue": "={{ $('Supabase · Buscar Orçamento · Fechar').item.json.conversa_id }}", "rightValue": "={{ $('Normaliza Entrada').item.json.conversa_id }}", "operator": { "type": "string", "operation": "equals" } }
-          ],
+          "conditions": [{ "id": "c1", "leftValue": "={{ $('Supabase · Buscar Orçamento · Fechar').item.json.conversa_id }}", "rightValue": "={{ $('Normaliza Entrada').item.json.conversa_id }}", "operator": { "type": "string", "operation": "equals" } }],
           "combinator": "and"
         },
         "options": {}
@@ -730,15 +679,14 @@
       "name": "Pertence a Esta Conversa? · Fechar",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [-400, 1060],
-      "notes": "Achado A3 (DIAGNOSTICO_VENANCIO.md): a raia 'Fechar' validava UUID/existência/status/itens mas nunca comparava conversa_id, ao contrário da raia 'Adicionar Item' (nó 'Pertence a Esta Conversa?'). Mesmo padrão replicado aqui: compara o conversa_id do orçamento encontrado com o conversa_id real desta execução, ANTES de chamar a RPC de fechamento."
+      "position": [-368, 1248]
     },
     {
       "parameters": {
         "assignments": {
           "assignments": [
             { "id": "1", "name": "sucesso", "value": "={{ false }}", "type": "boolean" },
-            { "id": "2", "name": "motivo", "value": "Este orçamento não pertence a esta conversa — não é possível fechar/gerar pedido para ele.", "type": "string" },
+            { "id": "2", "name": "motivo", "value": "Este orçamento não pertence a esta conversa.", "type": "string" },
             { "id": "3", "name": "error", "value": "orcamento_id não pertence a esta conversa", "type": "string" },
             { "id": "4", "name": "encerrar", "value": "={{ true }}", "type": "boolean" }
           ]
@@ -749,29 +697,24 @@
       "name": "Set · Resultado Outra Conversa · Fechar",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-400, 1280],
-      "notes": "Branch false de 'Pertence a Esta Conversa? · Fechar' — não executa nenhum fechamento de orçamento."
+      "position": [-336, 1600]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/aceitar_orcamento",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "url": "https://esvduqgqiypcpgxhunsd.supabase.co/rest/v1/rpc/aceitar_orcamento",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
         "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            { "name": "apikey", "value": "={{ $env.SUPABASE_ANON_KEY }}" },
-            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_ANON_KEY }}" },
-            { "name": "Content-Type", "value": "application/json" },
-            { "name": "Prefer", "value": "return=representation" }
-          ]
-        },
+        "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }, { "name": "Prefer", "value": "return=representation" }] },
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
             { "name": "p_orcamento_id", "value": "={{ $('Supabase · Buscar Orçamento · Fechar').item.json.id }}" },
-            { "name": "p_origem", "value": "agente_vendas_n8n" }
+            { "name": "p_origem", "value": "agente_vendas_n8n" },
+            { "name": "p_forma_entrega", "value": "={{ ['retirada','entrega_propria','uber_flash'].includes($json.forma_entrega) ? $json.forma_entrega : null }}" },
+            { "name": "p_endereco_entrega", "value": "={{ $json.endereco_entrega || null }}" },
+            { "name": "p_horario_retirada_desejado", "value": "={{ $json.horario_retirada_desejado || null }}" }
           ]
         },
         "options": {}
@@ -780,8 +723,8 @@
       "name": "RPC · Aceitar Orçamento",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-240, 1060],
-      "notes": "Correção C2 (DIAGNOSTICO_VENANCIO.md): substitui os antigos 5 nós Supabase sequenciais (Marca Orçamento Aceito → Cria Pedido → Busca Itens do Orçamento → Copia Item pro Pedido → Grava Histórico Pedido) por UMA única chamada à função RPC 'aceitar_orcamento()' (squemanovo.sql:385-409), que já faz toda essa sequência dentro de uma única transação PL/pgSQL atômica no banco. Retorna a linha de 'pedidos' criada (id, protocolo, cliente_id, orcamento_id, conversa_id, status...). AÇÃO MANUAL PENDENTE: o nó usa 'genericCredentialType'/'httpHeaderAuth' mas não há credencial vinculada no export (mesmo padrão de A4/Correção 6) — ou vincule uma credencial Header Auth no n8n, ou troque 'authentication' para 'none' e confie apenas nos headers apikey/Authorization já preenchidos via $env. Requer SUPABASE_URL e SUPABASE_ANON_KEY (ou uma service role key com permissão de executar a função) configuradas como variáveis de ambiente do n8n."
+      "position": [64, 1248],
+      "credentials": { "supabaseApi": { "id": "IlPIhLKj72bLR8RD", "name": "Supabase account" } }
     },
     {
       "parameters": {
@@ -798,8 +741,280 @@
       "name": "Set · Resultado Sucesso · Fechar",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [400, 1060],
-      "notes": "Campos agora lidos da resposta do nó 'RPC · Aceitar Orçamento' (linha de 'pedidos' retornada pela função), não mais de 'Supabase · Cria Pedido' (removido). Expressão com Array.isArray cobre tanto o caso do PostgREST devolver um objeto único quanto um array de 1 elemento — confirmar formato real após reimportar e ajustar se necessário."
+      "position": [240, 1248]
+    },
+    {
+      "parameters": {
+        "content": "## Auditoria nodes Supabase — filtro multi-condição (03/08)\n\nBug: node Supabase v1 (getAll/update) ignora silenciosamente a 2a+ condição de um filtro com 2+ condições.\n\nVarredura completa dos 2 workflows de produção (Agente vendedor + este sub-workflow) — 12 nodes n8n-nodes-base.supabase + 2 supabaseTool:\n\n- Grava Msg Cliente — insert, sem filtro\n- Atualiza Tempo Conversa — 1 condição\n- Verifica Validade da Conversa — 1 condição\n- Verifica Pedido Existe · Guard — 1 condição\n- Supabase · Grava Resposta — insert, sem filtro\n- Consultar Produtos / Consultar Categorias (tools) — 1 condição / sem filtro\n- Supabase · Buscar Orçamento Aberto — 2 condições (conversa_id + status). Bug confirmado 30/07. \"Corrigido\" em 03/08 revalidando só status no IF \"Já Existe Orçamento Aberto?\" — mas conversa_id NUNCA foi revalidado, e era essa a condição que o node estava de fato ignorando. Efeito real em produção (achado 25/08, via node_executions 11725/11726): a query devolvia orçamento em rascunho de OUTRO cliente/conversa; o guard \"Pertence a Esta Conversa?\" da raia Adicionar Item barrava a escrita a tempo (por isso não houve vazamento de dado), mas o cliente ficava travado recebendo \"não consegui adicionar\" pra sempre, porque o orcamento_id devolvido nunca era dele. Corrigido de vez em 25/08: o IF agora também exige `$json.conversa_id === $('Normaliza Entrada').item.json.conversa_id` — se não bater, cai corretamente no fluxo de criar orçamento novo.\n- Supabase · Cria Orçamento Novo — insert, sem filtro\n- Supabase · Buscar Orçamento · Adicionar Item — 1 condição\n- Supabase · Buscar Produto — 1 condição\n- Supabase · Insere Item — insert, sem filtro\n- Supabase · Buscar Orçamento · Fechar — 1 condição\n- Verifica Existência de Itens — 1 condição\n\nNenhum outro node com 2+ condições encontrado nesta rodada. Re-auditar antes de assumir isso como verdade caso algum node novo com filtro seja adicionado depois de 03/08.\n\n## Atualização 26/08 (T2.1 — problema P6)\n\nO \"corrigido em 03/08\" acima não corrigiu a causa raiz: o node Supabase · Buscar Orçamento Aberto continuava com as 2 condições (conversa_id + status) — o bug do node v1 ignora a 2a em silêncio, então na prática só `conversa_id=eq` era aplicado nas versões antigas do driver, mas em 25/08 (execução n8n 11774) a consulta devolveu um orçamento de OUTRO cliente (conversa_id null, outro cliente_id), evidência de que o comportamento do bug pode variar/piorar. Efeito em cadeia: por nunca reaproveitar o rascunho certo, cada chamada de \"Criar Orçamento\" na mesma conversa criava um rascunho novo (3 rascunhos achados pra conversa 493b2143-... nesse dia).\n\nCorreção aplicada hoje (opção b, decidida pelo dono): removida a condição `status` do filtro do node — agora o node só filtra por `conversa_id` (único filtro, imune ao bug). O IF seguinte \"Já Existe Orçamento Aberto?\" já validava `status === 'rascunho' && conversa_id === conversa_id da entrada` desde 25/08 e continua fazendo essa validação sem mudança nenhuma — ele é quem decide reaproveitar ou criar novo. Guardas \"Pertence a Esta Conversa?\" e \"Já Existe Orçamento Aberto?\" não foram tocados.\n\nReauditoria 26/08: revisei também todos os nodes Supabase do Agente de Vendas (qqN54gUwSLYq14bZ) — Grava Msg Cliente, Atualiza Tempo Conversa, Verifica Validade da Conversa, Verifica Pedido Existe · Guard, Supabase · Grava Resposta, Consultar Categorias, Perguntar ao Operador, Erro · Registra Evento, Erro · Registra Falha no Respond to Webhook, Erro Registra Evento Falha Tool via Agente — nenhum tem 2+ condições. Único node com filtro multi-condição nos dois workflows era este, agora corrigido.\n\nRessalva: a tabela orcamentos ainda tem rascunhos duplicados pré-existentes de antes da correção (ex: conversa 493b2143-... com 3 rascunhos) — limpeza é a tarefa T2.4, separada desta.\n\n## Verificação 01/09: nenhum node deste workflow tem hoje 2+ condições de filtro (reconferido ao vivo, incluindo os nodes de fallback adicionados em 26/08 e 01/09).",
+        "height": 620,
+        "width": 480
+      },
+      "id": "630cf158-5e0d-437e-8a7b-4ef30aa2c941",
+      "name": "Nota · Auditoria Filtro Multi-condição (03/08)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-1056, -1504]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "version": 2, "leftValue": "", "caseSensitive": true, "typeValidation": "strict" },
+          "conditions": [{ "id": "c1", "leftValue": "={{ !!$('Normaliza Entrada').item.json.forma_entrega }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a5db15d6-826c-49e7-b437-7b40ae1ce103",
+      "name": "Dados de Entrega Já Informados? · Fechar",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-160, 1248]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "mensagens",
+        "returnAll": true,
+        "filters": { "conditions": [{ "keyName": "conversa_id", "condition": "eq", "keyValue": "={{ $('Normaliza Entrada').item.json.conversa_id }}" }] }
+      },
+      "id": "f35d50b3-aba2-4af5-ada3-d2a6c53bf4f9",
+      "name": "Buscar Mensagens Recentes · Fechar",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [-144, 1600],
+      "credentials": { "supabaseApi": { "id": "IlPIhLKj72bLR8RD", "name": "Supabase account" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const itens = $input.all().map(i => i.json)\n  .sort((a, b) => new Date(a.enviado_em) - new Date(b.enviado_em))\n  .slice(-20);\n\nconst linhas = itens.map(m => {\n  let texto = m.conteudo;\n  try {\n    const parsed = JSON.parse(m.conteudo);\n    if (Array.isArray(parsed)) texto = parsed.join(' ');\n  } catch (e) {}\n  const quem = m.remetente === 'cliente' ? 'Cliente' : 'Loja';\n  return `${quem}: ${texto}`;\n});\n\nreturn [{ json: { transcript: linhas.join('\\n') } }];"
+      },
+      "id": "2363d16a-b1ad-4763-8c45-60adcdaff190",
+      "name": "Monta Texto da Conversa · Fechar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [48, 1600]
+    },
+    {
+      "parameters": { "model": "google/gemini-2.5-flash", "options": { "responseFormat": "json_object" } },
+      "id": "8f4668e1-50d4-428c-b770-f21a5ad3cae4",
+      "name": "OpenRouter Chat Model · Extração Entrega",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [240, 1856],
+      "credentials": { "openRouterApi": { "id": "R2kDTiP9SEakdSsr", "name": "OPENROUTER API JOAO" } }
+    },
+    {
+      "parameters": {
+        "text": "={{ $json.transcript }}",
+        "attributes": {
+          "attributes": [
+            { "name": "quer_retirar", "type": "boolean", "description": "true se o cliente disse que vai retirar/buscar o pedido na loja; false se ele disse que quer receber em casa/entrega; se nao ficou claro nas mensagens, NAO inclua essa chave no JSON de resposta -- nunca escreva null, isso quebra a validacao" },
+            { "name": "endereco_entrega", "description": "endereco completo que o cliente informou para entrega, exatamente como ele escreveu; vazio se for retirada ou se nao foi informado" },
+            { "name": "horario_desejado", "description": "horario ou prazo que o cliente pediu para retirar ou receber, exatamente como ele disse, em texto livre (ex: 'hoje as 16h', 'amanha de manha'); vazio se nao foi mencionado" }
+          ]
+        },
+        "options": {
+          "systemPromptTemplate": "You are an expert extraction algorithm.\nOnly extract relevant information from the text.\nIf you do not know the value of an attribute asked to extract, you may omit the attribute's value. NUNCA escreva null como valor de nenhum atributo -- se voce nao souber o valor, simplesmente omita a chave inteira do JSON de resposta (a validacao rejeita null e quebra a execucao inteira).\n\nResponda APENAS com o objeto JSON puro (comecando direto em { e terminando em }), sem nenhum texto antes ou depois, e NUNCA envolva a resposta em blocos de codigo markdown -- nunca use ```json ou ``` ao redor do JSON."
+        }
+      },
+      "id": "6c035309-3c69-4e22-bd86-e9b5e439707b",
+      "name": "Extrai Dados de Entrega",
+      "type": "@n8n/n8n-nodes-langchain.informationExtractor",
+      "typeVersion": 1.2,
+      "position": [240, 1600],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "1", "name": "forma_entrega", "value": "={{ $json.output?.quer_retirar === true ? 'retirada' : ($json.output?.quer_retirar === false ? (Number($('Supabase · Buscar Orçamento · Fechar').item.json.valor_total) >= 100 ? 'entrega_propria' : 'uber_flash') : null) }}", "type": "string" },
+            { "id": "2", "name": "endereco_entrega", "value": "={{ $json.output?.quer_retirar === false ? ($json.output?.endereco_entrega || null) : null }}", "type": "string" },
+            { "id": "3", "name": "horario_retirada_desejado", "value": "={{ $json.output?.horario_desejado || null }}", "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d2c5f8b5-c03e-4193-bb23-a9e833c37ccd",
+      "name": "Aplica Dados Extraídos · Fechar",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [640, 1600]
+    },
+    {
+      "parameters": {
+        "content": "## Fallback determinístico\nSe o Agente de Vendas nao passou forma_entrega/endereco/horario ao chamar Fechar Orcamento (observado em 3/3 testes reais), extrai isso de um jeito confiavel: le as ultimas mensagens da conversa com uma chain de IA dedicada e simples (so extracao, nao decide nada de negocio), e a decisao entrega_propria vs uber_flash (regra dos R$100) fica 100% em codigo, nao depende do modelo.",
+        "height": 220,
+        "width": 300,
+        "color": 5
+      },
+      "id": "798e3034-68a2-4fef-946d-fbf7bae8a8cb",
+      "name": "Nota · Extração Determinística de Entrega (20/08)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-144, 1504]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "produtos",
+        "limit": 1,
+        "filters": { "conditions": [{ "keyName": "nome", "condition": "ilike", "keyValue": "={{ $('Normaliza Entrada').item.json.nome_produto }}" }] }
+      },
+      "id": "6b93d3c1-9047-4c30-8cc4-46ab12466484",
+      "name": "Supabase · Buscar Produto por Nome",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [240, 624],
+      "alwaysOutputData": true,
+      "credentials": { "supabaseApi": { "id": "IlPIhLKj72bLR8RD", "name": "Supabase account" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "version": 2, "leftValue": "", "caseSensitive": true, "typeValidation": "strict" },
+          "conditions": [{ "id": "c1", "leftValue": "={{ $json.nome }}", "rightValue": "", "operator": { "type": "string", "operation": "notEmpty", "singleValue": true } }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "51dbb172-948e-49e6-90f6-173b75f3a2dd",
+      "name": "Produto Encontrado por Nome?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [432, 624]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "orcamentos",
+        "limit": 1,
+        "filters": { "conditions": [{ "keyName": "conversa_id", "condition": "eq", "keyValue": "={{ $('Normaliza Entrada').item.json.conversa_id }}" }] }
+      },
+      "id": "fb1fb1fb-0001-4a00-8000-000000000001",
+      "name": "Supabase · Buscar Orçamento por Conversa · Fallback",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [-912, 624],
+      "alwaysOutputData": true,
+      "credentials": { "supabaseApi": { "id": "IlPIhLKj72bLR8RD", "name": "Supabase account" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "version": 2, "leftValue": "", "caseSensitive": true, "typeValidation": "strict" },
+          "conditions": [{ "id": "c1", "leftValue": "={{ !!$json.id && $json.status === 'rascunho' }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "fb1fb1fb-0001-4a00-8000-000000000002",
+      "name": "Orçamento de Fallback Encontrado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-704, 624]
+    },
+    {
+      "parameters": {
+        "assignments": { "assignments": [{ "id": "1", "name": "orcamento_id_resolvido", "value": "={{ $json.id }}", "type": "string" }] },
+        "options": {}
+      },
+      "id": "fb1fb1fb-0001-4a00-8000-000000000003",
+      "name": "Set · orcamento_id Resolvido · Adicionar Item",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-528, 368]
+    },
+    {
+      "parameters": {
+        "content": "## Fallback: orcamento_id inventado pela IA (26/08)\n\nMesma classe de bug ja corrigido para produto_id (fallback por nome_produto). Aqui: se o orcamento_id que a IA passou nao existe em orcamentos, antes de desistir buscamos o orcamento em rascunho dessa mesma conversa (filtro so por conversa_id, devido ao bug do node Supabase v1 com 2+ condicoes -- status e validado no IF seguinte, nao no filtro).\n\nSe achar um rascunho da conversa: usamos o id real dele (nunca o que a IA mandou) e seguimos direto para a validacao de produto_id, pulando 'Pertence a Esta Conversa?' e 'Ainda em Rascunho?' porque a propria busca+IF ja garantem isso.\n\nSe nao achar: cai no mesmo resultado de 'nao encontrado' de sempre.\n\nIMPORTANTE: 'Supabase Insere Item' passou a usar o id resolvido aqui (no 'Set orcamento_id Resolvido Adicionar Item') em vez do orcamento_id cru da IA -- sem essa troca o insert quebraria com violacao de FK mesmo apos o fallback achar o orcamento certo.",
+        "height": 380,
+        "width": 460,
+        "color": 5
+      },
+      "id": "fb1fb1fb-0001-4a00-8000-000000000004",
+      "name": "Nota · Fallback orcamento_id por Conversa (26/08)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-2352, 512]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "itens_orcamento",
+        "returnAll": true,
+        "filters": { "conditions": [{ "keyName": "orcamento_id", "condition": "eq", "keyValue": "={{ $json.id }}" }] }
+      },
+      "id": "d7f62239-af93-4f52-bbc9-c4c7b649f8f1",
+      "name": "Supabase · Buscar Itens Existentes",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [-912, -240],
+      "alwaysOutputData": true,
+      "credentials": { "supabaseApi": { "id": "IlPIhLKj72bLR8RD", "name": "Supabase account" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const orc = $('Supabase · Buscar Orçamento Aberto').first().json;\n\nconst itens = $input.all()\n  .map(i => i.json)\n  .filter(it => it && it.id)\n  .filter(it => !String(it.descricao_livre || '').startsWith('Escola: '))\n  .map(it => ({\n    descricao: it.descricao_livre,\n    quantidade: it.quantidade,\n    valor_unitario: it.valor_unitario,\n    produto_id: it.produto_id,\n    precificado: it.valor_unitario !== null && it.valor_unitario !== undefined\n  }));\n\nreturn [{ json: { id: orc.id, protocolo: orc.protocolo, itens } }];"
+      },
+      "id": "4421a5b4-d065-4f91-9885-7b158e4516a3",
+      "name": "Code · Filtra Itens Existentes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-720, -240]
+    },
+    {
+      "id": "2deb899a-66e2-4463-a7bb-f89dbc55d9bd",
+      "name": "Nota · Fallback orcamento_id por Conversa · Fechar (01/09)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-1488, 1400],
+      "parameters": {
+        "content": "## Fallback orcamento_id · Fechar (01/09)\nSe o agente chamar \"Fechar Orçamento\" com orcamento_id vazio/inválido (ex.: chamou \"Criar Orçamento\" e \"Fechar Orçamento\" quase ao mesmo tempo, sem esperar o retorno), tenta resolver pelo orçamento em rascunho desta conversa antes de desistir -- mesmo padrão já usado na raia Adicionar Item (26/08).",
+        "height": 140,
+        "width": 340
+      }
+    },
+    {
+      "id": "720ad36d-16b9-4022-9df3-66e072c37a78",
+      "name": "Supabase · Buscar Orçamento por Conversa · Fallback · Fechar",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [-1488, 1500],
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "orcamentos",
+        "limit": 1,
+        "filters": { "conditions": [{ "keyName": "conversa_id", "condition": "eq", "keyValue": "={{ $('Normaliza Entrada').item.json.conversa_id }}" }] }
+      },
+      "credentials": { "supabaseApi": { "id": "IlPIhLKj72bLR8RD", "name": "Supabase account" } },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "d77953dc-cdc9-42a1-833a-9b42465072a4",
+      "name": "Orçamento de Fallback Válido? · Fechar",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-1296, 1500],
+      "parameters": {
+        "conditions": {
+          "options": { "version": 2, "leftValue": "", "caseSensitive": true, "typeValidation": "strict" },
+          "conditions": [{ "id": "c1", "leftValue": "={{ !!$json.id && $json.status === 'rascunho' }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } }],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "1c9a9235-85fc-4cf5-8c66-983f35dff144",
+      "name": "Set · orcamento_id Resolvido · Fechar",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-1104, 1500],
+      "parameters": {
+        "assignments": { "assignments": [{ "id": "1", "name": "orcamento_id", "value": "={{ $json.id }}", "type": "string" }] },
+        "options": {}
+      }
     }
   ],
   "connections": {
@@ -813,99 +1028,60 @@
         [{ "node": "Set · Resultado Ação Desconhecida", "type": "main", "index": 0 }]
       ]
     },
-
     "Supabase · Buscar Orçamento Aberto": { "main": [[{ "node": "Já Existe Orçamento Aberto?", "type": "main", "index": 0 }]] },
-    "Já Existe Orçamento Aberto?": {
-      "main": [
-        [{ "node": "Set · Resultado Reaproveitado", "type": "main", "index": 0 }],
-        [{ "node": "Supabase · Cria Orçamento Novo", "type": "main", "index": 0 }]
-      ]
-    },
+    "Já Existe Orçamento Aberto?": { "main": [[{ "node": "Supabase · Buscar Itens Existentes", "type": "main", "index": 0 }], [{ "node": "Supabase · Cria Orçamento Novo", "type": "main", "index": 0 }]] },
     "Supabase · Cria Orçamento Novo": { "main": [[{ "node": "Set · Resultado Criado", "type": "main", "index": 0 }]] },
-
-    "orcamento_id é um UUID Válido? · Adicionar Item": {
-      "main": [
-        [{ "node": "Supabase · Buscar Orçamento · Adicionar Item", "type": "main", "index": 0 }],
-        [{ "node": "Set · Resultado Orçamento ID Inválido · Adicionar Item", "type": "main", "index": 0 }]
-      ]
-    },
+    "orcamento_id é um UUID Válido? · Adicionar Item": { "main": [[{ "node": "Supabase · Buscar Orçamento · Adicionar Item", "type": "main", "index": 0 }], [{ "node": "Set · Resultado Orçamento ID Inválido · Adicionar Item", "type": "main", "index": 0 }]] },
     "Supabase · Buscar Orçamento · Adicionar Item": { "main": [[{ "node": "Orçamento Encontrado? · Adicionar Item", "type": "main", "index": 0 }]] },
-    "Orçamento Encontrado? · Adicionar Item": {
-      "main": [
-        [{ "node": "Pertence a Esta Conversa?", "type": "main", "index": 0 }],
-        [{ "node": "Set · Resultado Orçamento Não Encontrado · Adicionar Item", "type": "main", "index": 0 }]
-      ]
-    },
-    "Pertence a Esta Conversa?": {
-      "main": [
-        [{ "node": "Ainda em Rascunho? · Adicionar Item", "type": "main", "index": 0 }],
-        [{ "node": "Set · Resultado Outra Conversa", "type": "main", "index": 0 }]
-      ]
-    },
-    "Ainda em Rascunho? · Adicionar Item": {
-      "main": [
-        [{ "node": "produto_id é um UUID Válido?", "type": "main", "index": 0 }],
-        [{ "node": "Set · Resultado Já Fechado · Adicionar Item", "type": "main", "index": 0 }]
-      ]
-    },
-    "produto_id é um UUID Válido?": {
-      "main": [
-        [{ "node": "Quantidade É Válida?", "type": "main", "index": 0 }],
-        [{ "node": "Set · Resultado Produto ID Inválido", "type": "main", "index": 0 }]
-      ]
-    },
-    "Quantidade É Válida?": {
-      "main": [
-        [{ "node": "Supabase · Buscar Produto", "type": "main", "index": 0 }],
-        [{ "node": "Set · Resultado Quantidade Inválida", "type": "main", "index": 0 }]
-      ]
-    },
+    "Orçamento Encontrado? · Adicionar Item": { "main": [[{ "node": "Pertence a Esta Conversa?", "type": "main", "index": 0 }], [{ "node": "Supabase · Buscar Orçamento por Conversa · Fallback", "type": "main", "index": 0 }]] },
+    "Pertence a Esta Conversa?": { "main": [[{ "node": "Ainda em Rascunho? · Adicionar Item", "type": "main", "index": 0 }], [{ "node": "Set · Resultado Outra Conversa", "type": "main", "index": 0 }]] },
+    "Ainda em Rascunho? · Adicionar Item": { "main": [[{ "node": "Set · orcamento_id Resolvido · Adicionar Item", "type": "main", "index": 0 }], [{ "node": "Set · Resultado Já Fechado · Adicionar Item", "type": "main", "index": 0 }]] },
+    "produto_id é um UUID Válido?": { "main": [[{ "node": "Quantidade É Válida?", "type": "main", "index": 0 }], [{ "node": "Set · Resultado Produto ID Inválido", "type": "main", "index": 0 }]] },
+    "Quantidade É Válida?": { "main": [[{ "node": "Supabase · Buscar Produto", "type": "main", "index": 0 }], [{ "node": "Set · Resultado Quantidade Inválida", "type": "main", "index": 0 }]] },
     "Supabase · Buscar Produto": { "main": [[{ "node": "Produto Encontrado?", "type": "main", "index": 0 }]] },
-    "Produto Encontrado?": {
-      "main": [
-        [{ "node": "Supabase · Insere Item", "type": "main", "index": 0 }],
-        [{ "node": "Set · Resultado Produto Não Encontrado", "type": "main", "index": 0 }]
-      ]
-    },
+    "Produto Encontrado?": { "main": [[{ "node": "Supabase · Insere Item", "type": "main", "index": 0 }], [{ "node": "Supabase · Buscar Produto por Nome", "type": "main", "index": 0 }]] },
     "Supabase · Insere Item": { "main": [[{ "node": "Set · Resultado Sucesso · Adicionar Item", "type": "main", "index": 0 }]] },
-
-    "orcamento_id é um UUID Válido? · Fechar": {
-      "main": [
-        [{ "node": "Supabase · Buscar Orçamento · Fechar", "type": "main", "index": 0 }],
-        [{ "node": "Set · Resultado Orçamento ID Inválido · Fechar", "type": "main", "index": 0 }]
-      ]
-    },
+    "orcamento_id é um UUID Válido? · Fechar": { "main": [[{ "node": "Supabase · Buscar Orçamento · Fechar", "type": "main", "index": 0 }], [{ "node": "Supabase · Buscar Orçamento por Conversa · Fallback · Fechar", "type": "main", "index": 0 }]] },
     "Supabase · Buscar Orçamento · Fechar": { "main": [[{ "node": "Orçamento Encontrado? · Fechar", "type": "main", "index": 0 }]] },
-    "Orçamento Encontrado? · Fechar": {
-      "main": [
-        [{ "node": "Ainda em Rascunho? · Fechar", "type": "main", "index": 0 }],
-        [{ "node": "Set · Resultado Orçamento Não Encontrado · Fechar", "type": "main", "index": 0 }]
-      ]
-    },
-    "Ainda em Rascunho? · Fechar": {
-      "main": [
-        [{ "node": "Verifica Existência de Itens", "type": "main", "index": 0 }],
-        [{ "node": "Já Fechado (Ignorado) · Fechar", "type": "main", "index": 0 }]
-      ]
-    },
+    "Orçamento Encontrado? · Fechar": { "main": [[{ "node": "Ainda em Rascunho? · Fechar", "type": "main", "index": 0 }], [{ "node": "Set · Resultado Orçamento Não Encontrado · Fechar", "type": "main", "index": 0 }]] },
+    "Ainda em Rascunho? · Fechar": { "main": [[{ "node": "Verifica Existência de Itens", "type": "main", "index": 0 }], [{ "node": "Já Fechado (Ignorado) · Fechar", "type": "main", "index": 0 }]] },
     "Já Fechado (Ignorado) · Fechar": { "main": [[{ "node": "Set · Resultado Já Fechado · Fechar", "type": "main", "index": 0 }]] },
     "Verifica Existência de Itens": { "main": [[{ "node": "Tem Pelo Menos 1 Item?", "type": "main", "index": 0 }]] },
-    "Tem Pelo Menos 1 Item?": {
-      "main": [
-        [{ "node": "Pertence a Esta Conversa? · Fechar", "type": "main", "index": 0 }],
-        [{ "node": "Set · Resultado Sem Itens", "type": "main", "index": 0 }]
-      ]
-    },
-    "Pertence a Esta Conversa? · Fechar": {
-      "main": [
-        [{ "node": "RPC · Aceitar Orçamento", "type": "main", "index": 0 }],
-        [{ "node": "Set · Resultado Outra Conversa · Fechar", "type": "main", "index": 0 }]
-      ]
-    },
-    "RPC · Aceitar Orçamento": { "main": [[{ "node": "Set · Resultado Sucesso · Fechar", "type": "main", "index": 0 }]] }
+    "Tem Pelo Menos 1 Item?": { "main": [[{ "node": "Pertence a Esta Conversa? · Fechar", "type": "main", "index": 0 }], [{ "node": "Set · Resultado Sem Itens", "type": "main", "index": 0 }]] },
+    "Pertence a Esta Conversa? · Fechar": { "main": [[{ "node": "Dados de Entrega Já Informados? · Fechar", "type": "main", "index": 0 }], [{ "node": "Set · Resultado Outra Conversa · Fechar", "type": "main", "index": 0 }]] },
+    "RPC · Aceitar Orçamento": { "main": [[{ "node": "Set · Resultado Sucesso · Fechar", "type": "main", "index": 0 }]] },
+    "Dados de Entrega Já Informados? · Fechar": { "main": [[{ "node": "RPC · Aceitar Orçamento", "type": "main", "index": 0 }], [{ "node": "Buscar Mensagens Recentes · Fechar", "type": "main", "index": 0 }]] },
+    "Buscar Mensagens Recentes · Fechar": { "main": [[{ "node": "Monta Texto da Conversa · Fechar", "type": "main", "index": 0 }]] },
+    "Monta Texto da Conversa · Fechar": { "main": [[{ "node": "Extrai Dados de Entrega", "type": "main", "index": 0 }]] },
+    "OpenRouter Chat Model · Extração Entrega": { "ai_languageModel": [[{ "node": "Extrai Dados de Entrega", "type": "ai_languageModel", "index": 0 }]] },
+    "Extrai Dados de Entrega": { "main": [[{ "node": "Aplica Dados Extraídos · Fechar", "type": "main", "index": 0 }]] },
+    "Aplica Dados Extraídos · Fechar": { "main": [[{ "node": "RPC · Aceitar Orçamento", "type": "main", "index": 0 }]] },
+    "Supabase · Buscar Produto por Nome": { "main": [[{ "node": "Produto Encontrado por Nome?", "type": "main", "index": 0 }]] },
+    "Produto Encontrado por Nome?": { "main": [[{ "node": "Supabase · Insere Item", "type": "main", "index": 0 }], [{ "node": "Set · Resultado Produto Não Encontrado", "type": "main", "index": 0 }]] },
+    "Supabase · Buscar Orçamento por Conversa · Fallback": { "main": [[{ "node": "Orçamento de Fallback Encontrado?", "type": "main", "index": 0 }]] },
+    "Orçamento de Fallback Encontrado?": { "main": [[{ "node": "Set · orcamento_id Resolvido · Adicionar Item", "type": "main", "index": 0 }], [{ "node": "Set · Resultado Orçamento Não Encontrado · Adicionar Item", "type": "main", "index": 0 }]] },
+    "Set · orcamento_id Resolvido · Adicionar Item": { "main": [[{ "node": "produto_id é um UUID Válido?", "type": "main", "index": 0 }]] },
+    "Supabase · Buscar Itens Existentes": { "main": [[{ "node": "Code · Filtra Itens Existentes", "type": "main", "index": 0 }]] },
+    "Code · Filtra Itens Existentes": { "main": [[{ "node": "Set · Resultado Reaproveitado", "type": "main", "index": 0 }]] },
+    "Supabase · Buscar Orçamento por Conversa · Fallback · Fechar": { "main": [[{ "node": "Orçamento de Fallback Válido? · Fechar", "type": "main", "index": 0 }]] },
+    "Orçamento de Fallback Válido? · Fechar": { "main": [[{ "node": "Set · orcamento_id Resolvido · Fechar", "type": "main", "index": 0 }], [{ "node": "Set · Resultado Orçamento ID Inválido · Fechar", "type": "main", "index": 0 }]] },
+    "Set · orcamento_id Resolvido · Fechar": { "main": [[{ "node": "Supabase · Buscar Orçamento · Fechar", "type": "main", "index": 0 }]] }
   },
-  "pinData": {},
-  "meta": {
-    "instanceId": "09304f7ddfc01635a9120999ac264bbfa4eb4005b5f25bf3d517f6739c27a5a7"
-  }
+  "pinData": {
+    "Recebe do Agente de Vendas": [
+      {
+        "json": {
+          "acao": "buscar_ou_criar",
+          "conversa_id": "493b2143-7b7d-4bcb-89e3-c38aa371135b",
+          "cliente_id": "a6853bf6-56bc-4e0b-9740-6b9af22a93bf",
+          "orcamento_id": null,
+          "produto_id": null,
+          "quantidade": 0,
+          "nome_produto": null
+        },
+        "pairedItem": { "item": 0 }
+      }
+    ]
+  },
+  "meta": null
 }
