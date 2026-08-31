@@ -37,6 +37,14 @@ export function PedidoRow({ pedido, onClick, atrasado = false, nomeAtendente = n
               ⚡ Imediata
             </span>
           )}
+          {pedido.listas_modelo && (
+            <span
+              className="pedido-prioridade-badge pedido-prioridade-badge--lista-modelo"
+              title={`Criado a partir da lista pronta de ${pedido.listas_modelo.escolas?.nome ?? 'escola'} (${pedido.listas_modelo.ano})`}
+            >
+              🎒 {pedido.listas_modelo.escolas?.nome ?? 'Lista'}
+            </span>
+          )}
         </div>
         <div className="pedido-cliente-tel">{telefone}</div>
         <EtiquetaAtendimento nome={nomeAtendente} />

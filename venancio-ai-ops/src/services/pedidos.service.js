@@ -14,6 +14,7 @@ const SELECT_PEDIDO_COMPLETO = `
   operadores (id, nome),
   responsavel_separacao:funcionarios!responsavel_separacao_id (id, nome),
   responsavel_entrega:funcionarios!responsavel_entrega_id (id, nome),
+  listas_modelo (id, ano, escolas (id, nome)),
   itens_pedido (
     id, nome_item, quantidade, valor_unitario, valor_total, separado, produto_id,
     tipo_observacao, observacao,

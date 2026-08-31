@@ -4036,6 +4036,15 @@ select.input option { background: var(--bg-card-2); color: var(--text-1); }
   animation: piscar-imediata 2s ease-in-out infinite;
 }
 
+/* Origem: pedido criado a partir de uma Listas Modelo (dashboard), não do
+   fluxo normal via WhatsApp -- achado do dono 01/09: precisa dar pra ver
+   de qual escola veio sem abrir mais nada. */
+.pedido-prioridade-badge--lista-modelo {
+  background: rgba(124, 58, 237, 0.14);
+  color: var(--purple);
+  border: 1px solid rgba(124, 58, 237, 0.30);
+}
+
 @keyframes piscar-imediata {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }

@@ -43,7 +43,11 @@ export function CriarPedidoDeListaModal({ lista, onFechar, onCriado }) {
       if (!cliente) {
         cliente = await clientesService.criarOuAtualizar(telefone.trim(), {
           nome: nome.trim(),
-          origem: 'lista_modelo',
+          // 'lista_modelo' não existe -- clientes_origem_check só aceita
+          // 'whatsapp' ou 'manual'. Mesmo padrão do NovoPedidoModal/
+          // NovoOrcamentoModal: cliente cadastrado pelo Operador no
+          // dashboard é 'manual' (achado em produção 01/09).
+          origem: 'manual',
         })
       }
 

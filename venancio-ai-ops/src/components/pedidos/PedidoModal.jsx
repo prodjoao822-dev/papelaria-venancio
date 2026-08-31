@@ -300,6 +300,14 @@ export function PedidoModal({ pedidoId, onFechar, onStatusAtualizado }) {
               {pedido ? pedido.protocolo : 'Pedido'}
             </h2>
             {pedido && <StatusBadge status={pedido.status} />}
+            {pedido?.listas_modelo && (
+              <span
+                className="pedido-prioridade-badge pedido-prioridade-badge--lista-modelo"
+                title={`Criado a partir da lista pronta de ${pedido.listas_modelo.escolas?.nome ?? 'escola'} (${pedido.listas_modelo.ano})`}
+              >
+                🎒 Lista {pedido.listas_modelo.escolas?.nome ?? ''} · {pedido.listas_modelo.ano}
+              </span>
+            )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {pedido && (
