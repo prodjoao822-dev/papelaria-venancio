@@ -40,8 +40,25 @@ Rode **nesta ordem**, tudo no SQL Editor do Supabase (ou via `psql`):
 | 6 | `extensao_p5_orcamento_ativo_correto.sql` | Fecha o problema P5 (`orcamento_ativo_cliente` devolvia o rascunho mais recente em vez do que tinha itens). Ainda não estava em produção quando o baseline foi gerado. |
 | 7 | `extensao_p5_indice_unico_rascunho_conversa.sql` | Rede de segurança de P5: índice único parcial (1 rascunho por `conversa_id`). **Falha de propósito** se ainda houver rascunhos duplicados por conversa não resolvidos pela tarefa T2.4 — leia o cabeçalho antes de rodar. |
 | 8 | `extensao_push_tokens.sql` | Fecha o problema P20 (RF-08): tabela `push_tokens` + RPC `registrar_push_token`, fundação de banco para push. Ainda não estava em produção quando o baseline foi gerado. |
+| 9 | `extensao_fix_recalculo_valor_security_definer.sql` | Fix "permission denied for table orcamentos" no dashboard (26/08). |
+| 10 | `extensao_notificacao_entregador.sql` | Notificação do Entregador (P9) + leitura do delegante em `operadores` (P13) (26/08). |
+| 11 | `extensao_concluir_separacao_avanca_pedido.sql` | `concluir_separacao` passa a avançar o pedido pra "pronto" (decisão D2, 27/08). |
+| 12 | `extensao_fix_marcar_pronto_saiu_entrega.sql` | Fix "permission denied for table pedidos" ao marcar pronto/saiu pra entrega (27/08). |
+| 13 | `extensao_fix_registrar_evento_security_definer.sql` | Fix sistêmico: trigger de `consultas_operacionais` não conseguia gravar em `eventos` (28/08). |
+| 14 | `extensao_produtos_documentos_reindexa_ao_editar.sql` | Reindexação do RAG quando um produto é editado, não só quando é criado (28/08). |
+| 15 | `extensao_categorias_taxonomia_ampliada.sql` | Taxonomia de categorias ampliada + classificação em massa (29/08). |
+| 16 | `extensao_categorias_taxonomia_ampliada_fix_acentos.sql` | Fix do item 15, mesmo dia: regras de categoria não batiam com nome acentuado. **Rodar logo depois do item 15.** |
+| 17 | `extensao_categorias_segunda_leva_29-08.sql` | Segunda leva de classificação, fecha os grupos que sobraram dos itens 15/16 (29/08). |
+| 18 | `extensao_ajusta_precos_e_sku_auditoria_shopcontrol_29-08.sql` | Corrige 9 preços e popula 42 SKUs reais a partir de recibos do Shop Control (29/08). |
+| 19 | `extensao_cadastra_produtos_faltantes_shopcontrol_29-08.sql` | Cadastra 145 produtos que a loja vende mas não existiam no catálogo (29/08). **Depende do item 18** (mesmo cruzamento de recibos). |
+| 20 | `extensao_b6_policy_faltante_operadores.sql` | Fecha o B6 pela primeira vez (31/08): 1 policy órfã de `operadores` que rodava em produção sem existir em nenhum arquivo. |
+| 21 | `extensao_listas_modelo_escolar_01-09.sql` | Tabelas `listas_modelo`/`listas_modelo_itens` + RPC `criar_pedido_de_lista_modelo` (01/09). **Rodar antes do item 22.** |
+| 22 | `extensao_listas_modelo_dados_01-09.sql` | As 227 listas / 5.711 itens de dado real (01/09). **Depende do item 21.** |
+| 23 | `extensao_pedido_rastreia_lista_modelo_01-09.sql` | Coluna `pedidos.lista_modelo_id` + RPC atualizada pra rastrear a origem (01/09). **Depende do item 21.** |
+| 24 | `extensao_rls_escolas_leitura_operador_01-09.sql` | Policy de leitura de `escolas` pro operador do dashboard — faltava desde sempre (01/09). |
+| 25 | `extensao_seguranca_p2_revoga_anon_dashboard_01-09.sql` | Revoga EXECUTE de `anon` nas 5 RPCs `*_dashboard` (defesa em profundidade, item B1, 01/09). |
 
-Depois disso o banco novo é equivalente ao de produção **mais** os itens 2, 3, 6, 7 e 8.
+Depois disso o banco novo é equivalente ao de produção em 01/09/2026 (148 policies, verificado por diff ao vivo contra `pg_policies` — ver nota de fechamento no fim de `extensao_seguranca_p2_revoga_anon_dashboard_01-09.sql`).
 
 ### O que o baseline NÃO cobre
 
