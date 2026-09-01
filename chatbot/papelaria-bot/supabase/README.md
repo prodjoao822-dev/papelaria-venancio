@@ -57,8 +57,11 @@ Rode **nesta ordem**, tudo no SQL Editor do Supabase (ou via `psql`):
 | 23 | `extensao_pedido_rastreia_lista_modelo_01-09.sql` | Coluna `pedidos.lista_modelo_id` + RPC atualizada pra rastrear a origem (01/09). **Depende do item 21.** |
 | 24 | `extensao_rls_escolas_leitura_operador_01-09.sql` | Policy de leitura de `escolas` pro operador do dashboard — faltava desde sempre (01/09). |
 | 25 | `extensao_seguranca_p2_revoga_anon_dashboard_01-09.sql` | Revoga EXECUTE de `anon` nas 5 RPCs `*_dashboard` (defesa em profundidade, item B1, 01/09). |
+| 26 | `extensao_tarefas_rf03_01-09.sql` | Tabela `tarefas` + RPCs `criar_tarefa`/`concluir_tarefa`/`reatribuir_tarefa` (RF-03, decisão D3 do dono, 01/09). |
+| 27 | `extensao_lista_espera_rf04_01-09.sql` | Tabela `lista_espera` + RPCs `registrar_interesse_lista_espera`/`listar_interessados_produto`/`marcar_cliente_notificado` (RF-04, mesma decisão D3, 01/09). |
+| 28 | `extensao_pedidos_pagamento_horario_previsto_rf02_01-09.sql` | Colunas `forma_pagamento`/`status_pagamento`/`horario_previsto` em `pedidos` (RF-02/P14, decisão D5 do dono, 01/09). |
 
-Depois disso o banco novo é equivalente ao de produção em 01/09/2026 (148 policies, verificado por diff ao vivo contra `pg_policies` — ver nota de fechamento no fim de `extensao_seguranca_p2_revoga_anon_dashboard_01-09.sql`).
+Depois disso o banco novo é equivalente ao de produção em 01/09/2026 (tarde) — 148 policies + as 10 novas dos itens 26/27 (5 `tarefas` + 5 `lista_espera`), verificado por diff ao vivo contra `pg_policies` na 1ª rodada (ver nota de fechamento no fim de `extensao_seguranca_p2_revoga_anon_dashboard_01-09.sql`) e por consulta direta às tabelas/RPCs/constraints novas dos itens 26-28 (ver nota de fechamento em cada arquivo).
 
 ### O que o baseline NÃO cobre
 
