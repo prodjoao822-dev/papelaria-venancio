@@ -79,16 +79,17 @@ describe('extrairDisponibilidadeDeTexto', () => {
     expect(extrairDisponibilidadeDeTexto(texto)).toBe(esperado)
   })
 
-  // BUG REAL encontrado escrevendo este teste (não corrigido — fora do escopo
-  // pedido, reportado à parte): a alternativa `sim,` do regex de disponível
-  // nunca casa. `\b` exige um caractere de palavra de um dos lados; "sim,"
-  // termina em vírgula e é sempre seguida de espaço/pontuação, então o
-  // boundary depois da vírgula nunca existe. Resultado: uma resposta do tipo
-  // "Sim, chegou agora" (sem a palavra "tem") não é reconhecida como
-  // disponível — só funciona hoje porque frases reais quase sempre têm outro
-  // gatilho junto (como "tem"/"temos").
-  test('"Sim, chegou agora" (sem a palavra "tem") NÃO é reconhecido como disponível — bug de regex, ver comentário acima', () => {
-    expect(extrairDisponibilidadeDeTexto('Sim, chegou agora')).toBeNull()
+  // Bug real achado ao escrever este teste (01/09), corrigido em seguida: a
+  // alternativa `sim,` do regex de disponível nunca casava. `\b` exige um
+  // caractere de palavra de um dos lados; "sim," termina em vírgula e é
+  // sempre seguida de espaço/pontuação, então o boundary depois da vírgula
+  // nunca existia. Resultado: "Sim, chegou agora" (sem a palavra "tem") não
+  // era reconhecido como disponível -- só funcionava por acidente quando a
+  // frase tinha outro gatilho junto ("tem"/"temos"). Fix: tirar a vírgula da
+  // alternativa (`sim` em vez de `sim,`) -- o boundary depois de "m" sempre
+  // existe, então casa tanto "Sim," quanto "Sim" isolado ou seguido de ponto.
+  test('"Sim, chegou agora" (sem a palavra "tem") é reconhecido como disponível', () => {
+    expect(extrairDisponibilidadeDeTexto('Sim, chegou agora')).toBe('disponivel')
   })
 
   test('texto ambíguo (nem confirma nem nega) devolve null', () => {

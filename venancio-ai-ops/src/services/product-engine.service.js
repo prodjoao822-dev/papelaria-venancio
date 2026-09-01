@@ -30,7 +30,7 @@ export function extrairPrecoDeTexto(texto) {
 export function extrairDisponibilidadeDeTexto(texto) {
   if (!texto) return null
   const t = texto.toLowerCase()
-  if (/\b(tem\s|temos|disponív|disponiv|sim,|tenho|há\s|ha\s|acabou de chegar)\b/.test(t) &&
+  if (/\b(tem\s|temos|disponív|disponiv|sim|tenho|há\s|ha\s|acabou de chegar)\b/.test(t) &&
       !/\b(não\s*tem|nao\s*tem|sem\s*estoque|esgotado|indisponív|acabou\b)\b/.test(t)) {
     return 'disponivel'
   }
