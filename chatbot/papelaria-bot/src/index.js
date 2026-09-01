@@ -4,10 +4,11 @@ const express = require('express');
 const env = require('./config/env'); // valida as variáveis de ambiente já na subida (falha rápido)
 const verifyToken = require('./middlewares/verifyToken');
 const verifyOperador = require('./middlewares/verifyOperador');
-const { limiteWebhook, limiteLoginSeparador } = require('./middlewares/rateLimiter');
+const { limiteWebhook, limiteLoginSeparador, limiteLoginOperador } = require('./middlewares/rateLimiter');
 const webhookController = require('./webhook/webhookController');
 const operadorController = require('./dashboard/operadorController');
 const separadorAuthController = require('./dashboard/separadorAuthController');
+const operadorAuthController = require('./dashboard/operadorAuthController');
 const analyticsService = require('./services/analyticsService');
 const logger = require('./utils/logger');
 
@@ -125,6 +126,22 @@ app.post('/operador/separador/login', corsDashboard, limiteLoginSeparador, separ
 // checagem de papel dentro do controller). Nunca self-service.
 app.options('/operador/separador/:funcionarioId/reset-pin', corsDashboard);
 app.post('/operador/separador/:funcionarioId/reset-pin', corsDashboard, verifyOperador, separadorAuthController.resetPin);
+
+// Login do Operador por código+PIN (01/09/2026) — segunda forma de entrar
+// no dashboard, ao lado do e-mail/senha. Mesmas regras do bloco acima:
+// sem verifyOperador (é o próprio login), rate limit dedicado. Ver
+// operadorAuthController.js.
+app.options('/operador/login-codigo', corsDashboard);
+app.post('/operador/login-codigo', corsDashboard, limiteLoginOperador, operadorAuthController.loginComCodigo);
+
+// Cadastro de operador novo com código+PIN e reset de PIN — exige sessão
+// de operador ADMIN (verifyOperador + checagem de papel dentro do
+// controller). Nunca self-service.
+app.options('/operador/criar-com-codigo', corsDashboard);
+app.post('/operador/criar-com-codigo', corsDashboard, verifyOperador, operadorAuthController.criarComCodigo);
+
+app.options('/operador/:operadorId/reset-pin', corsDashboard);
+app.post('/operador/:operadorId/reset-pin', corsDashboard, verifyOperador, operadorAuthController.resetarPin);
 
 app.listen(env.PORT, () => {
   logger.info(`Papelaria bot escutando na porta ${env.PORT}`);

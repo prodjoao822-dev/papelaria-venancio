@@ -39,4 +39,15 @@ const limiteLoginSeparador = rateLimit({
   message: { ok: false, erro: 'Muitas tentativas de login em pouco tempo. Tente novamente em instantes.' },
 });
 
-module.exports = { limiteWebhook, limiteLoginSeparador };
+// Login do Operador por código+PIN (01/09/2026) — mesmo motivo/mesmo teto
+// do limiteLoginSeparador, contador separado (rota diferente) pra não
+// dividir o mesmo balde entre login de operador e de funcionário.
+const limiteLoginOperador = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, erro: 'Muitas tentativas de login em pouco tempo. Tente novamente em instantes.' },
+});
+
+module.exports = { limiteWebhook, limiteLoginSeparador, limiteLoginOperador };

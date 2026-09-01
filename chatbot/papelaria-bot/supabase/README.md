@@ -60,6 +60,7 @@ Rode **nesta ordem**, tudo no SQL Editor do Supabase (ou via `psql`):
 | 26 | `extensao_tarefas_rf03_01-09.sql` | Tabela `tarefas` + RPCs `criar_tarefa`/`concluir_tarefa`/`reatribuir_tarefa` (RF-03, decisão D3 do dono, 01/09). |
 | 27 | `extensao_lista_espera_rf04_01-09.sql` | Tabela `lista_espera` + RPCs `registrar_interesse_lista_espera`/`listar_interessados_produto`/`marcar_cliente_notificado` (RF-04, mesma decisão D3, 01/09). |
 | 28 | `extensao_pedidos_pagamento_horario_previsto_rf02_01-09.sql` | Colunas `forma_pagamento`/`status_pagamento`/`horario_previsto` em `pedidos` (RF-02/P14, decisão D5 do dono, 01/09). |
+| 29 | `extensao_operador_login_codigo_pin_01-09.sql` | Colunas `codigo`/`pin_tentativas_falhas`/`pin_bloqueado_ate` em `operadores` — login por código+PIN pros demais operadores, ao lado do e-mail/senha (01/09). |
 
 Depois disso o banco novo é equivalente ao de produção em 01/09/2026 (tarde) — 148 policies + as 10 novas dos itens 26/27 (5 `tarefas` + 5 `lista_espera`), verificado por diff ao vivo contra `pg_policies` na 1ª rodada (ver nota de fechamento no fim de `extensao_seguranca_p2_revoga_anon_dashboard_01-09.sql`) e por consulta direta às tabelas/RPCs/constraints novas dos itens 26-28 (ver nota de fechamento em cada arquivo).
 
