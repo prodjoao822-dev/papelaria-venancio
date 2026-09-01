@@ -133,6 +133,7 @@ const NAV_OPERACOES = [
   // que a tela com chat (SolicitacaoDetalheModal) nunca foi usada de
   // verdade em produção -- não é bug de código, era invisibilidade de nav.
   { to: '/separacao',   label: 'Separação',     icone: '📬' },
+  { to: '/tarefas',     label: 'Tarefas',       icone: '✅' },
   { to: '/logistica',   label: 'Logística',     icone: '🛵' },
   { to: '/atendimento', label: 'Atendimento',   icone: '💬', badgeKey: 'atendimentos', badgeAlerta: true },
   { to: '/consultas',   label: 'Consultas IA',  icone: '❓', badgeKey: 'consultas',    badgeAlerta: true },
@@ -144,6 +145,7 @@ const NAV_CATALOGO = [
   { to: '/marcas-categorias', label: 'Marcas & Categorias', icone: '🔖' },
   { to: '/memoria-ia',  label: 'Memória IA',    icone: '🧠' },
   { to: '/demanda',     label: 'Demanda',        icone: '📈', badgeKey: 'alertasDemanda', badgeAlerta: true },
+  { to: '/lista-espera', label: 'Lista de Espera', icone: '⏳' },
 ]
 
 const NAV_CADASTROS = [

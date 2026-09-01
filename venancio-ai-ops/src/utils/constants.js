@@ -40,6 +40,20 @@ export const FORMAS_ENTREGA = [
   { value: 'uber_flash',     label: 'Uber Flash / Motoboy' },
 ]
 
+// pedidos.forma_pagamento (RF-02, Fase 3) — CHECK constraint no banco
+export const FORMAS_PAGAMENTO = [
+  { value: 'dinheiro',        label: 'Dinheiro' },
+  { value: 'pix',              label: 'Pix' },
+  { value: 'cartao_debito',    label: 'Cartão de Débito' },
+  { value: 'cartao_credito',   label: 'Cartão de Crédito' },
+]
+
+// pedidos.status_pagamento — CHECK constraint no banco, default 'pendente'
+export const STATUS_PAGAMENTO = [
+  { value: 'pendente', label: 'Pendente' },
+  { value: 'pago',     label: 'Pago' },
+]
+
 // funcionarios.papeis (text[]) — chatbot/papelaria-bot/supabase/extensao_funcionarios_responsaveis.sql
 export const PAPEIS_FUNCIONARIO = [
   { value: 'separacao', label: 'Separação' },

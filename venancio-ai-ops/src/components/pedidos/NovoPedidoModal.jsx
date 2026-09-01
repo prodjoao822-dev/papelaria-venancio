@@ -7,6 +7,7 @@ import { ProdutoAutocompleteInput } from './ProdutoAutocompleteInput'
 import { useToast } from '@/contexts/AppContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatCurrency } from '@/utils/formatters'
+import { FORMAS_PAGAMENTO, STATUS_PAGAMENTO } from '@/utils/constants'
 
 const FORMAS_ENTREGA = [
   { value: 'retirada',       label: 'Retirada na loja' },
@@ -31,6 +32,11 @@ export function NovoPedidoModal({ onFechar, clienteInicial = null }) {
   const [formaEntrega, setFormaEntrega] = useState('retirada')
   const [enderecoEntrega, setEnderecoEntrega] = useState('')
   const [observacoes, setObservacoes] = useState('')
+  // RF-02 (Fase 3): pagamento — todos opcionais no cadastro manual, pra não
+  // travar o balcão quando o cliente ainda não decidiu como vai pagar.
+  const [formaPagamento, setFormaPagamento] = useState('')
+  const [statusPagamento, setStatusPagamento] = useState('pendente')
+  const [horarioPrevisto, setHorarioPrevisto] = useState('')
   const [itens, setItens] = useState([{ ...ITEM_VAZIO }])
   const [responsavelSeparacaoId, setResponsavelSeparacaoId] = useState('')
   const [funcionariosSeparacao, setFuncionariosSeparacao] = useState([])
@@ -123,6 +129,9 @@ export function NovoPedidoModal({ onFechar, clienteInicial = null }) {
         forma_entrega: formaEntrega,
         endereco_entrega: formaEntrega !== 'retirada' ? enderecoEntrega.trim() : null,
         observacoes: observacoes || null,
+        forma_pagamento: formaPagamento || null,
+        status_pagamento: statusPagamento,
+        horario_previsto: horarioPrevisto ? new Date(horarioPrevisto).toISOString() : null,
         itens: itensFiltrados.map((item) => ({
           produto_id: item.produto_id ?? null,
           descricao_livre: item.descricao_livre.trim(),
@@ -239,6 +248,47 @@ export function NovoPedidoModal({ onFechar, clienteInicial = null }) {
                     />
                   </div>
                 )}
+              </div>
+            </div>
+
+            {/* Pagamento (RF-02) */}
+            <div className="pedido-detalhe-secao">
+              <p className="pedido-detalhe-titulo">Pagamento</p>
+              <div className="form-grid form-grid--2">
+                <div className="form-grupo">
+                  <label className="form-label">Forma de Pagamento</label>
+                  <select
+                    className="input"
+                    value={formaPagamento}
+                    onChange={(e) => setFormaPagamento(e.target.value)}
+                  >
+                    <option value="">— Não informado —</option>
+                    {FORMAS_PAGAMENTO.map((f) => (
+                      <option key={f.value} value={f.value}>{f.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-grupo">
+                  <label className="form-label">Status do Pagamento</label>
+                  <select
+                    className="input"
+                    value={statusPagamento}
+                    onChange={(e) => setStatusPagamento(e.target.value)}
+                  >
+                    {STATUS_PAGAMENTO.map((s) => (
+                      <option key={s.value} value={s.value}>{s.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-grupo">
+                  <label className="form-label">Horário Previsto (retirada/entrega)</label>
+                  <input
+                    type="datetime-local"
+                    className="input"
+                    value={horarioPrevisto}
+                    onChange={(e) => setHorarioPrevisto(e.target.value)}
+                  />
+                </div>
               </div>
             </div>
 

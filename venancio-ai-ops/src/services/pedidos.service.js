@@ -196,7 +196,12 @@ export const pedidosService = {
    * Cria um orçamento tipo venda_geral e aceita na hora.
    */
   async criar(dadosPedido, operadorId = null) {
-    const { itens, cliente_id, forma_entrega, endereco_entrega, observacoes } = dadosPedido
+    const {
+      itens, cliente_id, forma_entrega, endereco_entrega, observacoes,
+      // RF-02 (Fase 3): campos de pagamento, opcionais — sem eles o pedido
+      // nasce com status_pagamento default ('pendente') e forma_pagamento nula.
+      forma_pagamento, status_pagamento, horario_previsto,
+    } = dadosPedido
 
     const orcamento = await orcamentosService.criar({
       cliente_id,
@@ -213,10 +218,19 @@ export const pedidosService = {
 
     const pedido = await orcamentosService.aceitar(orcamento.id, operadorId)
 
+    const camposExtras = {}
     if (forma_entrega || endereco_entrega) {
+      camposExtras.forma_entrega = forma_entrega ?? 'retirada'
+      camposExtras.endereco_entrega = endereco_entrega ?? null
+    }
+    if (forma_pagamento) camposExtras.forma_pagamento = forma_pagamento
+    if (status_pagamento) camposExtras.status_pagamento = status_pagamento
+    if (horario_previsto) camposExtras.horario_previsto = horario_previsto
+
+    if (Object.keys(camposExtras).length > 0) {
       const { error } = await supabase
         .from('pedidos')
-        .update({ forma_entrega: forma_entrega ?? 'retirada', endereco_entrega: endereco_entrega ?? null })
+        .update(camposExtras)
         .eq('id', pedido.id)
       if (error) throw error
     }
@@ -224,6 +238,23 @@ export const pedidosService = {
     await notificarN8n('NOVO_PEDIDO', { pedidoId: pedido.id })
 
     return pedidosService.buscarPorId(pedido.id)
+  },
+
+  /**
+   * Edita os 3 campos de pagamento (RF-02) de um pedido já existente —
+   * UPDATE comum via supabase-js (não é status crítico de fluxo, não tem
+   * RPC dedicada; a policy `operadores_atualizacao` já cobre).
+   */
+  async atualizarPagamento(pedidoId, { forma_pagamento, status_pagamento, horario_previsto }) {
+    const { data, error } = await supabase
+      .from('pedidos')
+      .update({ forma_pagamento, status_pagamento, horario_previsto })
+      .eq('id', pedidoId)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
   },
 
   async buscarKpis() {

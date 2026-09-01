@@ -17,6 +17,8 @@ import { MarcasCategoriasPage } from '@/pages/MarcasCategoriasPage'
 import { ConfigPage } from '@/pages/ConfigPage'
 import { OrcamentosPage } from '@/pages/OrcamentosPage'
 import { ListasModeloPage } from '@/pages/ListasModeloPage'
+import { TarefasPage } from '@/pages/TarefasPage'
+import { ListaEsperaPage } from '@/pages/ListaEsperaPage'
 import { FuncionariosPage } from '@/pages/FuncionariosPage'
 import { LogisticaPage } from '@/pages/LogisticaPage'
 import { AtendimentoPage } from '@/pages/AtendimentoPage'
@@ -73,6 +75,8 @@ export default function App() {
                   <Route path="clientes"    element={<ClientesPage />} />
                   <Route path="orcamentos"  element={<OrcamentosPage />} />
                   <Route path="listas-prontas" element={<ListasModeloPage />} />
+                  <Route path="tarefas"     element={<TarefasPage />} />
+                  <Route path="lista-espera" element={<ListaEsperaPage />} />
                   <Route path="funcionarios" element={<FuncionariosPage />} />
                   <Route path="catalogo"    element={<CatalogPage />} />
                   <Route path="marcas-categorias" element={<MarcasCategoriasPage />} />

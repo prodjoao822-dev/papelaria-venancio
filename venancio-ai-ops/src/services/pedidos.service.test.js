@@ -319,6 +319,79 @@ describe('criar (pedido manual do dashboard)', () => {
     expect(updateChain.update).toHaveBeenCalledWith({ forma_entrega: 'uber_flash', endereco_entrega: 'Rua X, 123' })
     expect(updateChain.eq).toHaveBeenCalledWith('id', 'ped1')
   })
+
+  test('com forma_pagamento/status_pagamento/horario_previsto, atualiza os 3 campos no pedido recém-aceito', async () => {
+    orcamentosService.criar.mockResolvedValue({ id: 'orc1' })
+    orcamentosService.aceitar.mockResolvedValue({ id: 'ped1' })
+    const updateChain = chain({ error: null })
+    let chamada = 0
+    supabase.from.mockImplementation((tabela) => {
+      if (tabela !== 'pedidos') throw new Error(`tabela inesperada: ${tabela}`)
+      chamada += 1
+      if (chamada === 1) return updateChain
+      return chain({ data: pedidoRow({ id: 'ped1' }), error: null })
+    })
+
+    await pedidosService.criar({
+      cliente_id: 'cli1',
+      itens: [],
+      forma_pagamento: 'pix',
+      status_pagamento: 'pago',
+      horario_previsto: '2026-09-01T15:00:00.000Z',
+    })
+
+    expect(updateChain.update).toHaveBeenCalledWith({
+      forma_pagamento: 'pix',
+      status_pagamento: 'pago',
+      horario_previsto: '2026-09-01T15:00:00.000Z',
+    })
+  })
+
+  test('sem nenhum campo de pagamento nem entrega, não faz UPDATE extra', async () => {
+    orcamentosService.criar.mockResolvedValue({ id: 'orc1' })
+    orcamentosService.aceitar.mockResolvedValue({ id: 'ped1' })
+    const tabelasConsultadas = []
+    supabase.from.mockImplementation((tabela) => {
+      tabelasConsultadas.push(tabela)
+      return chain({ data: pedidoRow({ id: 'ped1' }), error: null })
+    })
+
+    await pedidosService.criar({ cliente_id: 'cli1', itens: [], status_pagamento: '' })
+
+    expect(tabelasConsultadas).toEqual(['pedidos'])
+  })
+})
+
+describe('atualizarPagamento', () => {
+  test('atualiza forma_pagamento/status_pagamento/horario_previsto do pedido pelo id', async () => {
+    const c = chain({ data: { id: 'p1', forma_pagamento: 'cartao_credito', status_pagamento: 'pago', horario_previsto: '2026-09-01T15:00:00Z' }, error: null })
+    supabase.from.mockImplementation((tabela) => {
+      if (tabela !== 'pedidos') throw new Error(`tabela inesperada: ${tabela}`)
+      return c
+    })
+
+    const resultado = await pedidosService.atualizarPagamento('p1', {
+      forma_pagamento: 'cartao_credito',
+      status_pagamento: 'pago',
+      horario_previsto: '2026-09-01T15:00:00Z',
+    })
+
+    expect(c.update).toHaveBeenCalledWith({
+      forma_pagamento: 'cartao_credito',
+      status_pagamento: 'pago',
+      horario_previsto: '2026-09-01T15:00:00Z',
+    })
+    expect(c.eq).toHaveBeenCalledWith('id', 'p1')
+    expect(resultado.status_pagamento).toBe('pago')
+  })
+
+  test('erro do banco é propagado', async () => {
+    supabase.from.mockImplementation(() => chain({ data: null, error: new Error('coluna inválida') }))
+
+    await expect(
+      pedidosService.atualizarPagamento('p1', { forma_pagamento: 'pix', status_pagamento: 'pago', horario_previsto: null })
+    ).rejects.toThrow('coluna inválida')
+  })
 })
 
 describe('marcarItemSeparado', () => {

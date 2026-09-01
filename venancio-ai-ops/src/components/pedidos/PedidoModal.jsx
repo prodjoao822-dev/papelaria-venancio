@@ -10,7 +10,7 @@ import {
   formatEntrega,
 } from '@/utils/formatters'
 import { getStatusConfig } from '@/utils/status'
-import { OPERACOES_SHOPCONTROL } from '@/utils/constants'
+import { OPERACOES_SHOPCONTROL, FORMAS_PAGAMENTO, STATUS_PAGAMENTO } from '@/utils/constants'
 import { useToast } from '@/contexts/AppContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { AbrirOcorrenciaModal } from '@/components/ocorrencias/AbrirOcorrenciaModal'
@@ -133,6 +133,92 @@ function ResponsaveisSequencia({ pedido, onAtualizar }) {
         </div>
       </section>
     </>
+  )
+}
+
+// datetime-local não aceita ISO com timezone/segundos — corta pro formato
+// que o input espera (yyyy-MM-ddTHH:mm), em horário local do navegador.
+function isoParaDatetimeLocal(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+// ── Pagamento (RF-02) ──────────────────────────────────────────────────────────
+function PagamentoPedido({ pedido, onAtualizar }) {
+  const [formaPagamento, setFormaPagamento] = useState(pedido.forma_pagamento ?? '')
+  const [statusPagamento, setStatusPagamento] = useState(pedido.status_pagamento ?? 'pendente')
+  const [horarioPrevisto, setHorarioPrevisto] = useState(isoParaDatetimeLocal(pedido.horario_previsto))
+  const [salvando, setSalvando] = useState(false)
+  const { toast } = useToast()
+
+  useEffect(() => {
+    setFormaPagamento(pedido.forma_pagamento ?? '')
+    setStatusPagamento(pedido.status_pagamento ?? 'pendente')
+    setHorarioPrevisto(isoParaDatetimeLocal(pedido.horario_previsto))
+  }, [pedido.id, pedido.forma_pagamento, pedido.status_pagamento, pedido.horario_previsto])
+
+  async function handleSalvar() {
+    setSalvando(true)
+    try {
+      await pedidosService.atualizarPagamento(pedido.id, {
+        forma_pagamento: formaPagamento || null,
+        status_pagamento: statusPagamento,
+        horario_previsto: horarioPrevisto ? new Date(horarioPrevisto).toISOString() : null,
+      })
+      toast.sucesso('Pagamento atualizado.')
+      onAtualizar?.()
+    } catch (err) {
+      toast.erro('Erro ao salvar pagamento: ' + err.message)
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  return (
+    <section className="pedido-detalhe-secao">
+      <h3 className="pedido-detalhe-titulo">Pagamento</h3>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div className="pedido-detalhe-campo">
+          <span className="campo-label">Forma de Pagamento</span>
+          <select
+            className="input input-sm"
+            value={formaPagamento}
+            onChange={(e) => setFormaPagamento(e.target.value)}
+          >
+            <option value="">— Não informado —</option>
+            {FORMAS_PAGAMENTO.map((f) => (
+              <option key={f.value} value={f.value}>{f.label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="pedido-detalhe-campo">
+          <span className="campo-label">Status</span>
+          <select
+            className="input input-sm"
+            value={statusPagamento}
+            onChange={(e) => setStatusPagamento(e.target.value)}
+          >
+            {STATUS_PAGAMENTO.map((s) => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="pedido-detalhe-campo">
+          <span className="campo-label">Horário Previsto</span>
+          <input
+            type="datetime-local"
+            className="input input-sm"
+            value={horarioPrevisto}
+            onChange={(e) => setHorarioPrevisto(e.target.value)}
+          />
+        </div>
+        <button className="btn btn-ghost btn-sm" onClick={handleSalvar} disabled={salvando}>
+          {salvando ? '...' : 'Salvar'}
+        </button>
+      </div>
+    </section>
   )
 }
 
@@ -375,6 +461,7 @@ export function PedidoModal({ pedidoId, onFechar, onStatusAtualizado }) {
               </section>
 
               <ResponsaveisSequencia pedido={pedido} onAtualizar={carregar} />
+              <PagamentoPedido pedido={pedido} onAtualizar={carregar} />
 
               {/* Itens */}
               <section className="pedido-detalhe-secao">
