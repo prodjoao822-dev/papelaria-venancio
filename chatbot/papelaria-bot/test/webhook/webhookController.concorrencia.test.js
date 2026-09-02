@@ -84,6 +84,8 @@ dubla('../../src/services/evolutionApi', {
   enviarDocumentoBase64: async () => ({}),
   baixarMidia: async () => ({ base64: 'x' }),
   foiEnviadaPeloBot: () => false,
+  enviarPresenca: async () => {},
+  manterDigitando: () => () => {},
 });
 dubla('../../src/middlewares/reativacaoBot', {
   garantirBotAtivo: async () => ({ podeResponder: true, viaGatilhoPedido: false }),

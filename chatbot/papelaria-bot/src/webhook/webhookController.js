@@ -395,13 +395,25 @@ async function consultarAgenteVendasComRedeDeSeguranca(
     // tempo total até o timeout, sem saber quanto era fila/Supabase e quanto
     // era o workflow do n8n em si.
     const inicioChamadaAgente = Date.now();
-    const respostaAgente = await n8nClient.consultarAgenteVendas({
-      cliente_id: cliente.id,
-      conversa_id: conversaId,
-      telefone: cliente.telefone,
-      texto,
-      ...(contextoExtra ? { contexto: contextoExtra } : {}),
-    });
+    // O "digitando..." disparado no recebimento da mensagem (ver acima) some
+    // sozinho depois de ~5s (PRESENCE_DELAY_MS), mas essa chamada ao Agente de
+    // Vendas costuma levar 10-29s em produção — sem reforçar o indicador, o
+    // cliente vê "digitando..." sumir no meio da espera e acha que travou.
+    // manterDigitando reenvia "composing" em loop até pararDigitando() ser
+    // chamado (garantido pelo `finally` abaixo, sucesso ou erro).
+    const pararDigitando = evolutionApi.manterDigitando(cliente.telefone);
+    let respostaAgente;
+    try {
+      respostaAgente = await n8nClient.consultarAgenteVendas({
+        cliente_id: cliente.id,
+        conversa_id: conversaId,
+        telefone: cliente.telefone,
+        texto,
+        ...(contextoExtra ? { contexto: contextoExtra } : {}),
+      });
+    } finally {
+      pararDigitando();
+    }
     analyticsService.registrarEvento('agente_vendas_tempo_resposta', {
       conversaId,
       duracaoMs: Date.now() - inicioChamadaAgente,
@@ -668,6 +680,18 @@ async function receberWebhook(req, res) {
         return res.status(200).json({ ok: true, pausado: true });
       }
 
+      // Indicador "digitando..." do WhatsApp: dispara assim que sabemos que
+      // vamos de fato processar esta mensagem (não é eco nem fromMe de
+      // humano), antes de qualquer resposta potencialmente demorada (PDF,
+      // transcrição de áudio/imagem, Agente de Vendas). `enviarPresenca` já é
+      // best-effort por construção (nunca rejeita — ver evolutionApi.js), mas
+      // o `.catch` aqui é defesa em profundidade: puramente cosmético, então
+      // mesmo uma falha inesperada não pode virar unhandled rejection nem
+      // atrasar o fluxo real — por isso sem `await`.
+      evolutionApi.enviarPresenca(mensagem.telefone, 'composing').catch((erro) => {
+        logger.aviso(`Falha ao sinalizar "digitando..." para ${mensagem.telefone} (ignorado)`, erro.message);
+      });
+
       // PDF do cliente: captura genérica, fora da máquina de estados (ver
       // receberDocumentoPdf acima) — roda mesmo com o bot pausado, então fica
       // antes da checagem de garantirBotAtivo.
@@ -798,6 +822,14 @@ async function receberWebhook(req, res) {
         // nunca chegavam nela (o operador via a conversa vazia enquanto o cliente
         // escrevia no WhatsApp). Agora registra de verdade.
         await registrarNoHistorico(conversa.id, 'cliente', mensagem.texto);
+        // Nenhuma mensagem de texto vai sair daqui pra limpar o "digitando..."
+        // disparado acima — sem isso o indicador ficaria aceso até o WhatsApp
+        // expirá-lo sozinho, dando a entender que o bot ia responder quando
+        // quem vai responder é um humano. Mesma defesa em profundidade do
+        // `.catch` acima.
+        evolutionApi.enviarPresenca(mensagem.telefone, 'paused').catch((erro) => {
+          logger.aviso(`Falha ao sinalizar "paused" para ${mensagem.telefone} (ignorado)`, erro.message);
+        });
         return res.status(200).json({ ok: true, pausado: true });
       }
 

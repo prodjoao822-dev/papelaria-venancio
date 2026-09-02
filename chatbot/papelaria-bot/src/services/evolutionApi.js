@@ -294,6 +294,79 @@ async function baixarMidia(mensagemBruta) {
   return resposta.json();
 }
 
+// Indicador "digitando..." do WhatsApp (chat presence), mostrado enquanto o
+// bot processa a mensagem do cliente antes de responder. Puramente cosmético:
+// diferente de enviarTexto/enviarMedia, uma falha aqui NUNCA pode propagar —
+// não há retentativa nem lançamento de erro, só um log em nível aviso.
+//
+// PONTO A CONFIRMAR (não simulável em teste automatizado): o endpoint e o
+// payload abaixo seguem a documentação pública da Evolution API
+// (`POST /chat/sendPresence/{instance}`, `presence: "composing" | "paused"`),
+// mas nenhuma outra função deste arquivo já chama esse endpoint contra esta
+// instância específica — não há como garantir aqui que a versão da Evolution
+// API em produção aceita exatamente este payload. Testar contra a instância
+// real antes de confiar 100% neste comportamento.
+const PRESENCE_TIMEOUT_MS = 5000; // bem menor que EVOLUTION_API_TIMEOUT_MS: é só efeito visual, não vale reter o processamento esperando.
+const PRESENCE_DELAY_MS = 5000; // por quanto tempo o "digitando..." fica visível antes do WhatsApp voltar a "disponível" sozinho, caso a resposta demore mais que isso.
+
+async function enviarPresenca(telefoneDestino, presence) {
+  const url = `${env.EVOLUTION_API_URL}/chat/sendPresence/${env.EVOLUTION_INSTANCE}`;
+  const controleTimeout = new AbortController();
+  const timeoutId = setTimeout(() => controleTimeout.abort(), PRESENCE_TIMEOUT_MS);
+
+  try {
+    const resposta = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: env.EVOLUTION_API_KEY,
+      },
+      body: JSON.stringify({ number: telefoneDestino, presence, delay: PRESENCE_DELAY_MS }),
+      signal: controleTimeout.signal,
+      dispatcher: agenteSemConexaoOciosa,
+    });
+
+    if (!resposta.ok) {
+      const corpoErro = await resposta.text().catch(() => '');
+      logger.aviso(`Evolution API retornou erro ao enviar presence "${presence}" para ${telefoneDestino}`, {
+        status: resposta.status,
+        corpoErro,
+      });
+    }
+  } catch (erro) {
+    // Cosmético: uma falha aqui não pode impedir a resposta de verdade nem
+    // derrubar quem chamou. Nível aviso (não erro) de propósito — não afeta o
+    // cliente, só a experiência visual do "digitando...".
+    logger.aviso(`Falha ao enviar presence "${presence}" para ${telefoneDestino} (ignorado, é só cosmético)`, erro.message);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+// PRESENCE_DELAY_MS (5s) é bem menor que o tempo real de resposta do Agente
+// de Vendas (10-29s, medido em produção — ver nota "Política onError 03/08"
+// no workflow n8n). Um único enviarPresenca('composing') no início da
+// mensagem faz o "digitando..." sumir sozinho no meio da espera, dando a
+// entender que o bot travou. manterDigitando reenvia "composing" em loop
+// (intervalo menor que PRESENCE_DELAY_MS, pra sempre renovar antes do
+// WhatsApp reverter) enquanto uma chamada demorada (ex: n8nClient.
+// consultarAgenteVendas) está em voo — quem chama é responsável por invocar
+// a função de parada devolvida assim que a chamada demorada terminar
+// (sucesso ou erro), tipicamente num `finally`.
+const PRESENCE_HEARTBEAT_MS = 4000;
+
+function manterDigitando(telefoneDestino) {
+  enviarPresenca(telefoneDestino, 'composing').catch(() => {});
+  const idIntervalo = setInterval(() => {
+    enviarPresenca(telefoneDestino, 'composing').catch(() => {});
+  }, PRESENCE_HEARTBEAT_MS);
+
+  return function pararDigitando() {
+    clearInterval(idIntervalo);
+  };
+}
+
 module.exports = {
-  enviarTexto, enviarArquivo, enviarDocumentoBase64, baixarMidia, foiEnviadaPeloBot,
+  enviarTexto, enviarArquivo, enviarDocumentoBase64, baixarMidia, foiEnviadaPeloBot, enviarPresenca,
+  manterDigitando,
 };

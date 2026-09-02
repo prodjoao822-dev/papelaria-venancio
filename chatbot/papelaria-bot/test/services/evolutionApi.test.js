@@ -1,4 +1,4 @@
-const { test } = require('node:test');
+const { test, mock } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -147,4 +147,151 @@ test('telefone com formatação diferente ainda casa o eco', async () => {
   ));
 
   assert.equal(evolutionApi.foiEnviadaPeloBot(null, '5527998489094', 'Prontinho!'), true);
+});
+
+// --- indicador "digitando..." (chat presence) ---
+//
+// Cosmético: precisa chamar o endpoint certo com o payload documentado
+// publicamente pela Evolution API, mas acima de tudo NUNCA pode lançar — quem
+// chama (webhookController) não trata o retorno nem envolve em try/catch.
+
+test('enviarPresenca chama o endpoint de presence com number/presence corretos', async () => {
+  const chamadas = [];
+  const fetchOriginal = global.fetch;
+  global.fetch = async (url, opcoes) => {
+    chamadas.push({ url, opcoes });
+    return { ok: true, text: async () => '' };
+  };
+
+  try {
+    await evolutionApi.enviarPresenca('5527999999999', 'composing');
+  } finally {
+    global.fetch = fetchOriginal;
+  }
+
+  assert.equal(chamadas.length, 1);
+  assert.equal(chamadas[0].url, `${process.env.EVOLUTION_API_URL}/chat/sendPresence/${process.env.EVOLUTION_INSTANCE}`);
+  const corpo = JSON.parse(chamadas[0].opcoes.body);
+  assert.equal(corpo.number, '5527999999999');
+  assert.equal(corpo.presence, 'composing');
+});
+
+test('enviarPresenca aceita "paused" do mesmo jeito', async () => {
+  const chamadas = [];
+  const fetchOriginal = global.fetch;
+  global.fetch = async (url, opcoes) => {
+    chamadas.push(JSON.parse(opcoes.body));
+    return { ok: true, text: async () => '' };
+  };
+
+  try {
+    await evolutionApi.enviarPresenca('5527999999999', 'paused');
+  } finally {
+    global.fetch = fetchOriginal;
+  }
+
+  assert.equal(chamadas[0].presence, 'paused');
+});
+
+test('enviarPresenca nunca lança: erro de rede é só logado', async () => {
+  const fetchOriginal = global.fetch;
+  global.fetch = async () => { throw erroDeRede('ECONNREFUSED', 'connect'); };
+
+  try {
+    await assert.doesNotReject(() => evolutionApi.enviarPresenca('5527999999999', 'composing'));
+  } finally {
+    global.fetch = fetchOriginal;
+  }
+});
+
+test('enviarPresenca nunca lança: resposta de erro HTTP também é só logada', async () => {
+  const fetchOriginal = global.fetch;
+  global.fetch = async () => ({ ok: false, status: 500, text: async () => 'erro interno' });
+
+  try {
+    await assert.doesNotReject(() => evolutionApi.enviarPresenca('5527999999999', 'composing'));
+  } finally {
+    global.fetch = fetchOriginal;
+  }
+});
+
+test('enviarPresenca não faz retentativa (é uma única chamada de melhor esforço)', async () => {
+  let tentativas = 0;
+  const fetchOriginal = global.fetch;
+  global.fetch = async () => { tentativas += 1; throw erroDeRede('ECONNREFUSED', 'connect'); };
+
+  try {
+    await evolutionApi.enviarPresenca('5527999999999', 'composing');
+  } finally {
+    global.fetch = fetchOriginal;
+  }
+
+  assert.equal(tentativas, 1);
+});
+
+// --- manterDigitando: reforça "composing" durante uma espera longa ---
+//
+// PRESENCE_DELAY_MS (5s) é bem menor que o tempo real do Agente de Vendas
+// (10-29s em produção) — um enviarPresenca isolado deixa o "digitando..."
+// sumir no meio da espera. manterDigitando reenvia em loop até a chamada
+// demorada terminar.
+
+async function flush() {
+  // Deixa o fire-and-forget de dentro de manterDigitando (sem await) resolver
+  // antes da asserção — enviarPresenca só tem um `await fetch` no caminho
+  // feliz, uma volta de microtask/macrotask basta.
+  await new Promise((resolve) => setImmediate(resolve));
+}
+
+test('manterDigitando dispara "composing" imediatamente e de novo a cada 4s', async () => {
+  const chamadas = [];
+  const fetchOriginal = global.fetch;
+  global.fetch = async (url, opcoes) => {
+    chamadas.push(JSON.parse(opcoes.body));
+    return { ok: true, text: async () => '' };
+  };
+
+  mock.timers.enable({ apis: ['setInterval'] });
+  try {
+    evolutionApi.manterDigitando('5527999999999');
+    await flush();
+    assert.equal(chamadas.length, 1, 'primeira chamada é imediata, não espera o primeiro tick');
+
+    mock.timers.tick(4000);
+    await flush();
+    assert.equal(chamadas.length, 2);
+
+    mock.timers.tick(4000);
+    await flush();
+    assert.equal(chamadas.length, 3);
+    assert.equal(chamadas.every((c) => c.presence === 'composing'), true);
+  } finally {
+    mock.timers.reset();
+    global.fetch = fetchOriginal;
+  }
+});
+
+test('pararDigitando() (devolvido por manterDigitando) encerra o reforço', async () => {
+  const chamadas = [];
+  const fetchOriginal = global.fetch;
+  global.fetch = async (url, opcoes) => {
+    chamadas.push(JSON.parse(opcoes.body));
+    return { ok: true, text: async () => '' };
+  };
+
+  mock.timers.enable({ apis: ['setInterval'] });
+  try {
+    const pararDigitando = evolutionApi.manterDigitando('5527999999999');
+    await flush();
+    assert.equal(chamadas.length, 1);
+
+    pararDigitando();
+    mock.timers.tick(20000);
+    await flush();
+
+    assert.equal(chamadas.length, 1, 'depois de parar, nenhum novo "composing" deve sair');
+  } finally {
+    mock.timers.reset();
+    global.fetch = fetchOriginal;
+  }
 });
