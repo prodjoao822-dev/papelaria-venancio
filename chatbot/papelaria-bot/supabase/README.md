@@ -105,26 +105,27 @@ Em produção, aplique **só o arquivo novo da mudança**, e registre a migraç�
 3. Valide com uma consulta de leitura que o efeito foi o esperado.
 4. Commite o `.sql`. **Migração que existe só no banco é exatamente o B6.**
 
-Pendente em 26/08/2026: os itens 2, 3, 6 e 7 da tabela do Caminho A **ainda
-não foram aplicados em produção**. Os itens 6 e 7 (P5) foram escritos por um
-agente sem `execute_sql`/`apply_migration` disponíveis na sessão — ver a nota
-de execução no final de cada arquivo. O item 7 também depende da tarefa T2.4
-(limpeza de rascunhos duplicados) ainda não feita.
+Atualização 02/09/2026: os itens 2, 3, 6 e 7 (marcados "pendente" desde
+26/08 porque foram escritos por agentes sem `execute_sql`/`apply_migration`
+disponíveis na sessão) foram **confirmados ao vivo como já aplicados em
+produção** (`has_function_privilege`/`pg_indexes` batendo com o esperado).
+As notas de execução de cada arquivo foram corrigidas — nenhuma ação
+pendente aqui.
 
 Também pendente: `extensao_push_tokens.sql` (T3.3, problema P20 — tabela
 `push_tokens` + RPC `registrar_push_token`, fundação de banco do RF-08).
 Mesma limitação de ferramentas (sessão só com `list_tables`) — ver a nota de
 execução no final do arquivo antes de aplicar.
 
-Pendente em 02/09/2026: `extensao_fix_grant_pagamento_pedidos_02-09.sql`
+Aplicado em 02/09/2026: `extensao_fix_grant_pagamento_pedidos_02-09.sql`
 (bug "Erro ao criar pedido: permission denied for table pedidos" reportado
 pelo dono) — `forma_pagamento`/`status_pagamento`/`horario_previsto`
 (adicionadas por `extensao_pedidos_pagamento_horario_previsto_rf02_01-09.sql`)
-nunca ganharam o `grant update (coluna) ... to authenticated` equivalente às
-outras colunas de `pedidos`; RLS está correta, é só GRANT de coluna
-faltando. Mesma limitação de ferramentas da sessão (só `list_tables`
-disponível, e o Bash não tinha rota de rede pro Postgres) — ver a nota de
-execução no arquivo antes de aplicar.
+nunca tinham ganhado o `grant update (coluna) ... to authenticated`
+equivalente às outras colunas de `pedidos`; RLS estava correta, era só
+GRANT de coluna faltando. Aplicado via `apply_migration` e validado ao
+vivo (`information_schema.column_privileges` confirma UPDATE pra
+`authenticated` nas 3 colunas).
 
 ---
 

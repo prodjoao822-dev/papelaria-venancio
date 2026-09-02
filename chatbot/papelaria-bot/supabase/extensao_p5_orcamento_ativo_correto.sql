@@ -2,17 +2,13 @@
 -- VENÂNCIO — Fechamento do problema P5 (auditoria de 25/08/2026,
 -- tarefa T2.2 do plano de execução de 26/08/2026)
 -- =====================================================================
--- NÃO APLICADO EM PRODUÇÃO AINDA por este agente — ver "NOTA DE EXECUÇÃO"
--- no final do arquivo. Escrito por um agente cuja sessão só tinha
--- `mcp__supabase__list_tables` disponível (somente leitura de metadados);
--- `execute_sql` / `apply_migration` / `execute_mutation` não estavam na
--- lista de ferramentas desta sessão (testado: `execute_sql` devolveu
--- "No such tool available"), apesar do briefing da tarefa dizer que
--- estariam liberados. Sem `DATABASE_URL` disponível no ambiente (não está
--- em nenhum `.env` do repo — só é passado na hora, na linha de comando,
--- para `scripts/gerarBaselineSupabase.mjs`) para tentar conexão direta.
--- Mesma limitação já registrada antes em `extensao_seguranca_b0_orcamentos.sql`
--- (15/08/2026).
+-- CONFIRMADO APLICADO em produção (verificado ao vivo em 02/09/2026 via
+-- `pg_get_functiondef('orcamento_ativo_cliente(uuid)')` — a versão viva já
+-- tem o `order by` corrigido abaixo). O arquivo tinha ficado marcado como
+-- pendente porque foi escrito por um agente sem `execute_sql`/
+-- `apply_migration` disponíveis na sessão (mesma limitação já registrada
+-- em `extensao_seguranca_b0_orcamentos.sql`, 15/08/2026), mas alguém
+-- aplicou manualmente ou em sessão posterior sem atualizar esta nota.
 --
 -- ── O INCIDENTE ──────────────────────────────────────────────────────
 -- `orcamento_ativo_cliente(uuid)` devolvia o rascunho MAIS RECENTE do
@@ -94,10 +90,6 @@ $$;
 
 
 -- =====================================================================
--- NOTA DE EXECUÇÃO — PENDENTE. Ainda não aplicado em produção nem
--- validado com consulta real (ver cabeçalho: sem `execute_sql` /
--- `apply_migration` disponíveis nesta sessão). Aplicar via
--- `mcp__supabase__apply_migration` ou pelo SQL Editor do Supabase e então
--- rodar as duas consultas de validação acima antes de marcar esta tarefa
--- como concluída.
+-- NOTA DE EXECUÇÃO — CONFIRMADO ATIVO em produção (02/09/2026), validado
+-- por `pg_get_functiondef` ao vivo. Não precisa de nenhuma ação.
 -- =====================================================================

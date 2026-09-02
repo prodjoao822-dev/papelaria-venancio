@@ -1,10 +1,10 @@
 -- =====================================================================
 -- VENÂNCIO — Rede de segurança do problema P5 (tarefa T2.2, 26/08/2026)
 -- =====================================================================
--- NÃO APLICADO EM PRODUÇÃO por este agente — mesma limitação de
--- ferramentas descrita em `extensao_p5_orcamento_ativo_correto.sql`
--- (sem `execute_sql`/`apply_migration`/`execute_mutation` nesta sessão,
--- sem `DATABASE_URL` no ambiente). Ver "NOTA DE EXECUÇÃO" no final.
+-- CONFIRMADO APLICADO em produção (verificado ao vivo em 02/09/2026 via
+-- `pg_indexes` — o índice `idx_orcamentos_rascunho_unico_por_conversa`
+-- já existe). Nota original ficou desatualizada — ver "NOTA DE EXECUÇÃO"
+-- no final.
 --
 -- ── POR QUE ISTO EXISTE ────────────────────────────────────────────────
 -- `orcamento_ativo_cliente` (arquivo irmão desta migração) escolhe certo
@@ -91,11 +91,6 @@ create unique index if not exists idx_orcamentos_rascunho_unico_por_conversa
 
 
 -- =====================================================================
--- NOTA DE EXECUÇÃO — PENDENTE. Ainda não aplicado em produção. Ver
--- cabeçalho: sem `execute_sql`/`apply_migration` disponíveis nesta sessão,
--- e mesmo que estivessem, o bloco `do $$ ... $$` acima é esperado ABORTAR
--- hoje (26/08/2026) por causa dos duplicados conhecidos da conversa
--- `493b2143-7b7d-4bcb-89e3-c38aa371135b` — a menos que a tarefa T2.4 já
--- tenha rodado antes desta migração. Confirme o estado atual com a
--- consulta de `extensao_p5_orcamento_ativo_correto.sql` antes de aplicar.
+-- NOTA DE EXECUÇÃO — CONFIRMADO ATIVO em produção (02/09/2026), validado
+-- por `pg_indexes` ao vivo. Não precisa de nenhuma ação.
 -- =====================================================================

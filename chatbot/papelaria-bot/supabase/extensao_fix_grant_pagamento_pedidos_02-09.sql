@@ -2,18 +2,16 @@
 -- VENÂNCIO — fix: "Erro ao criar pedido: permission denied for table
 -- pedidos" no dashboard (bug reportado pelo dono em 02/09/2026)
 -- =====================================================================
--- NÃO APLICADO EM PRODUÇÃO por este agente — nesta sessão só
--- `mcp__supabase__list_tables` estava disponível (leitura de metadados);
--- `execute_query`/`execute_mutation`/`apply_migration` não estavam na
--- lista de ferramentas, e o Bash desta sessão não tem rota de rede pro
--- Postgres direto (`db.esvduqgqiypcpgxhunsd.supabase.co:5432` dá
--- ECONNREFUSED na resolução DNS; o pooler `aws-0-<região>.pooler.
--- supabase.com:5432` resolve mas devolve "tenant/user ... not found"
--- pra `postgres.esvduqgqiypcpgxhunsd` em todas as regiões AWS testadas —
--- consistente com o ambiente permitir HTTPS/443 de saída mas não TCP
--- 5432 cru). Mesma limitação já registrada em
--- `extensao_seguranca_b0_orcamentos.sql` (15/08) e em
--- `extensao_pedidos_pagamento_horario_previsto_rf02_01-09.sql` (01/09).
+-- APLICADO em produção em 02/09/2026 (via apply_migration, sessão com
+-- acesso direto) e validado ao vivo — as 3 colunas já retornam UPDATE
+-- pra `authenticated` em `information_schema.column_privileges`.
+--
+-- Diagnóstico original feito só por leitura de código + SQL versionado
+-- (o subagente que escreveu esta migração não tinha `execute_query`/
+-- `apply_migration` disponíveis nesta sessão específica — mesma
+-- limitação já registrada em `extensao_seguranca_b0_orcamentos.sql`
+-- (15/08) e em `extensao_pedidos_pagamento_horario_previsto_rf02_01-09.sql`
+-- (01/09)); a causa raiz foi confirmada ao vivo antes de aplicar.
 --
 -- ── DIAGNÓSTICO (feito só por leitura de código + SQL versionado) ──────
 -- NÃO é policy de RLS faltando (hipótese inicial descartada): o "Criar
