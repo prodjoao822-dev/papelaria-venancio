@@ -61,6 +61,8 @@ Rode **nesta ordem**, tudo no SQL Editor do Supabase (ou via `psql`):
 | 27 | `extensao_lista_espera_rf04_01-09.sql` | Tabela `lista_espera` + RPCs `registrar_interesse_lista_espera`/`listar_interessados_produto`/`marcar_cliente_notificado` (RF-04, mesma decisão D3, 01/09). |
 | 28 | `extensao_pedidos_pagamento_horario_previsto_rf02_01-09.sql` | Colunas `forma_pagamento`/`status_pagamento`/`horario_previsto` em `pedidos` (RF-02/P14, decisão D5 do dono, 01/09). |
 | 29 | `extensao_operador_login_codigo_pin_01-09.sql` | Colunas `codigo`/`pin_tentativas_falhas`/`pin_bloqueado_ate` em `operadores` — login por código+PIN pros demais operadores, ao lado do e-mail/senha (01/09). |
+| 30 | `extensao_fix_grant_pagamento_pedidos_02-09.sql` | Fix "permission denied for table pedidos" ao criar pedido com pagamento — faltava `grant update (coluna)` pra `authenticated` nas colunas do RF-02 (02/09). |
+| 31 | `extensao_fix_duplicacao_e_remocao_item_orcamento_02-09.sql` | RPCs novas `adicionar_item_orcamento` (idempotente por `produto_id`, SET em vez de duplicar linha) e `remover_item_orcamento` (só em rascunho, idempotente). Fecha o incidente real do pedido PED-2026-0257 (02/09). Aplicado e validado ao vivo. **Falta o n8n trocar o INSERT cru pela RPC nova e ganhar a ferramenta de remoção** — tarefa separada, ver nota no arquivo. |
 
 Depois disso o banco novo é equivalente ao de produção em 01/09/2026 (tarde) — 148 policies + as 10 novas dos itens 26/27 (5 `tarefas` + 5 `lista_espera`), verificado por diff ao vivo contra `pg_policies` na 1ª rodada (ver nota de fechamento no fim de `extensao_seguranca_p2_revoga_anon_dashboard_01-09.sql`) e por consulta direta às tabelas/RPCs/constraints novas dos itens 26-28 (ver nota de fechamento em cada arquivo).
 
@@ -126,6 +128,16 @@ equivalente às outras colunas de `pedidos`; RLS estava correta, era só
 GRANT de coluna faltando. Aplicado via `apply_migration` e validado ao
 vivo (`information_schema.column_privileges` confirma UPDATE pra
 `authenticated` nas 3 colunas).
+
+Também pendente: `extensao_fix_duplicacao_e_remocao_item_orcamento_02-09.sql`
+(incidente real PED-2026-0257/ORC-2026-0256, 02/09) — RPCs novas
+`adicionar_item_orcamento` (idempotente por `produto_id`, corta a
+duplicação de item na raiz) e `remover_item_orcamento` (só em orçamento
+`rascunho`, idempotente). Mesma limitação de ferramentas (sessão só com
+`list_tables`, sem `execute_sql`/`apply_migration`, e sem conexão direta
+possível via `DATABASE_URL` a partir deste sandbox) — nem aplicado nem
+validado ao vivo ainda. Ver nota de execução e roteiro de validação no
+final do arquivo antes de aplicar.
 
 ---
 
