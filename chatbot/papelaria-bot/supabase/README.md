@@ -116,6 +116,16 @@ Também pendente: `extensao_push_tokens.sql` (T3.3, problema P20 — tabela
 Mesma limitação de ferramentas (sessão só com `list_tables`) — ver a nota de
 execução no final do arquivo antes de aplicar.
 
+Pendente em 02/09/2026: `extensao_fix_grant_pagamento_pedidos_02-09.sql`
+(bug "Erro ao criar pedido: permission denied for table pedidos" reportado
+pelo dono) — `forma_pagamento`/`status_pagamento`/`horario_previsto`
+(adicionadas por `extensao_pedidos_pagamento_horario_previsto_rf02_01-09.sql`)
+nunca ganharam o `grant update (coluna) ... to authenticated` equivalente às
+outras colunas de `pedidos`; RLS está correta, é só GRANT de coluna
+faltando. Mesma limitação de ferramentas da sessão (só `list_tables`
+disponível, e o Bash não tinha rota de rede pro Postgres) — ver a nota de
+execução no arquivo antes de aplicar.
+
 ---
 
 ## Arquivos históricos (não use para montar banco novo)

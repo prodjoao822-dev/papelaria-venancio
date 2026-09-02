@@ -1,0 +1,84 @@
+-- =====================================================================
+-- VENÂNCIO — fix: "Erro ao criar pedido: permission denied for table
+-- pedidos" no dashboard (bug reportado pelo dono em 02/09/2026)
+-- =====================================================================
+-- NÃO APLICADO EM PRODUÇÃO por este agente — nesta sessão só
+-- `mcp__supabase__list_tables` estava disponível (leitura de metadados);
+-- `execute_query`/`execute_mutation`/`apply_migration` não estavam na
+-- lista de ferramentas, e o Bash desta sessão não tem rota de rede pro
+-- Postgres direto (`db.esvduqgqiypcpgxhunsd.supabase.co:5432` dá
+-- ECONNREFUSED na resolução DNS; o pooler `aws-0-<região>.pooler.
+-- supabase.com:5432` resolve mas devolve "tenant/user ... not found"
+-- pra `postgres.esvduqgqiypcpgxhunsd` em todas as regiões AWS testadas —
+-- consistente com o ambiente permitir HTTPS/443 de saída mas não TCP
+-- 5432 cru). Mesma limitação já registrada em
+-- `extensao_seguranca_b0_orcamentos.sql` (15/08) e em
+-- `extensao_pedidos_pagamento_horario_previsto_rf02_01-09.sql` (01/09).
+--
+-- ── DIAGNÓSTICO (feito só por leitura de código + SQL versionado) ──────
+-- NÃO é policy de RLS faltando (hipótese inicial descartada): o "Criar
+-- Pedido" do dashboard nunca faz `insert` direto em `pedidos` — ele cria
+-- um orçamento rascunho e chama a RPC `aceitar_orcamento_dashboard`
+-- (`SECURITY DEFINER`, ver `baseline_producao_26-08-2026.sql`), que por
+-- sua vez chama `aceitar_orcamento` (também `SECURITY DEFINER`) — o
+-- `insert into pedidos` roda com o privilégio do dono da função, não do
+-- operador logado, então RLS/GRANT de `pedidos` nem entram em jogo nessa
+-- parte. Confirmado em `venancio-ai-ops/src/services/orcamentos.service.js`
+-- (`aceitar()` chama `supabase.rpc('aceitar_orcamento_dashboard', ...)`).
+--
+-- O erro acontece DEPOIS, no passo seguinte de
+-- `pedidosService.criar()` (`venancio-ai-ops/src/services/pedidos.
+-- service.js`): depois de aceitar o orçamento, se `camposExtras` não
+-- estiver vazio, ele faz um UPDATE comum via supabase-js
+-- (`supabase.from('pedidos').update(camposExtras)`), que SIM roda com o
+-- privilégio do operador autenticado (role `authenticated`, sujeito a
+-- RLS e a GRANT). `NovoPedidoModal.jsx` inicializa `statusPagamento`
+-- com o default `'pendente'` (nunca vazio) e sempre manda
+-- `status_pagamento: statusPagamento` pra `pedidosService.criar()` — ou
+-- seja, `camposExtras.status_pagamento` está preenchido em TODO clique
+-- de "Criar Pedido", não só quando o operador mexe no campo de
+-- pagamento. Isso torna `camposExtras` sempre não-vazio e sempre
+-- dispara esse UPDATE.
+--
+-- A causa real: `forma_pagamento`, `status_pagamento` e
+-- `horario_previsto` foram criadas em `pedidos` por
+-- `extensao_pedidos_pagamento_horario_previsto_rf02_01-09.sql` (01/09),
+-- cujo cabeçalho argumenta que a policy de RLS `operadores_atualizacao`
+-- (`for update using (eh_operador_ativo())`) já cobre as 3 colunas
+-- novas "automaticamente, sem precisar de mudança de RLS" — verdade
+-- pra RLS, mas GRANT de coluna é uma camada SEPARADA e independente da
+-- RLS. Desde a correção de 25/08/2026 (ver
+-- `extensao_fix_recalculo_valor_security_definer.sql` e
+-- `extensao_fix_marcar_pronto_saiu_entrega.sql`, que documentam o mesmo
+-- padrão de bug), o role `authenticated` NÃO tem mais um `grant update`
+-- geral em `pedidos` — só colunas nomeadas uma a uma
+-- (`baseline_producao_26-08-2026.sql`, linhas ~4088-4091:
+-- `endereco_entrega`, `forma_entrega`, `operacao`, `sequencia`). As 3
+-- colunas novas do RF-02 nunca ganharam o `grant update` equivalente —
+-- confirmado por busca em todo `chatbot/papelaria-bot/supabase/*.sql`:
+-- nenhum arquivo faz `grant update (forma_pagamento|status_pagamento|
+-- horario_previsto) ... to authenticated`. Resultado: todo UPDATE que
+-- toca `status_pagamento` (ou as outras duas) como `authenticated`
+-- falha com "permission denied for table pedidos" (SQLSTATE 42501) —
+-- msg genérica de GRANT, não de RLS (RLS negada dá "new row violates
+-- row-level security policy for table ...", mensagem diferente). Mesmo
+-- mecanismo também quebra a tela dedicada de Pagamento
+-- (`pedidosService.atualizarPagamento()`), que escreve as mesmas 3
+-- colunas.
+--
+-- NÃO É preciso RLS nova nem RPC nova aqui — só fechar o GRANT que
+-- ficou faltando, mesmo padrão dos 2 fixes de 25-27/08 citados acima.
+--
+-- ── VALIDAÇÃO SUGERIDA (rodar depois de aplicar) ───────────────────────
+-- select table_name, column_name, grantee, privilege_type
+-- from information_schema.column_privileges
+-- where table_schema = 'public' and table_name = 'pedidos'
+--   and column_name in ('forma_pagamento','status_pagamento','horario_previsto')
+-- order by column_name, grantee;
+-- -- deve retornar UPDATE pra `authenticated` nas 3 colunas (além do que
+-- -- `service_role`/`anon` já tinham por outros grants mais amplos).
+-- =====================================================================
+
+grant update (forma_pagamento) on pedidos to authenticated;
+grant update (status_pagamento) on pedidos to authenticated;
+grant update (horario_previsto) on pedidos to authenticated;
