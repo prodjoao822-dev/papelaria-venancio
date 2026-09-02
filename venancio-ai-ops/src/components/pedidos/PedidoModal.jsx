@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { pedidosService } from '@/services/pedidos.service'
 import { funcionariosService } from '@/services/funcionarios.service'
 import { StatusBadge } from './StatusBadge'
@@ -11,6 +11,7 @@ import {
 } from '@/utils/formatters'
 import { getStatusConfig } from '@/utils/status'
 import { OPERACOES_SHOPCONTROL, FORMAS_PAGAMENTO, STATUS_PAGAMENTO } from '@/utils/constants'
+import { criarSequenciadorDeRequisicoes } from '@/utils/requestSequencer'
 import { useToast } from '@/contexts/AppContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { AbrirOcorrenciaModal } from '@/components/ocorrencias/AbrirOcorrenciaModal'
@@ -339,17 +340,42 @@ export function PedidoModal({ pedidoId, onFechar, onStatusAtualizado }) {
   const { toast } = useToast()
   const { operador } = useAuth()
 
-  const carregar = useCallback(() => {
+  // Como as seções (Responsáveis, Sequência, Pagamento, Marcar Todos) chamam
+  // onAtualizar() de forma independente, é possível disparar 2+ requisições
+  // em paralelo. Ver utils/requestSequencer.js para o porquê da guarda:
+  // sem ela, a resposta que chegasse por último "vencia" mesmo que tivesse
+  // sido disparada antes de outra já concluída, sobrescrevendo um
+  // salvamento recente com um snapshot antigo (o usuário via o campo
+  // "voltar" e achava que não tinha salvo, quando na verdade salvou — só a
+  // tela é que mostrou um estado desatualizado por causa da corrida).
+  const sequenciadorRef = useRef(null)
+  if (!sequenciadorRef.current) sequenciadorRef.current = criarSequenciadorDeRequisicoes()
+
+  // mostrarCarregando=true só na carga inicial do modal. As seções internas
+  // chamam onAtualizar() só pra ressincronizar o pedido em segundo plano
+  // depois de salvar — trocar a tela inteira pelo spinner a cada campo
+  // editado é o que causava o "pisca" de carregamento a cada pequena edição.
+  const carregar = useCallback((mostrarCarregando = false) => {
     if (!pedidoId) return
-    setCarregando(true)
-    pedidosService
+    const sequenciador = sequenciadorRef.current
+    const minhaRequisicao = sequenciador.proxima()
+    if (mostrarCarregando) setCarregando(true)
+    return pedidosService
       .buscarPorId(pedidoId)
-      .then(setPedido)
-      .catch((err) => toast.erro('Erro ao carregar pedido: ' + err.message))
-      .finally(() => setCarregando(false))
+      .then((dados) => {
+        if (!sequenciador.ehAtual(minhaRequisicao)) return // resposta obsoleta, descarta
+        setPedido(dados)
+      })
+      .catch((err) => {
+        if (!sequenciador.ehAtual(minhaRequisicao)) return
+        toast.erro('Erro ao carregar pedido: ' + err.message)
+      })
+      .finally(() => {
+        if (mostrarCarregando && sequenciador.ehAtual(minhaRequisicao)) setCarregando(false)
+      })
   }, [pedidoId, toast])
 
-  useEffect(() => { carregar() }, [carregar])
+  useEffect(() => { carregar(true) }, [carregar])
 
   async function handleAtualizarStatus(novoStatus) {
     setAtualizando(true)
