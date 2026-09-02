@@ -208,6 +208,78 @@ test('a pausa carrega um motivo legível pro log', () => {
   assert.match(acao.dados.motivo, /Falar com um atendente/);
 });
 
+// --- correção de 01/09: texto livre (sem dígito) dentro de um menu numérico ---
+//
+// Ver comentário de `pareceTentativaNumerica` em menuEngine.js: a solução
+// estrutural NÃO é ampliar a lista de saudações (rejeitado explicitamente
+// pelo dono do produto) — é distinguir "tentativa frustrada de digitar um
+// número" (mantém o erro) de "texto que não tem dígito nenhum" (redireciona
+// pra opção configurada em `textoLivreVaiPara`, com a intenção real do
+// cliente quando a opção é do tipo consultarAgente).
+describe('menuEngine: texto livre sem dígito (textoLivreVaiPara)', () => {
+  function criarMenuComTextoLivre() {
+    return criarEstadoDeMenu({
+      STATE: 'ESTADO_TESTE',
+      rodape: 'Escolha uma opção:',
+      opcoes: {
+        1: { rotulo: 'Lista escolar', tipo: 'estado', estado: 'OUTRO_ESTADO' },
+        2: {
+          rotulo: 'Material escolar',
+          tipo: 'consultarAgente',
+          estado: 'AGENTE_VENDAS_ATIVO',
+          intencao: 'material escolar',
+        },
+      },
+      textoLivreVaiPara: '2',
+    });
+  }
+
+  test('mensagem numérica válida continua funcionando normalmente', () => {
+    const menu = criarMenuComTextoLivre();
+    const resultado = menu.processar('1', { estado: 'ESTADO_TESTE', dados: { algo: 'x' } });
+
+    assert.equal(resultado.estado, 'OUTRO_ESTADO');
+    assert.deepEqual(resultado.dados, { algo: 'x' });
+  });
+
+  ['Obrigado', 'obrigada', 'vlw', 'blz', 'Só isso mesmo então, valeu!', 'vcs tem caderno de desenho?'].forEach((texto) => {
+    test(`"${texto}" não cai no fallback de erro — vai pro Agente de Vendas com a intenção real`, () => {
+      const menu = criarMenuComTextoLivre();
+      const resultado = menu.processar(texto, { estado: 'ESTADO_TESTE', dados: {} });
+
+      assert.doesNotMatch(String(resultado.resposta), /Opção inválida/);
+      assert.equal(resultado.estado, 'AGENTE_VENDAS_ATIVO');
+      assert.deepEqual(resultado.acoes, [
+        { tipo: 'CONSULTAR_AGENTE_VENDAS', dados: { intencao: texto } },
+      ]);
+    });
+  });
+
+  test('texto com dígito que não bate com opção nenhuma continua acusando "opção inválida"', () => {
+    const menu = criarMenuComTextoLivre();
+    const resultado = menu.processar('8', { estado: 'ESTADO_TESTE', dados: {} });
+
+    assert.match(resultado.resposta, /Opção inválida/);
+    assert.equal(resultado.estado, 'ESTADO_TESTE');
+  });
+
+  test('saudação continua tendo prioridade sobre o redirecionamento de texto livre', () => {
+    const menu = criarMenuComTextoLivre();
+    const resultado = menu.processar('oi', { estado: 'ESTADO_TESTE', dados: {} });
+
+    assert.equal(resultado.estado, 'ESTADO_TESTE');
+    assert.equal(resultado.acoes, undefined);
+    assert.doesNotMatch(resultado.resposta, /Opção inválida/);
+  });
+
+  test('sem "textoLivreVaiPara" configurado, texto sem dígito continua acusando erro (sem regressão)', () => {
+    const menu = criarMenuDeTeste(); // não configura textoLivreVaiPara
+    const resultado = menu.processar('obrigado', { estado: 'ESTADO_TESTE', dados: {} });
+
+    assert.match(resultado.resposta, /Opção inválida/);
+  });
+});
+
 test('a opção 6 do submenu de vendas pausa o bot de verdade', () => {
   // eslint-disable-next-line global-require -- carregado aqui pra manter o teste local
   const submenuVendas = require('../../src/botEngine/states/submenuVendas');

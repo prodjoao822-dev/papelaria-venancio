@@ -23,6 +23,21 @@ module.exports = criarEstadoDeMenu({
 
   rodape: 'Digite a opção desejada:',
 
+  // Bug real de teste (01/09): depois de ver a lista escolar, uma cliente
+  // escreveu "Obrigado" aqui e caiu no fallback "Opção inválida". O dono
+  // rejeitou explicitamente resolver isso ampliando a lista de saudações
+  // (SAUDACOES, em menuEngine.js) — qualquer lista fixa de palavras-chave é
+  // frágil, sempre existe uma variação nova que ela não prevê. A solução
+  // estrutural: texto sem nenhum dígito (não é tentativa de digitar um
+  // número de opção) cai na opção "Material escolar" — não porque o assunto
+  // seja necessariamente material escolar, mas porque isso rotea pro Agente
+  // de Vendas com o TEXTO ORIGINAL do cliente como intenção (ver menuEngine),
+  // e é o próprio LLM quem decide o que responder a um agradecimento, uma
+  // despedida ou uma pergunta livre de verdade — não uma lista de
+  // palavras-chave determinística daqui. Ver `pareceTentativaNumerica` em
+  // menuEngine.js para o detalhe completo da heurística.
+  textoLivreVaiPara: '2',
+
   opcoes: {
     1: {
       rotulo: 'Lista escolar',

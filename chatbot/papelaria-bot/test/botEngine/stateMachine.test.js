@@ -188,6 +188,59 @@ describe('submenu de vendas', () => {
     assert.doesNotMatch(resultado.resposta, /Opção inválida/);
     assert.match(resultado.resposta, /Material escolar/);
   });
+
+  // --- correção de 01/09: bug real de teste — cliente escreveu "Obrigado" ---
+  // depois de ver a lista escolar e caiu no fallback "Opção inválida". Ver
+  // `pareceTentativaNumerica` em menuEngine.js pro porquê da heurística
+  // (estrutural: sem dígito nenhum = não é tentativa de digitar um número) em
+  // vez de simplesmente ampliar a lista de saudações reconhecidas — caminho
+  // explicitamente rejeitado pelo dono do produto.
+  describe('texto livre sem dígito no submenu de vendas (não é saudação nem opção)', () => {
+    ['Obrigado', 'obrigada', 'vlw', 'blz', 'Só isso mesmo então, valeu!'].forEach((texto) => {
+      test(`"${texto}" não acusa "opção inválida" — vira consulta ao Agente de Vendas`, () => {
+        const resultado = processarMensagem(irParaSubmenuVendas(), texto);
+
+        assert.doesNotMatch(String(resultado.resposta), /Opção inválida/);
+        assert.equal(resultado.sessao.estado, 'AGENTE_VENDAS_ATIVO');
+        assert.equal(resultado.acoes.length, 1);
+        assert.equal(resultado.acoes[0].tipo, 'CONSULTAR_AGENTE_VENDAS');
+        // A intenção mandada ao Agente de Vendas é o texto REAL do cliente, não
+        // um rótulo fixo — é o próprio LLM quem decide o que responder.
+        assert.equal(resultado.acoes[0].dados.intencao, texto);
+      });
+    });
+
+    test('texto com dígito que não é opção válida ("8") continua acusando "opção inválida"', () => {
+      const resultado = processarMensagem(irParaSubmenuVendas(), '8');
+      assert.equal(resultado.sessao.estado, 'SUBMENU_VENDAS');
+      assert.match(resultado.resposta, /Opção inválida/);
+    });
+
+    // Regressão: as opções numéricas 1 a 7 do submenu de vendas continuam
+    // funcionando exatamente como antes desta mudança.
+    test('opções numéricas válidas (1 a 7) continuam funcionando sem nenhuma mudança', () => {
+      ['1', '2', '3', '4', '5', '6', '7'].forEach((opcao) => {
+        const resultado = processarMensagem(irParaSubmenuVendas(), opcao);
+        assert.notEqual(resultado.sessao.estado, undefined);
+        assert.doesNotMatch(String(resultado.resposta ?? ''), /Opção inválida/);
+      });
+    });
+  });
+});
+
+// --- correção de 01/09: garantir que o MENU_PRINCIPAL não sofreu nenhuma ---
+// regressão com a introdução de `textoLivreVaiPara` — ele não configura essa
+// opção de propósito (ver comentário em menuEngine.js), então texto livre sem
+// dígito continua acusando "opção inválida" exatamente como antes.
+describe('menu principal: sem regressão com o redirecionamento de texto livre', () => {
+  test('"obrigado" depois do menu já apresentado continua acusando "opção inválida", sem redirecionar pra nada', () => {
+    const jaViuMenu = processarMensagem(estadoInicial(), 'oi').sessao;
+    const resultado = processarMensagem(jaViuMenu, 'obrigado');
+
+    assert.equal(resultado.sessao.estado, 'MENU_PRINCIPAL');
+    assert.match(resultado.resposta, /Opção inválida/);
+    assert.equal(resultado.acoes.length, 0);
+  });
 });
 
 describe('estado de handoff AGENTE_VENDAS_ATIVO', () => {

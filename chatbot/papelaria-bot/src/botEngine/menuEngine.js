@@ -45,8 +45,45 @@ function ehSaudacao(texto) {
   return SAUDACOES.includes(texto.trim().toLowerCase());
 }
 
+// --- Texto livre dentro de um menu numérico (bug real de teste, 01/09) ---
+//
+// Depois de ver a lista escolar, uma cliente escreveu "Obrigado" no
+// SUBMENU_VENDAS e caiu no fallback "Opção inválida" — confuso pra quem só
+// estava agradecendo. A correção óbvia seria ampliar SAUDACOES acima com
+// "obrigado", "vlw", "blz" etc., mas o dono do produto rejeitou esse caminho
+// explicitamente: qualquer lista fixa de palavras é frágil por natureza —
+// sempre existe uma variação nova ("show", "só isso mesmo então", uma
+// pergunta livre qualquer) que a lista não prevê, e o mesmo bug reaparece.
+// É reativo, não estrutural.
+//
+// A heurística adotada não tenta reconhecer O QUE o cliente escreveu, só SE
+// a mensagem parece uma tentativa (frustrada) de digitar um número de opção
+// que simplesmente não existe no menu (ex.: "8", "10") — nesse caso continua
+// fazendo sentido o fallback "opção inválida, digite um número". Texto sem
+// nenhum dígito não é uma tentativa de escolher número nenhum (é frase:
+// agradecimento, despedida, pergunta livre...) e pedir pra digitar um número
+// não ajuda em nada.
+function pareceTentativaNumerica(texto) {
+  return /\d/.test(texto);
+}
+
 function criarEstadoDeMenu(config) {
-  const { STATE, cabecalho, rodape, opcoes, primeiraMensagemSemErro } = config;
+  const {
+    STATE, cabecalho, rodape, opcoes, primeiraMensagemSemErro,
+    // `textoLivreVaiPara` (opt-in por estado, config só de dados): chave de uma
+    // opção já existente em `opcoes` — texto sem dígito que não é opção nem
+    // saudação passa a se comportar como se o cliente tivesse escolhido essa
+    // opção, em vez de cair no fallback de erro. Hoje só SUBMENU_VENDAS usa
+    // isso (aponta pra uma opção `consultarAgente`): depois de ver
+    // produtos/lista, o Agente de Vendas (LLM) é quem decide o que fazer com
+    // "obrigado" ou uma pergunta de verdade — não uma lista de palavras-chave
+    // daqui. MENU_PRINCIPAL não configura isso de propósito: não haveria pra
+    // onde "cair" um texto livre nesse nível, e o caso real que existe nele
+    // (primeira mensagem de uma conversa nova) já é resolvido por
+    // `primeiraMensagemSemErro` — ver comentário de `pareceTentativaNumerica`
+    // acima para o porquê desta heurística em vez de mais palavras-chave.
+    textoLivreVaiPara,
+  } = config;
 
   function mensagem(contexto = {}) {
     const cabecalhoTexto = cabecalho ? `${cabecalho(contexto)}\n\n` : '';
@@ -56,26 +93,7 @@ function criarEstadoDeMenu(config) {
     return `\n${cabecalhoTexto}${rodape}\n\n${opcoesTexto}\n`;
   }
 
-  function processar(textoRecebido, sessao, contexto = {}) {
-    const texto = textoRecebido.trim();
-    const opcao = opcoes[texto];
-
-    const jaApresentado = Boolean(sessao.dados?.[FLAG_MENU_APRESENTADO]);
-    const dadosBase = primeiraMensagemSemErro
-      ? { ...sessao.dados, [FLAG_MENU_APRESENTADO]: true }
-      : sessao.dados;
-
-    if (!opcao) {
-      if (ehSaudacao(texto)) {
-        return { estado: STATE, dados: dadosBase, resposta: mensagem(contexto) };
-      }
-
-      const resposta = (primeiraMensagemSemErro && !jaApresentado)
-        ? mensagem(contexto)
-        : fallback.mensagemOpcaoInvalida(mensagem(contexto));
-      return { estado: STATE, dados: dadosBase, resposta };
-    }
-
+  function executarOpcao(opcao, dadosBase, contexto) {
     if (opcao.tipo === 'estado') {
       const dados = opcao.limparCampos
         ? Object.fromEntries(Object.entries(dadosBase).filter(([chave]) => !opcao.limparCampos.includes(chave)))
@@ -130,7 +148,42 @@ function criarEstadoDeMenu(config) {
       };
     }
 
-    throw new Error(`menuEngine: tipo de opção desconhecido "${opcao.tipo}" (estado ${STATE}, opção "${texto}")`);
+    throw new Error(`menuEngine: tipo de opção desconhecido "${opcao.tipo}" (estado ${STATE})`);
+  }
+
+  function processar(textoRecebido, sessao, contexto = {}) {
+    const texto = textoRecebido.trim();
+    const opcaoEscolhida = opcoes[texto];
+
+    const jaApresentado = Boolean(sessao.dados?.[FLAG_MENU_APRESENTADO]);
+    const dadosBase = primeiraMensagemSemErro
+      ? { ...sessao.dados, [FLAG_MENU_APRESENTADO]: true }
+      : sessao.dados;
+
+    if (opcaoEscolhida) {
+      return executarOpcao(opcaoEscolhida, dadosBase, contexto);
+    }
+
+    if (ehSaudacao(texto)) {
+      return { estado: STATE, dados: dadosBase, resposta: mensagem(contexto) };
+    }
+
+    if (textoLivreVaiPara && texto.length > 0 && !pareceTentativaNumerica(texto)) {
+      const opcaoDestino = opcoes[textoLivreVaiPara];
+      // Substituir a intenção canônica da opção pelo texto real do cliente só
+      // faz sentido pra "consultarAgente" — é o único tipo que usa esse texto
+      // pra alimentar o Agente de Vendas; "estado"/"notificar" não têm onde
+      // esse texto entrar, então mantêm o comportamento normal da opção alvo.
+      const opcaoComTextoReal = opcaoDestino.tipo === 'consultarAgente'
+        ? { ...opcaoDestino, intencao: textoRecebido.trim() }
+        : opcaoDestino;
+      return executarOpcao(opcaoComTextoReal, dadosBase, contexto);
+    }
+
+    const resposta = (primeiraMensagemSemErro && !jaApresentado)
+      ? mensagem(contexto)
+      : fallback.mensagemOpcaoInvalida(mensagem(contexto));
+    return { estado: STATE, dados: dadosBase, resposta };
   }
 
   return { STATE, mensagem, processar };
