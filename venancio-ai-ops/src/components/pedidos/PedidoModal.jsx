@@ -11,6 +11,7 @@ import {
 } from '@/utils/formatters'
 import { getStatusConfig } from '@/utils/status'
 import { OPERACOES_SHOPCONTROL, FORMAS_PAGAMENTO, STATUS_PAGAMENTO } from '@/utils/constants'
+import { calcularProgressoChecklist } from '@/utils/checklistSeparacao'
 import { criarSequenciadorDeRequisicoes } from '@/utils/requestSequencer'
 import { useToast } from '@/contexts/AppContext'
 import { useAuth } from '@/contexts/AuthContext'
@@ -233,12 +234,14 @@ function ChecklistSeparacao({ pedido, onAtualizar }) {
     setItens(pedido?.itens_pedido ?? [])
   }, [pedido])
 
-  const separados = itens.filter((i) => i.separado).length
-  const total = itens.length
-  const progresso = total > 0 ? Math.round((separados / total) * 100) : 0
-  const tudoSeparado = separados === total && total > 0
+  // Ver utils/checklistSeparacao.js para o porquê do status_real entrar
+  // nessa conta (bug real: checklist ficava "0/N" pra pedido já separado
+  // via Separação Delegada/Rápida, que nunca toca em itens_pedido).
+  const { total, separados, progresso, tudoSeparado, separacaoConfirmadaPeloStatus } =
+    calcularProgressoChecklist(itens, pedido.status_real)
 
   async function handleToggle(item) {
+    if (separacaoConfirmadaPeloStatus) return // checklist bloqueado — pedido já separado
     const novoValor = !item.separado
     // Atualiza otimisticamente — resposta visual imediata (< 100ms)
     // NÃO chamar onAtualizar() aqui: o pai faria carregar() que, ao retornar do
@@ -306,15 +309,19 @@ function ChecklistSeparacao({ pedido, onAtualizar }) {
 
       {/* Lista de itens */}
       <div className="checklist-lista">
-        {itens.map((item) => (
+        {itens.map((item) => {
+          const marcado = (item.separado ?? false) || separacaoConfirmadaPeloStatus
+          return (
           <label
             key={item.id}
-            className={`checklist-item ${item.separado ? 'checklist-item--separado' : ''}`}
+            className={`checklist-item ${marcado ? 'checklist-item--separado' : ''}`}
+            title={separacaoConfirmadaPeloStatus ? 'Pedido já separado — checklist bloqueado' : undefined}
           >
             <input
               type="checkbox"
               className="checklist-checkbox"
-              checked={item.separado ?? false}
+              checked={marcado}
+              disabled={separacaoConfirmadaPeloStatus}
               onChange={() => handleToggle(item)}
             />
             <div className="checklist-item-info">
@@ -325,7 +332,8 @@ function ChecklistSeparacao({ pedido, onAtualizar }) {
               {formatCurrency(item.quantidade * item.valor_unitario)}
             </span>
           </label>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
@@ -386,7 +394,12 @@ export function PedidoModal({ pedidoId, onFechar, onStatusAtualizado }) {
         operador?.id ?? null,
         observacao || null
       )
-      setPedido((prev) => ({ ...prev, status: atualizado.status }))
+      // Mescla só status + status_real (não o pedido inteiro) pra não sobrescrever
+      // edições em andamento em outras seções (Sequência, Pagamento) — mas os
+      // dois campos de status juntos, senão status_real ficava desatualizado
+      // e o checklist (que decide "tudo separado" a partir dele) não refletia
+      // uma transição de status feita por aqui (ex.: "Marcar Separado").
+      setPedido((prev) => ({ ...prev, status: atualizado.status, status_real: atualizado.status_real }))
       onStatusAtualizado?.(atualizado)
       toast.sucesso(`Pedido atualizado para "${getStatusConfig(novoStatus).label}"`)
       setObservacao('')
