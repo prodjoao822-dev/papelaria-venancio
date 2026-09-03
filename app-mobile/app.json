@@ -41,7 +41,8 @@
         {
           "color": "#1B5FAE"
         }
-      ]
+      ],
+      "expo-status-bar"
     ],
     "extra": {
       "buildIdentity": {

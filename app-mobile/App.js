@@ -8,7 +8,7 @@ import AppNavigator from './src/navigation/AppNavigator';
 // Define como uma notificação push recebida com o app ABERTO deve se
 // comportar. Sem isso, o comportamento padrão varia entre plataformas/SDKs.
 // Registrado no escopo do módulo (fora do componente), como recomendado
-// pela doc do expo-notifications (SDK 54) — só precisa rodar uma vez por
+// pela doc do expo-notifications (SDK 57) — só precisa rodar uma vez por
 // processo do app, não a cada render/remontagem.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({

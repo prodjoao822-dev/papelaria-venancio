@@ -1,6 +1,6 @@
 # app-mobile — Venâncio Equipe
 
-App interno (React Native + Expo SDK 54) usado pelas equipes de Separação e
+App interno (React Native + Expo SDK 57) usado pelas equipes de Separação e
 Entrega da Papelaria Venâncio. Não é um app de cliente e não está publicado
 em loja nenhuma.
 

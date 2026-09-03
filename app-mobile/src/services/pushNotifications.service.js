@@ -22,7 +22,7 @@ import { separadorSupabase } from '../supabase/separadorClient'
 // aparece depois de existir pelo menos um canal de notificação — e
 // `setNotificationChannelAsync` precisa rodar ANTES de
 // `getPermissionsAsync`/`requestPermissionsAsync`/`getExpoPushTokenAsync`
-// (doc SDK 54, seção "Permissions > Android"). Em iOS essa chamada é
+// (doc SDK 57, seção "Permissions > Android"). Em iOS essa chamada é
 // ignorada silenciosamente (é uma no-op fora do Android).
 async function garantirCanalAndroid() {
   if (Platform.OS !== 'android') return
