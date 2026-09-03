@@ -13,6 +13,8 @@ import {
   limparRascunho,
   rascunhoNovoTemConteudo,
   rascunhoEdicaoDifereDoOriginal,
+  itensOrcamentoParaFormulario,
+  prepararDuplicacaoOrcamento,
 } from './rascunhoOrcamento'
 
 function criarLocalStorageFake() {
@@ -169,5 +171,123 @@ describe('rascunhoEdicaoDifereDoOriginal', () => {
   test('rascunho com observações alteradas é considerado diferente', () => {
     const alterado = { ...original, observacoes: 'cliente pediu desconto' }
     expect(rascunhoEdicaoDifereDoOriginal(alterado, original)).toBe(true)
+  })
+})
+
+describe('itensOrcamentoParaFormulario', () => {
+  test('converte itens_orcamento (shape do banco) pro shape do formulário', () => {
+    const orc = {
+      itens_orcamento: [
+        { id: 'item1', nome_item: 'Caderno 10 matérias', quantidade: 2, valor_unitario: 25.9, produto_id: 'prod1' },
+        { id: 'item2', nome_item: 'Item sem preço ainda', quantidade: 1, valor_unitario: null, produto_id: null },
+      ],
+    }
+    expect(itensOrcamentoParaFormulario(orc)).toEqual([
+      { descricao_livre: 'Caderno 10 matérias', quantidade: 2, valor_unitario: '25.9', produto_id: 'prod1' },
+      { descricao_livre: 'Item sem preço ainda', quantidade: 1, valor_unitario: '', produto_id: null },
+    ])
+  })
+
+  test('orçamento sem itens_orcamento (ou undefined) devolve lista vazia, não quebra', () => {
+    expect(itensOrcamentoParaFormulario({})).toEqual([])
+    expect(itensOrcamentoParaFormulario(undefined)).toEqual([])
+  })
+})
+
+// Duplicar Orçamento — mesmo "pacote" de material pra um cliente diferente
+// (pedido real do dono: não redigitar tudo de novo). O cliente tem que
+// nascer vazio de propósito, e itens/observações são cópia de verdade
+// (novo array, sem referência ao orçamento original).
+describe('prepararDuplicacaoOrcamento', () => {
+  function orcamentoOriginal() {
+    return {
+      id: 'orc-original',
+      protocolo: 'ORC-0001',
+      observacoes: 'Entregar embrulhado para presente',
+      clientes: { id: 'cli-original', nome: 'Ana Souza', telefone: '11999990000' },
+      itens_orcamento: [
+        { id: 'item1', nome_item: 'Caderno 10 matérias', quantidade: 2, valor_unitario: 25.9, produto_id: 'prod1' },
+        { id: 'item2', nome_item: 'Caneta azul', quantidade: 3, valor_unitario: 2.5, produto_id: null },
+      ],
+    }
+  }
+
+  test('copia itens e observações do orçamento original', () => {
+    const duplicado = prepararDuplicacaoOrcamento(orcamentoOriginal())
+
+    expect(duplicado.observacoes).toBe('Entregar embrulhado para presente')
+    expect(duplicado.itens).toEqual([
+      { descricao_livre: 'Caderno 10 matérias', quantidade: 2, valor_unitario: '25.9', produto_id: 'prod1' },
+      { descricao_livre: 'Caneta azul', quantidade: 3, valor_unitario: '2.5', produto_id: null },
+    ])
+  })
+
+  test('cliente nasce vazio — não copia nome/telefone do cliente original', () => {
+    const duplicado = prepararDuplicacaoOrcamento(orcamentoOriginal())
+
+    expect(duplicado.cliente).toEqual({ nome: '', telefone: '' })
+  })
+
+  test('status nasce como rascunho, independente do status do original', () => {
+    const original = { ...orcamentoOriginal(), status: 'aceito' }
+    expect(prepararDuplicacaoOrcamento(original).status).toBe('rascunho')
+  })
+
+  test('itens duplicados são um array novo — mexer neles não afeta o orçamento original', () => {
+    const original = orcamentoOriginal()
+    const duplicado = prepararDuplicacaoOrcamento(original)
+
+    duplicado.itens[0].quantidade = 999
+    duplicado.itens.push({ descricao_livre: 'Item novo', quantidade: 1, valor_unitario: '1', produto_id: null })
+
+    expect(original.itens_orcamento).toHaveLength(2)
+    expect(original.itens_orcamento[0].quantidade).toBe(2)
+  })
+
+  test('orçamento sem observações não quebra — vira string vazia', () => {
+    const original = { ...orcamentoOriginal(), observacoes: null }
+    expect(prepararDuplicacaoOrcamento(original).observacoes).toBe('')
+  })
+})
+
+describe('duplicação sobrescreve rascunho pré-existente de "novo orçamento"', () => {
+  beforeEach(() => {
+    vi.stubGlobal('localStorage', criarLocalStorageFake())
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  test('rascunho antigo não relacionado é substituído pelo conteúdo duplicado, sem misturar', () => {
+    // Rascunho de um "novo orçamento" qualquer que o operador tinha começado
+    // a digitar e não salvou — não tem nenhuma relação com a duplicação.
+    salvarRascunho(CHAVE_RASCUNHO_NOVO_ORCAMENTO, {
+      cliente: { nome: 'Rascunho Antigo', telefone: '11888880000' },
+      observacoes: 'nada a ver com a duplicação',
+      status: 'enviado',
+      itens: [{ descricao_livre: 'Produto do rascunho antigo', quantidade: 5, valor_unitario: '9,99', produto_id: null }],
+    })
+
+    const original = {
+      protocolo: 'ORC-0002',
+      observacoes: 'Pacote de material escolar padrão',
+      itens_orcamento: [
+        { id: 'item1', nome_item: 'Mochila', quantidade: 1, valor_unitario: 120, produto_id: 'prod9' },
+      ],
+    }
+    const duplicado = prepararDuplicacaoOrcamento(original)
+
+    // Isso é exatamente o que o NovoOrcamentoModal faz de forma síncrona ao
+    // montar com `duplicarDe` — sobrescreve na hora, sem esperar debounce.
+    salvarRascunho(CHAVE_RASCUNHO_NOVO_ORCAMENTO, duplicado)
+
+    const carregado = carregarRascunho(CHAVE_RASCUNHO_NOVO_ORCAMENTO)
+    expect(carregado).toEqual(duplicado)
+    expect(carregado.cliente).toEqual({ nome: '', telefone: '' })
+    expect(carregado.observacoes).toBe('Pacote de material escolar padrão')
+    expect(carregado.itens).toEqual([
+      { descricao_livre: 'Mochila', quantidade: 1, valor_unitario: '120', produto_id: 'prod9' },
+    ])
+    // Nada do rascunho antigo sobrevive misturado.
+    expect(JSON.stringify(carregado)).not.toContain('Rascunho Antigo')
+    expect(JSON.stringify(carregado)).not.toContain('nada a ver com a duplicação')
   })
 })

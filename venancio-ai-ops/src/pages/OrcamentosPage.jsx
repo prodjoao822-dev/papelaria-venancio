@@ -15,6 +15,7 @@ import {
   carregarRascunho,
   limparRascunho,
   rascunhoEdicaoDifereDoOriginal,
+  itensOrcamentoParaFormulario,
 } from '@/utils/rascunhoOrcamento'
 
 // Enum real status_orcamento (chatbot/papelaria-bot/supabase/squemanovo.sql):
@@ -46,16 +47,7 @@ const ACOES_STATUS = {
 
 const ITEM_EDIT_VAZIO = { descricao_livre: '', quantidade: 1, valor_unitario: '', produto_id: null }
 
-function itensParaEdicao(orc) {
-  return (orc.itens_orcamento ?? []).map((item) => ({
-    descricao_livre: item.nome_item ?? item.descricao_livre ?? '',
-    quantidade: item.quantidade,
-    valor_unitario: item.valor_unitario === null ? '' : String(item.valor_unitario),
-    produto_id: item.produto_id ?? null,
-  }))
-}
-
-function OrcamentoDetalhe({ orc, onStatusChange, onAceitar, onPrecoAtualizado, onAtualizado, onFechar }) {
+function OrcamentoDetalhe({ orc, onStatusChange, onAceitar, onPrecoAtualizado, onAtualizado, onDuplicar, onFechar }) {
   const { toast } = useToast()
   const [processando, setProcessando] = useState(false)
   const [editandoItemId, setEditandoItemId] = useState(null)
@@ -111,7 +103,7 @@ function OrcamentoDetalhe({ orc, onStatusChange, onAceitar, onPrecoAtualizado, o
   }
 
   function iniciarEdicaoOrcamento() {
-    const original = { itens: itensParaEdicao(orc), observacoes: orc.observacoes ?? '' }
+    const original = { itens: itensOrcamentoParaFormulario(orc), observacoes: orc.observacoes ?? '' }
     const rascunho = carregarRascunho(chaveRascunhoEdicao)
     const rascunhoValido = rascunho && Array.isArray(rascunho.itens)
 
@@ -225,7 +217,12 @@ function OrcamentoDetalhe({ orc, onStatusChange, onAceitar, onPrecoAtualizado, o
           </button>
           <div style={{ flex: 1 }} />
           {!editando && (
-            <button className="btn btn-ghost btn-sm" onClick={iniciarEdicaoOrcamento}>✏️ Editar</button>
+            <>
+              <button className="btn btn-ghost btn-sm" onClick={() => onDuplicar(orc)} title="Criar um novo orçamento com os mesmos itens, pra outro cliente">
+                ⧉ Duplicar
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={iniciarEdicaoOrcamento}>✏️ Editar</button>
+            </>
           )}
         </div>
 
@@ -392,6 +389,16 @@ export function OrcamentosPage() {
   const [busca, setBusca] = useState('')
   const [novoAberto, setNovoAberto] = useState(false)
   const [orcDetalhe, setOrcDetalhe] = useState(null)
+  const [duplicarOrc, setDuplicarOrc] = useState(null)
+
+  // Duplicar fecha o detalhe (se aberto) e abre o mesmo modal de "Novo
+  // Orçamento" pré-carregado — é uma ação explícita, não precisa de
+  // confirmação extra mesmo que já exista um rascunho de "novo orçamento"
+  // não relacionado (ver rascunhoOrcamento.prepararDuplicacaoOrcamento).
+  function handleDuplicar(orc) {
+    setOrcDetalhe(null)
+    setDuplicarOrc(orc)
+  }
 
   const orcFiltrados = useMemo(() => {
     const aba = ABAS_ORC.find((a) => a.id === abaAtiva)
@@ -562,6 +569,13 @@ export function OrcamentosPage() {
                               {a.label}
                             </button>
                           ))}
+                          <button
+                            className="btn btn-ghost btn-xs"
+                            onClick={() => handleDuplicar(orc)}
+                            title="Duplicar orçamento (mesmos itens, outro cliente)"
+                          >
+                            ⧉
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -573,9 +587,10 @@ export function OrcamentosPage() {
         )}
       </div>
 
-      {novoAberto && (
+      {(novoAberto || duplicarOrc) && (
         <NovoOrcamentoModal
-          onFechar={() => setNovoAberto(false)}
+          duplicarDe={duplicarOrc}
+          onFechar={() => { setNovoAberto(false); setDuplicarOrc(null) }}
           onCriado={() => carregar()}
         />
       )}
@@ -602,6 +617,7 @@ export function OrcamentosPage() {
             setOrcDetalhe(atualizado)
             carregar()
           }}
+          onDuplicar={handleDuplicar}
           onFechar={() => setOrcDetalhe(null)}
         />
       )}

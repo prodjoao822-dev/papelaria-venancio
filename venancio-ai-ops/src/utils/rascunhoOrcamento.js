@@ -74,3 +74,36 @@ export function rascunhoEdicaoDifereDoOriginal(dadosSalvos, dadosOriginais) {
     return false
   }
 }
+
+/**
+ * Converte os itens de um orçamento (já carregado com itens_orcamento, no
+ * shape que vem do SELECT_ORC_COMPLETO de orcamentos.service.js) no formato
+ * de item usado pelos formulários de orçamento (criar/editar/duplicar).
+ * Compartilhado entre a edição inline (OrcamentosPage) e a duplicação, pra
+ * não ter dois lugares fazendo o mesmo de-para.
+ */
+export function itensOrcamentoParaFormulario(orc) {
+  return (orc?.itens_orcamento ?? []).map((item) => ({
+    descricao_livre: item.nome_item ?? item.descricao_livre ?? '',
+    quantidade: item.quantidade,
+    valor_unitario: item.valor_unitario === null ? '' : String(item.valor_unitario),
+    produto_id: item.produto_id ?? null,
+  }))
+}
+
+/**
+ * Duplicar um orçamento (RN pedida pelo dono: mesmo "pacote" de material pra
+ * um cliente diferente) reaproveita o formulário de "Novo Orçamento" — copia
+ * itens e observações, mas o cliente nasce em branco de propósito: é
+ * exatamente o campo que o operador precisa trocar antes de salvar.
+ * O resultado é o mesmo shape gravado como rascunho de "novo orçamento"
+ * (CHAVE_RASCUNHO_NOVO_ORCAMENTO), pra reaproveitar o auto-save já existente.
+ */
+export function prepararDuplicacaoOrcamento(orc) {
+  return {
+    cliente: { nome: '', telefone: '' },
+    observacoes: orc?.observacoes ?? '',
+    status: 'rascunho',
+    itens: itensOrcamentoParaFormulario(orc),
+  }
+}

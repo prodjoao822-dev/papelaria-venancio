@@ -15,6 +15,7 @@ vi.mock('@/supabase/client', () => ({
 
 import { supabase } from '@/supabase/client'
 import { orcamentosService } from './orcamentos.service'
+import { prepararDuplicacaoOrcamento } from '@/utils/rascunhoOrcamento'
 
 const METODOS_CHAIN = [
   'select', 'order', 'limit', 'eq', 'in', 'not', 'gte', 'lt', 'lte',
@@ -107,6 +108,77 @@ describe('criar', () => {
     await expect(
       orcamentosService.criar({ cliente_id: 'cli-invalido', itens: [{ quantidade: 1, valor_unitario: 1 }] })
     ).rejects.toThrow('cliente inválido')
+  })
+})
+
+// Duplicar Orçamento (dashboard) reaproveita orcamentosService.criar() sem
+// nenhum código especial — o teste aqui é da integração completa do fluxo:
+// orçamento original → prepararDuplicacaoOrcamento() → operador troca o
+// cliente → criar() grava uma linha 100% nova, sem NENHUMA referência (id,
+// orcamento_id, cliente_id) ao orçamento de origem.
+describe('duplicar orçamento (prepararDuplicacaoOrcamento + criar)', () => {
+  test('a duplicata criada é um orçamento novo e independente — nenhuma referência ao original', async () => {
+    const original = orcamentoRow({
+      id: 'orc-original',
+      protocolo: 'ORC-0001',
+      cliente_id: 'cli-original',
+      observacoes: 'Pacote de material da 4ª série',
+      itens_orcamento: [
+        { id: 'item-original-1', nome_item: 'Caderno 10 matérias', quantidade: 2, valor_unitario: 25.9, produto_id: 'prod1' },
+      ],
+    })
+
+    const dadosDuplicados = prepararDuplicacaoOrcamento(original)
+    // Operador troca o cliente — esse é o único preenchimento manual exigido.
+    dadosDuplicados.cliente = { nome: 'Outro Cliente', telefone: '11977776666' }
+
+    let chamada = 0
+    const insertItensChain = chain({ error: null })
+    const insertOrcamentoChain = chain({ data: { id: 'orc-nova-duplicata' }, error: null })
+    supabase.from.mockImplementation((tabela) => {
+      chamada += 1
+      if (tabela === 'orcamentos' && chamada === 1) return insertOrcamentoChain
+      if (tabela === 'itens_orcamento') return insertItensChain
+      if (tabela === 'orcamentos') {
+        return chain({
+          data: orcamentoRow({ id: 'orc-nova-duplicata', cliente_id: 'cli-novo', observacoes: dadosDuplicados.observacoes }),
+          error: null,
+        })
+      }
+      throw new Error(`tabela inesperada: ${tabela}`)
+    })
+
+    const novaDuplicata = await orcamentosService.criar({
+      cliente_id: 'cli-novo',
+      tipo: 'venda_geral',
+      status: dadosDuplicados.status,
+      observacoes: dadosDuplicados.observacoes,
+      itens: dadosDuplicados.itens.map((i) => ({
+        produto_id: i.produto_id,
+        descricao_livre: i.descricao_livre,
+        quantidade: i.quantidade,
+        valor_unitario: parseFloat(i.valor_unitario),
+      })),
+    })
+
+    // Insert do orçamento novo não carrega id/protocolo do original.
+    expect(insertOrcamentoChain.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ cliente_id: 'cli-novo' })
+    )
+    const argsInsertOrcamento = insertOrcamentoChain.insert.mock.calls[0][0]
+    expect(argsInsertOrcamento).not.toHaveProperty('id')
+    expect(JSON.stringify(argsInsertOrcamento)).not.toContain('orc-original')
+
+    // Itens são inseridos vinculados ao ID NOVO, não ao original — e sem o
+    // id do item original (item-original-1), prova de que é uma cópia real.
+    expect(insertItensChain.insert).toHaveBeenCalledWith([
+      { orcamento_id: 'orc-nova-duplicata', produto_id: 'prod1', descricao_livre: 'Caderno 10 matérias', quantidade: 2, valor_unitario: 25.9 },
+    ])
+    expect(JSON.stringify(insertItensChain.insert.mock.calls[0][0])).not.toContain('item-original-1')
+    expect(JSON.stringify(insertItensChain.insert.mock.calls[0][0])).not.toContain('orc-original')
+
+    expect(novaDuplicata.id).toBe('orc-nova-duplicata')
+    expect(novaDuplicata.id).not.toBe(original.id)
   })
 })
 

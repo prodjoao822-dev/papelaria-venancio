@@ -8,8 +8,10 @@ import { useRascunhoAutoSave } from '@/hooks/useRascunhoAutoSave'
 import {
   CHAVE_RASCUNHO_NOVO_ORCAMENTO,
   carregarRascunho,
+  salvarRascunho,
   limparRascunho,
   rascunhoNovoTemConteudo,
+  prepararDuplicacaoOrcamento,
 } from '@/utils/rascunhoOrcamento'
 
 const ITEM_VAZIO = { descricao_livre: '', quantidade: 1, valor_unitario: '', produto_id: null }
@@ -18,30 +20,44 @@ const ITEM_VAZIO = { descricao_livre: '', quantidade: 1, valor_unitario: '', pro
 // que o rascunho salvo (se existir e tiver conteúdo) sobrepõe o padrão
 // vazio/clienteInicial. Feito fora do componente pra ficar fácil de ler o
 // que cada state realmente considera como "valor inicial".
-function estadoInicial(clienteInicial) {
+//
+// Duplicar (`duplicarDe`) tem prioridade sobre qualquer rascunho existente:
+// é uma ação explícita do operador, então sobrescreve na hora (síncrono,
+// antes do primeiro render) o rascunho de "novo orçamento" que já houvesse
+// — não mistura os dois nem pede confirmação extra.
+function estadoInicial(clienteInicial, duplicarDe) {
+  if (duplicarDe) {
+    const duplicado = prepararDuplicacaoOrcamento(duplicarDe)
+    salvarRascunho(CHAVE_RASCUNHO_NOVO_ORCAMENTO, duplicado)
+    return { ...duplicado, recuperado: false, duplicado: true }
+  }
+
   const rascunho = carregarRascunho(CHAVE_RASCUNHO_NOVO_ORCAMENTO)
   const temRascunho = rascunhoNovoTemConteudo(rascunho)
-  if (temRascunho) return { ...rascunho, recuperado: true }
+  if (temRascunho) return { ...rascunho, recuperado: true, duplicado: false }
   return {
     cliente: { nome: clienteInicial?.nome ?? '', telefone: clienteInicial?.telefone ?? '' },
     observacoes: '',
     status: 'rascunho',
     itens: [{ ...ITEM_VAZIO }],
     recuperado: false,
+    duplicado: false,
   }
 }
 
-export function NovoOrcamentoModal({ onFechar, onCriado, clienteInicial = null }) {
+export function NovoOrcamentoModal({ onFechar, onCriado, clienteInicial = null, duplicarDe = null }) {
   const { toast } = useToast()
   const [salvando, setSalvando] = useState(false)
-  const [estadoInicialCarregado] = useState(() => estadoInicial(clienteInicial))
+  const [estadoInicialCarregado] = useState(() => estadoInicial(clienteInicial, duplicarDe))
   const [cliente, setCliente] = useState(estadoInicialCarregado.cliente)
   const [observacoes, setObservacoes] = useState(estadoInicialCarregado.observacoes)
   const [status, setStatus] = useState(estadoInicialCarregado.status)
   const [itens, setItens] = useState(estadoInicialCarregado.itens)
 
   useEffect(() => {
-    if (estadoInicialCarregado.recuperado) {
+    if (estadoInicialCarregado.duplicado) {
+      toast.aviso('Orçamento duplicado — selecione o cliente para este novo orçamento.')
+    } else if (estadoInicialCarregado.recuperado) {
       toast.aviso('Recuperamos um rascunho de orçamento que não tinha sido salvo.')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -131,8 +147,12 @@ export function NovoOrcamentoModal({ onFechar, onCriado, clienteInicial = null }
           <div className="modal-header-esquerda">
             <span style={{ fontSize: 22 }}>📋</span>
             <div>
-              <h2 className="modal-titulo">Novo Orçamento</h2>
-              <p className="modal-subtitulo">Crie uma proposta para o cliente</p>
+              <h2 className="modal-titulo">{duplicarDe ? 'Duplicar Orçamento' : 'Novo Orçamento'}</h2>
+              <p className="modal-subtitulo">
+                {duplicarDe
+                  ? `Mesmos itens de ${duplicarDe.protocolo} — escolha o cliente`
+                  : 'Crie uma proposta para o cliente'}
+              </p>
             </div>
           </div>
           <button className="modal-fechar" onClick={onFechar}>✕</button>
