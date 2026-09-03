@@ -267,6 +267,19 @@ dubla('../src/services/evolutionApi', {
   foiEnviadaPeloBot() {
     return false;
   },
+  // Adicionadas 03/09/2026 (vistoria final pré-Volta às Aulas): faltavam
+  // aqui desde que evolutionApi.js ganhou o indicador "digitando..." em
+  // 02/09 (commit d0e051a). Sem isso, TODA mensagem que passa da checagem
+  // de duplicidade quebrava em `evolutionApi.enviarPresenca is not a
+  // function` (webhookController.js chama isso antes de qualquer resposta)
+  // — 33,7% de erro 500 no run sintético, não bug de negócio nenhum, só
+  // mock desatualizado. Mesmo formato best-effort do real: nunca lança.
+  async enviarPresenca() {
+    await aguardar(LATENCIAS.evolution);
+  },
+  manterDigitando() {
+    return () => {};
+  },
 });
 
 // --- escalonamentoService: a implementação real bate direto no Supabase

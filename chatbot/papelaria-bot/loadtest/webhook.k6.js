@@ -109,11 +109,17 @@ export const options = {
     },
   },
   thresholds: {
-    // Informativos — o teste não aborta, só marca no resumo final. 429 é
-    // esperado/aceitável em rajada acima do limite; o que importa é ver
-    // QUANTOS e comparar com o volume real esperado (50-200 msgs/DIA, bem
-    // abaixo do teto de 300/min).
-    'webhook_erro_total': ['count>=0'],
+    // `webhook_erro_total` (ver registrarErroGenerico) só soma respostas
+    // >=400 que NÃO são 429 — 429 é rastreado à parte e é esperado/aceitável
+    // em rajada acima do limite (o que importa ali é comparar a contagem
+    // com o volume real esperado, 50-200 msgs/DIA, bem abaixo do teto de
+    // 300-600/min). Qualquer OUTRO erro (4xx de validação, 500) não tem
+    // justificativa nos cenários deste script — threshold real, não
+    // informativo: 0 esperado. `count>=0` (versão anterior) nunca falhava
+    // o teste, mesmo com 100% de erro — corrigido em 03/09/2026 depois de
+    // achar, na vistoria final, que um mock desatualizado causava 33,7% de
+    // erro 500 sem que nenhum threshold acusasse isso.
+    'webhook_erro_total': ['count<1'],
     'duracao_pico_realista': ['p(95)<5000'],
   },
 };
