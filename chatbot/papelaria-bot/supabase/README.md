@@ -115,10 +115,11 @@ produção** (`has_function_privilege`/`pg_indexes` batendo com o esperado).
 As notas de execução de cada arquivo foram corrigidas — nenhuma ação
 pendente aqui.
 
-Também pendente: `extensao_push_tokens.sql` (T3.3, problema P20 — tabela
-`push_tokens` + RPC `registrar_push_token`, fundação de banco do RF-08).
-Mesma limitação de ferramentas (sessão só com `list_tables`) — ver a nota de
-execução no final do arquivo antes de aplicar.
+Atualização 03/09/2026: `extensao_push_tokens.sql` estava marcado "pendente"
+aqui, mas confirmado ao vivo (vistoria final pré-Volta às Aulas) que a
+tabela `push_tokens` já existe em produção, com RLS ligada e as 6 colunas
+batendo exatamente com o arquivo — já estava aplicado, só a nota do README
+nunca foi corrigida. Nenhuma ação pendente aqui.
 
 Aplicado em 02/09/2026: `extensao_fix_grant_pagamento_pedidos_02-09.sql`
 (bug "Erro ao criar pedido: permission denied for table pedidos" reportado
@@ -130,29 +131,31 @@ GRANT de coluna faltando. Aplicado via `apply_migration` e validado ao
 vivo (`information_schema.column_privileges` confirma UPDATE pra
 `authenticated` nas 3 colunas).
 
-Também pendente: `extensao_fix_duplicacao_e_remocao_item_orcamento_02-09.sql`
-(incidente real PED-2026-0257/ORC-2026-0256, 02/09) — RPCs novas
+Aplicado em 02/09/2026: `extensao_fix_duplicacao_e_remocao_item_orcamento_02-09.sql`
+(incidente real PED-2026-0257/ORC-2026-0256) — RPCs novas
 `adicionar_item_orcamento` (idempotente por `produto_id`, corta a
 duplicação de item na raiz) e `remover_item_orcamento` (só em orçamento
-`rascunho`, idempotente). Mesma limitação de ferramentas (sessão só com
-`list_tables`, sem `execute_sql`/`apply_migration`, e sem conexão direta
-possível via `DATABASE_URL` a partir deste sandbox) — nem aplicado nem
-validado ao vivo ainda. Ver nota de execução e roteiro de validação no
-final do arquivo antes de aplicar.
+`rascunho`, idempotente). Aplicado via `apply_migration` e validado ao vivo
+com dado de teste descartável (idempotência de adicionar, remoção +
+recálculo, trava de "só rascunho").
 
-Também pendente: `extensao_sincroniza_separado_itens_pedido_03-09.sql`
+Aplicado em 03/09/2026: `extensao_sincroniza_separado_itens_pedido_03-09.sql`
 (divergência entre o checklist manual do dashboard e o checklist da
 Separação Delegada/Rápida do app mobile, ambos marcando "separado" sem se
-comunicar — decisão do dono, 03/09: sincronizar só no sentido app mobile →
+comunicar — decisão do dono: sincronizar só no sentido app mobile →
 `itens_pedido`, nunca o inverso, porque só o lado do app tem checagem de
-identidade de quem pode marcar o item). Mesma limitação de ferramentas
-desta semana (sessão só com `list_tables`) — a definição vigente das duas
-funções foi confirmada por introspecção read-only (baseline de 26/08 +
-nenhum arquivo posterior redefinindo `marcar_item_separado_solicitacao`;
-`extensao_concluir_separacao_avanca_pedido.sql` como última definição de
-`concluir_separacao`), mas o `CREATE OR REPLACE` em si NÃO foi aplicado
-nem validado ao vivo. Ver nota de execução e roteiro de validação no
-final do arquivo antes de aplicar.
+identidade de quem pode marcar o item). Aplicado via `apply_migration` e
+validado ao vivo com pedido/solicitação de teste descartável (item marcado
+reflete imediatamente, `concluir_separacao` deixa tudo consistente).
+
+Aplicado em 03/09/2026: `extensao_seguranca_p3_revoga_anon_rpcs_delegacao_03-09.sql`
+(achado da vistoria final pré-Volta às Aulas) — 17 RPCs `SECURITY DEFINER`
+de separação/entrega/ocorrência (`concluir_separacao`, `separacao_rapida`,
+`delegar_entrega`, `abrir_ocorrencia` etc.) tinham `EXECUTE` aberto pra
+`anon`/`public` desde o baseline de 26/08, sem que P1/P2 as cobrissem —
+não era BOLA ativo (todas já tinham portão interno correto), mas defesa em
+profundidade fechada mesmo assim. Aplicado e validado ao vivo
+(`has_function_privilege`: `anon=false`/`authenticated=true` nas 17).
 
 ---
 
