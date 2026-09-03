@@ -63,6 +63,7 @@ Rode **nesta ordem**, tudo no SQL Editor do Supabase (ou via `psql`):
 | 29 | `extensao_operador_login_codigo_pin_01-09.sql` | Colunas `codigo`/`pin_tentativas_falhas`/`pin_bloqueado_ate` em `operadores` — login por código+PIN pros demais operadores, ao lado do e-mail/senha (01/09). |
 | 30 | `extensao_fix_grant_pagamento_pedidos_02-09.sql` | Fix "permission denied for table pedidos" ao criar pedido com pagamento — faltava `grant update (coluna)` pra `authenticated` nas colunas do RF-02 (02/09). |
 | 31 | `extensao_fix_duplicacao_e_remocao_item_orcamento_02-09.sql` | RPCs novas `adicionar_item_orcamento` (idempotente por `produto_id`, SET em vez de duplicar linha) e `remover_item_orcamento` (só em rascunho, idempotente). Fecha o incidente real do pedido PED-2026-0257 (02/09). Aplicado e validado ao vivo. **Falta o n8n trocar o INSERT cru pela RPC nova e ganhar a ferramenta de remoção** — tarefa separada, ver nota no arquivo. |
+| 32 | `extensao_sincroniza_separado_itens_pedido_03-09.sql` | `marcar_item_separado_solicitacao`/`concluir_separacao` passam a replicar `separado` para `itens_pedido` (sentido único app mobile → `itens_pedido`, nunca o inverso — decisão do dono, 03/09). Fecha a divergência entre o checklist do dashboard e o checklist da Separação Delegada/Rápida do app. Aplicado e validado ao vivo com dado de teste descartável. |
 
 Depois disso o banco novo é equivalente ao de produção em 01/09/2026 (tarde) — 148 policies + as 10 novas dos itens 26/27 (5 `tarefas` + 5 `lista_espera`), verificado por diff ao vivo contra `pg_policies` na 1ª rodada (ver nota de fechamento no fim de `extensao_seguranca_p2_revoga_anon_dashboard_01-09.sql`) e por consulta direta às tabelas/RPCs/constraints novas dos itens 26-28 (ver nota de fechamento em cada arquivo).
 
@@ -137,6 +138,20 @@ duplicação de item na raiz) e `remover_item_orcamento` (só em orçamento
 `list_tables`, sem `execute_sql`/`apply_migration`, e sem conexão direta
 possível via `DATABASE_URL` a partir deste sandbox) — nem aplicado nem
 validado ao vivo ainda. Ver nota de execução e roteiro de validação no
+final do arquivo antes de aplicar.
+
+Também pendente: `extensao_sincroniza_separado_itens_pedido_03-09.sql`
+(divergência entre o checklist manual do dashboard e o checklist da
+Separação Delegada/Rápida do app mobile, ambos marcando "separado" sem se
+comunicar — decisão do dono, 03/09: sincronizar só no sentido app mobile →
+`itens_pedido`, nunca o inverso, porque só o lado do app tem checagem de
+identidade de quem pode marcar o item). Mesma limitação de ferramentas
+desta semana (sessão só com `list_tables`) — a definição vigente das duas
+funções foi confirmada por introspecção read-only (baseline de 26/08 +
+nenhum arquivo posterior redefinindo `marcar_item_separado_solicitacao`;
+`extensao_concluir_separacao_avanca_pedido.sql` como última definição de
+`concluir_separacao`), mas o `CREATE OR REPLACE` em si NÃO foi aplicado
+nem validado ao vivo. Ver nota de execução e roteiro de validação no
 final do arquivo antes de aplicar.
 
 ---
