@@ -12,9 +12,15 @@ import NotificacoesScreen from '../features/notificacoes/NotificacoesScreen';
 import PerfilScreen from '../features/perfil/PerfilScreen';
 import PainelEntregasScreen from '../features/entregas/PainelEntregasScreen';
 import DetalheEntregaScreen from '../features/entregas/DetalheEntregaScreen';
+import PainelPedidosScreen from '../features/operador/PainelPedidosScreen';
+import DetalhePedidoScreen from '../features/operador/DetalhePedidoScreen';
+import TarefasScreen from '../features/operador/TarefasScreen';
+import ListaEsperaScreen from '../features/operador/ListaEsperaScreen';
+import OperadorPerfilScreen from '../features/operador/OperadorPerfilScreen';
 import { useSeparadorAuth } from '../contexts/SeparadorAuthContext';
+import { useOperadorAuth } from '../contexts/OperadorAuthContext';
 import { colors } from '../theme/colors';
-import { HomeIcon, ListaIcon, PerfilIcon, CaminhaoIcon } from '../components/icons';
+import { HomeIcon, ListaIcon, PerfilIcon, CaminhaoIcon, CaixaIcon, RelogioIcon } from '../components/icons';
 
 const RootStack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -22,6 +28,9 @@ const InicioStack = createNativeStackNavigator();
 const SolicitacoesStack = createNativeStackNavigator();
 const EntregasStack = createNativeStackNavigator();
 const PerfilStack = createNativeStackNavigator();
+
+const OperadorTab = createBottomTabNavigator();
+const PedidosOperadorStack = createNativeStackNavigator();
 
 // Telas com cabeçalho próprio no design (Home, Painel, Detalhe,
 // ConfirmacaoEnvio, ChatSolicitacao) escondem o header nativo do Stack;
@@ -148,19 +157,77 @@ function TabsAutenticadas() {
   );
 }
 
-export default function AppNavigator() {
-  const { session, carregando } = useSeparadorAuth();
+// Segunda árvore de navegação — papel Operador (via `operadores`, mesma
+// tabela do dashboard web), condicionada a `operador != null` (ver
+// `session` do OperadorAuthContext abaixo), mesmo raciocínio de
+// TabsAutenticadas para o Separador/Entregador. v1 deliberadamente pequena:
+// Pedidos (com detalhe), Tarefas, Espera e Perfil — todas as telas são só
+// leitura exceto "concluir tarefa" (RPC já existente). Não existe tela de
+// escolha entre funcionário/operador: LoginScreen tenta os dois fluxos e
+// quem logar primeiro decide qual árvore o RootStack.Navigator mostra logo
+// abaixo.
+function PedidosOperadorStackNavigator() {
+  return (
+    <PedidosOperadorStack.Navigator screenOptions={{ headerShown: false }}>
+      <PedidosOperadorStack.Screen name="PainelPedidos" component={PainelPedidosScreen} />
+      <PedidosOperadorStack.Screen name="DetalhePedido" component={DetalhePedidoScreen} />
+    </PedidosOperadorStack.Navigator>
+  );
+}
 
-  // Enquanto a sessão é restaurada do storage (LargeSecureStore), ainda não
-  // sabemos se o funcionário está logado — evita piscar a tela de Login
-  // antes de decidir a rota inicial. Não bloqueia aqui esperando
-  // `funcionario` (que traz `papeis`, usado pelas tabs condicionais em
-  // TabsAutenticadas): entre o setSession() do login e o SELECT em
-  // `funcionarios` resolver, pode haver um frame só com Início/Perfil
-  // visíveis (funcionario ainda null) — preferível a travar o app inteiro
-  // num spinner sem saída caso esse SELECT falhe (deixaria o usuário sem
-  // conseguir nem abrir Perfil pra deslogar).
-  if (carregando) {
+function TabsOperador() {
+  return (
+    <OperadorTab.Navigator
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textoTerciario,
+        tabBarStyle: {
+          backgroundColor: colors.superficie,
+          borderTopColor: colors.borda,
+          borderTopWidth: 1,
+        },
+        tabBarLabelStyle: { fontSize: 10.5, fontWeight: '700' },
+      }}
+    >
+      <OperadorTab.Screen
+        name="Pedidos"
+        component={PedidosOperadorStackNavigator}
+        options={{ tabBarIcon: ({ color, size }) => <CaixaIcon size={size} color={color} /> }}
+      />
+      <OperadorTab.Screen
+        name="Tarefas"
+        component={TarefasScreen}
+        options={{ tabBarIcon: ({ color, size }) => <ListaIcon size={size} color={color} /> }}
+      />
+      <OperadorTab.Screen
+        name="Espera"
+        component={ListaEsperaScreen}
+        options={{ tabBarIcon: ({ color, size }) => <RelogioIcon size={size} color={color} /> }}
+      />
+      <OperadorTab.Screen
+        name="Perfil"
+        component={OperadorPerfilScreen}
+        options={{ tabBarIcon: ({ color, size }) => <PerfilIcon size={size} color={color} /> }}
+      />
+    </OperadorTab.Navigator>
+  );
+}
+
+export default function AppNavigator() {
+  const { session: sessaoFuncionario, carregando: carregandoFuncionario } = useSeparadorAuth();
+  const { session: sessaoOperador, carregando: carregandoOperador } = useOperadorAuth();
+
+  // Enquanto qualquer uma das duas sessões é restaurada do storage
+  // (LargeSecureStore, uma storageKey por papel), ainda não sabemos se há
+  // alguém logado — evita piscar a tela de Login antes de decidir a rota
+  // inicial. Não bloqueia aqui esperando `funcionario`/`operador` (que
+  // trazem os dados usados pelas tabs condicionais): entre o setSession()
+  // do login e o SELECT de identidade resolver, pode haver um frame com
+  // menos tabs visíveis — preferível a travar o app inteiro num spinner sem
+  // saída caso esse SELECT falhe (deixaria o usuário sem conseguir nem
+  // abrir Perfil pra deslogar).
+  if (carregandoFuncionario || carregandoOperador) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.fundo }}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -168,11 +235,19 @@ export default function AppNavigator() {
     );
   }
 
+  // Funcionário (Separador/Entregador) tem prioridade sobre Operador quando,
+  // por algum motivo, as duas sessões existirem ao mesmo tempo no device —
+  // não deveria acontecer em uso normal (LoginScreen tenta um fluxo de cada
+  // vez e resulta numa única sessão nova), mas nada impede alguém de logar
+  // como funcionário, sair, logar como operador e a sessão antiga do
+  // funcionário nunca ter sido limpa por uma falha de rede no signOut.
   return (
     <NavigationContainer>
       <RootStack.Navigator screenOptions={{ headerShown: false }}>
-        {session ? (
+        {sessaoFuncionario ? (
           <RootStack.Screen name="App" component={TabsAutenticadas} />
+        ) : sessaoOperador ? (
+          <RootStack.Screen name="AppOperador" component={TabsOperador} />
         ) : (
           <RootStack.Screen name="Login" component={LoginScreen} />
         )}

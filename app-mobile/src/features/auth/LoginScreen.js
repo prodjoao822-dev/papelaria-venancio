@@ -4,13 +4,23 @@ import {
   KeyboardAvoidingView, Platform, ActivityIndicator, Pressable,
 } from 'react-native';
 import { useSeparadorAuth } from '../../contexts/SeparadorAuthContext';
+import { useOperadorAuth } from '../../contexts/OperadorAuthContext';
 import { colors } from '../../theme/colors';
 import { LivroIcon, AlertaIcon } from '../../components/icons';
 
 const PIN_LENGTH = 6;
 
+// Mensagem final única, nunca a mensagem crua de nenhuma das duas
+// tentativas: mostrar "esse código não existe" vs "esse PIN está errado"
+// (ou qual dos dois backends respondeu) permitiria descobrir por tentativa e
+// erro se um código pertence a um funcionário ou a um operador. Decisão do
+// dono (ver briefing desta tarefa): um único formulário código+PIN, sem tela
+// de escolha de papel.
+const MENSAGEM_ERRO_GENERICA = 'Código ou PIN inválido. Verifique e tente novamente.';
+
 export default function LoginScreen() {
-  const { login } = useSeparadorAuth();
+  const { login: loginFuncionario } = useSeparadorAuth();
+  const { login: loginOperador } = useOperadorAuth();
   const [codigo, setCodigo] = useState('');
   const [pin, setPin] = useState('');
   const [entrando, setEntrando] = useState(false);
@@ -24,12 +34,19 @@ export default function LoginScreen() {
     setErro(null);
     setEntrando(true);
     try {
-      // Só aplica a sessão no client Supabase — não navega manualmente:
-      // o AppNavigator reage à mudança de `session` do contexto e troca
-      // de tela sozinho (ver AppNavigator.js).
-      await login(codigo, pin);
-    } catch (err) {
-      setErro(err.message || 'Código ou PIN inválido. Verifique e tente novamente.');
+      // Só aplica a sessão no client Supabase certo — não navega
+      // manualmente: o AppNavigator reage à mudança de `session` de cada
+      // contexto e troca de tela sozinho (ver AppNavigator.js). Tenta
+      // primeiro como funcionário (Separador/Entregador — fluxo mais comum
+      // hoje) e só depois como operador; a primeira tentativa bem-sucedida
+      // encerra o fluxo sem chamar a segunda.
+      try {
+        await loginFuncionario(codigo, pin);
+      } catch {
+        await loginOperador(codigo, pin);
+      }
+    } catch {
+      setErro(MENSAGEM_ERRO_GENERICA);
     } finally {
       setEntrando(false);
     }
@@ -65,8 +82,9 @@ export default function LoginScreen() {
         )}
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>CÓDIGO DO FUNCIONÁRIO</Text>
+          <Text style={styles.label}>CÓDIGO</Text>
           <TextInput
+            testID="login-input-codigo"
             style={[styles.input, erro && styles.inputErro]}
             value={codigo}
             onChangeText={onChangeCodigo}
@@ -106,6 +124,7 @@ export default function LoginScreen() {
                 Mais robusto em Android/iOS do que 6 TextInputs com foco
                 encadeado. */}
             <TextInput
+              testID="login-input-pin"
               ref={pinInputRef}
               style={styles.pinInputOculto}
               value={pin}
@@ -121,6 +140,7 @@ export default function LoginScreen() {
         </View>
 
         <TouchableOpacity
+          testID="login-botao-entrar"
           style={[styles.button, !podeEntrar && styles.buttonDisabled]}
           onPress={handleLogin}
           disabled={!podeEntrar || entrando}
