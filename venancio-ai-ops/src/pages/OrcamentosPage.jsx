@@ -9,6 +9,13 @@ import { ProdutoAutocompleteInput } from '@/components/pedidos/ProdutoAutocomple
 import { useToast } from '@/contexts/AppContext'
 import { formatCurrency, formatDate, formatTimeAgo, formatPhone } from '@/utils/formatters'
 import { orcamentoDocumento } from '@/utils/orcamentoDocumento'
+import { useRascunhoAutoSave } from '@/hooks/useRascunhoAutoSave'
+import {
+  chaveRascunhoEdicaoOrcamento,
+  carregarRascunho,
+  limparRascunho,
+  rascunhoEdicaoDifereDoOriginal,
+} from '@/utils/rascunhoOrcamento'
 
 // Enum real status_orcamento (chatbot/papelaria-bot/supabase/squemanovo.sql):
 // rascunho -> enviado|recusado|aceito ; enviado -> aceito|recusado|expirado.
@@ -62,6 +69,12 @@ function OrcamentoDetalhe({ orc, onStatusChange, onAceitar, onPrecoAtualizado, o
   const acoes = ACOES_STATUS[orc.status] ?? []
   const pedidoGerado = orc.pedidos?.[0]
   const itensSemPreco = (orc.itens_orcamento ?? []).filter((i) => i.valor_unitario === null)
+  const chaveRascunhoEdicao = chaveRascunhoEdicaoOrcamento(orc.id)
+
+  // Só grava rascunho de edição enquanto `editando` está ativo — evita
+  // sobrescrever um rascunho existente com o state vazio ([]) de antes de
+  // entrar no modo de edição.
+  useRascunhoAutoSave(chaveRascunhoEdicao, { itens: itensEdit, observacoes: observacoesEdit }, editando)
 
   async function handleAcao(acao) {
     if (acao.acao === 'aceitar' && itensSemPreco.length > 0) {
@@ -98,9 +111,27 @@ function OrcamentoDetalhe({ orc, onStatusChange, onAceitar, onPrecoAtualizado, o
   }
 
   function iniciarEdicaoOrcamento() {
-    setItensEdit(itensParaEdicao(orc))
-    setObservacoesEdit(orc.observacoes ?? '')
+    const original = { itens: itensParaEdicao(orc), observacoes: orc.observacoes ?? '' }
+    const rascunho = carregarRascunho(chaveRascunhoEdicao)
+    const rascunhoValido = rascunho && Array.isArray(rascunho.itens)
+
+    if (rascunhoValido && rascunhoEdicaoDifereDoOriginal(rascunho, original)) {
+      setItensEdit(rascunho.itens)
+      setObservacoesEdit(rascunho.observacoes ?? '')
+      toast.aviso('Recuperamos alterações não salvas deste orçamento.')
+    } else {
+      setItensEdit(original.itens)
+      setObservacoesEdit(original.observacoes)
+    }
     setEditando(true)
+  }
+
+  // "Cancelar" na edição é ação explícita — descarta o rascunho de propósito.
+  // Fechar o modal inteiro (✕, clicar fora) enquanto editando=true preserva
+  // o rascunho, que é exatamente o cenário que queremos poder recuperar.
+  function cancelarEdicaoOrcamento() {
+    limparRascunho(chaveRascunhoEdicao)
+    setEditando(false)
   }
 
   function addItemEdit() { setItensEdit((p) => [...p, { ...ITEM_EDIT_VAZIO }]) }
@@ -137,6 +168,7 @@ function OrcamentoDetalhe({ orc, onStatusChange, onAceitar, onPrecoAtualizado, o
           valor_unitario: parseFloat(String(i.valor_unitario).replace(',', '.')) || 0,
         })),
       })
+      limparRascunho(chaveRascunhoEdicao)
       onAtualizado(atualizado)
       setEditando(false)
       toast.sucesso('Orçamento atualizado.')
@@ -288,7 +320,7 @@ function OrcamentoDetalhe({ orc, onStatusChange, onAceitar, onPrecoAtualizado, o
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
                     <button className="btn btn-ghost btn-sm" onClick={addItemEdit}>＋ Adicionar item</button>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button className="btn btn-ghost btn-sm" onClick={() => setEditando(false)} disabled={salvandoEdicao}>
+                      <button className="btn btn-ghost btn-sm" onClick={cancelarEdicaoOrcamento} disabled={salvandoEdicao}>
                         Cancelar
                       </button>
                       <button className="btn btn-primary btn-sm" onClick={salvarEdicaoOrcamento} disabled={salvandoEdicao}>

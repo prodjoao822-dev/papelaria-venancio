@@ -1,22 +1,53 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { orcamentosService } from '@/services/orcamentos.service'
 import { clientesService } from '@/services/clientes.service'
 import { ProdutoAutocompleteInput } from '@/components/pedidos/ProdutoAutocompleteInput'
 import { useToast } from '@/contexts/AppContext'
 import { formatCurrency } from '@/utils/formatters'
+import { useRascunhoAutoSave } from '@/hooks/useRascunhoAutoSave'
+import {
+  CHAVE_RASCUNHO_NOVO_ORCAMENTO,
+  carregarRascunho,
+  limparRascunho,
+  rascunhoNovoTemConteudo,
+} from '@/utils/rascunhoOrcamento'
 
 const ITEM_VAZIO = { descricao_livre: '', quantidade: 1, valor_unitario: '', produto_id: null }
+
+// Lazy init (função no useState) roda uma única vez, na montagem — é aqui
+// que o rascunho salvo (se existir e tiver conteúdo) sobrepõe o padrão
+// vazio/clienteInicial. Feito fora do componente pra ficar fácil de ler o
+// que cada state realmente considera como "valor inicial".
+function estadoInicial(clienteInicial) {
+  const rascunho = carregarRascunho(CHAVE_RASCUNHO_NOVO_ORCAMENTO)
+  const temRascunho = rascunhoNovoTemConteudo(rascunho)
+  if (temRascunho) return { ...rascunho, recuperado: true }
+  return {
+    cliente: { nome: clienteInicial?.nome ?? '', telefone: clienteInicial?.telefone ?? '' },
+    observacoes: '',
+    status: 'rascunho',
+    itens: [{ ...ITEM_VAZIO }],
+    recuperado: false,
+  }
+}
 
 export function NovoOrcamentoModal({ onFechar, onCriado, clienteInicial = null }) {
   const { toast } = useToast()
   const [salvando, setSalvando] = useState(false)
-  const [cliente, setCliente] = useState({
-    nome: clienteInicial?.nome ?? '',
-    telefone: clienteInicial?.telefone ?? '',
-  })
-  const [observacoes, setObservacoes] = useState('')
-  const [status, setStatus] = useState('rascunho')
-  const [itens, setItens] = useState([{ ...ITEM_VAZIO }])
+  const [estadoInicialCarregado] = useState(() => estadoInicial(clienteInicial))
+  const [cliente, setCliente] = useState(estadoInicialCarregado.cliente)
+  const [observacoes, setObservacoes] = useState(estadoInicialCarregado.observacoes)
+  const [status, setStatus] = useState(estadoInicialCarregado.status)
+  const [itens, setItens] = useState(estadoInicialCarregado.itens)
+
+  useEffect(() => {
+    if (estadoInicialCarregado.recuperado) {
+      toast.aviso('Recuperamos um rascunho de orçamento que não tinha sido salvo.')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useRascunhoAutoSave(CHAVE_RASCUNHO_NOVO_ORCAMENTO, { cliente, observacoes, status, itens })
 
   const total = itens.reduce((acc, i) => {
     return acc + (Number(i.quantidade) || 0) * (parseFloat(String(i.valor_unitario).replace(',', '.')) || 0)
@@ -74,6 +105,7 @@ export function NovoOrcamentoModal({ onFechar, onCriado, clienteInicial = null }
         })),
       })
 
+      limparRascunho(CHAVE_RASCUNHO_NOVO_ORCAMENTO)
       toast.sucesso('Orçamento criado!')
       onCriado?.(orc)
       onFechar()
@@ -82,6 +114,14 @@ export function NovoOrcamentoModal({ onFechar, onCriado, clienteInicial = null }
     } finally {
       setSalvando(false)
     }
+  }
+
+  // "Cancelar" é ação explícita do operador — diferente de fechar clicando
+  // fora do modal (acidental, na maioria das vezes) ou no ✕, que preservam
+  // o rascunho de propósito pra poder ser recuperado depois.
+  function handleCancelar() {
+    limparRascunho(CHAVE_RASCUNHO_NOVO_ORCAMENTO)
+    onFechar()
   }
 
   return (
@@ -173,7 +213,7 @@ export function NovoOrcamentoModal({ onFechar, onCriado, clienteInicial = null }
         </div>
 
         <div className="modal-footer">
-          <button className="btn btn-ghost" onClick={onFechar} disabled={salvando}>Cancelar</button>
+          <button className="btn btn-ghost" onClick={handleCancelar} disabled={salvando}>Cancelar</button>
           <button className="btn btn-primary" onClick={handleSalvar} disabled={salvando}>
             {salvando ? '...' : '✓ Criar Orçamento'}
           </button>
