@@ -133,6 +133,29 @@ describe('buscarPorTelefone', () => {
     expect(resultado).toBeNull()
   })
 
+  // Bug real (02/09/2026): cliente cadastrado manualmente com telefone
+  // mascarado ("+55 (27) 99999-9999") não batia por igualdade exata com o
+  // telefone já normalizado de um cliente vindo do WhatsApp — resultava em
+  // cliente duplicado e, no caso do envio de PDF, número rejeitado pela
+  // Evolution API. buscarPorTelefone agora normaliza antes do .eq().
+  test('normaliza o telefone (tira máscara, garante DDI) antes de comparar', async () => {
+    const c = chain({ data: null, error: null })
+    supabase.from.mockImplementation(() => c)
+
+    await clientesService.buscarPorTelefone('+55 (27) 99999-9999')
+
+    expect(c.eq).toHaveBeenCalledWith('telefone', '5527999999999')
+  })
+
+  test('telefone sem DDI (só DDD + número) é buscado já com o 55 na frente', async () => {
+    const c = chain({ data: null, error: null })
+    supabase.from.mockImplementation(() => c)
+
+    await clientesService.buscarPorTelefone('27999999999')
+
+    expect(c.eq).toHaveBeenCalledWith('telefone', '5527999999999')
+  })
+
   test('erro do banco é propagado', async () => {
     supabase.from.mockImplementation(() => chain({ data: null, error: new Error('conexão caiu') }))
 
@@ -192,7 +215,7 @@ describe('criarOuAtualizar', () => {
     expect(resultado.nome).toBe('Fulano Atualizado')
   })
 
-  test('telefone novo: faz INSERT com o telefone informado + dados extras', async () => {
+  test('telefone novo: faz INSERT com o telefone normalizado (DDI garantido) + dados extras', async () => {
     let chamada = 0
     const insertChain = chain({ data: { id: 'cli-novo' }, error: null })
     supabase.from.mockImplementation((tabela) => {
@@ -203,7 +226,29 @@ describe('criarOuAtualizar', () => {
 
     await clientesService.criarOuAtualizar('2788888888', { nome: 'Novo Cliente', origem: 'bot' })
 
-    expect(insertChain.insert).toHaveBeenCalledWith({ telefone: '2788888888', nome: 'Novo Cliente', origem: 'bot' })
+    expect(insertChain.insert).toHaveBeenCalledWith({ telefone: '552788888888', nome: 'Novo Cliente', origem: 'bot' })
+  })
+
+  // Mesmo bug de buscarPorTelefone: telefone digitado com máscara no
+  // NovoOrcamentoModal/NovoPedidoModal precisa ser salvo já normalizado, ou o
+  // cliente cadastrado assim nunca vai casar com o telefone real do WhatsApp
+  // (nem vai dar pra mandar PDF pela Evolution API depois).
+  test('telefone com máscara é normalizado antes do INSERT', async () => {
+    let chamada = 0
+    const insertChain = chain({ data: { id: 'cli-novo' }, error: null })
+    supabase.from.mockImplementation(() => {
+      chamada += 1
+      if (chamada === 1) return chain({ data: null, error: null })
+      return insertChain
+    })
+
+    await clientesService.criarOuAtualizar('+55 (27) 98888-8888', { nome: 'Novo Cliente', origem: 'manual' })
+
+    expect(insertChain.insert).toHaveBeenCalledWith({
+      telefone: '5527988888888',
+      nome: 'Novo Cliente',
+      origem: 'manual',
+    })
   })
 
   test('erro no UPDATE do cliente existente é propagado', async () => {

@@ -1,5 +1,6 @@
 import { supabase } from '@/supabase/client'
 import { N8N_WEBHOOKS, BOT_API_URL } from '@/utils/constants'
+import { normalizarTelefone } from '@/utils/telefone'
 
 const SELECT_ORC_COMPLETO = `
   *,
@@ -192,6 +193,17 @@ export const orcamentosService = {
       throw new Error('Orçamento sem telefone de cliente associado.')
     }
 
+    // Defesa em profundidade: clientes.service.js já normaliza o telefone na
+    // hora de cadastrar (mesmo formato só-dígitos-com-DDI que o bot grava a
+    // partir de uma conversa real do WhatsApp — ver utils/telefone.js), mas
+    // orçamentos criados manualmente ANTES desse fix podem ter o telefone do
+    // cliente salvo num formato antigo (com máscara, sem DDI etc.), que a
+    // Evolution API rejeita — causa raiz confirmada do "Falha ao enviar o PDF
+    // pelo WhatsApp" em orçamento criado pelo dashboard (02/09/2026).
+    // Normaliza de novo aqui pra também corrigir esses registros já existentes,
+    // sem depender de backfill manual no banco.
+    const telefoneNormalizado = normalizarTelefone(telefone)
+
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) throw new Error('Sessão expirada. Faça login novamente.')
 
@@ -201,7 +213,7 @@ export const orcamentosService = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({ telefone, base64, nomeArquivo, legenda }),
+      body: JSON.stringify({ telefone: telefoneNormalizado, base64, nomeArquivo, legenda }),
     })
 
     const corpo = await resposta.json().catch(() => ({}))

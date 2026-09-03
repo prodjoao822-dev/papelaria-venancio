@@ -1,4 +1,5 @@
 import { supabase } from '@/supabase/client'
+import { normalizarTelefone } from '@/utils/telefone'
 
 const SELECT_CRM = `
   id, nome, telefone, observacoes, origem, status, criado_em, atualizado_em,
@@ -57,7 +58,7 @@ export const clientesService = {
     const { data, error } = await supabase
       .from('clientes')
       .select('*')
-      .eq('telefone', telefone)
+      .eq('telefone', normalizarTelefone(telefone))
       .maybeSingle()
 
     if (error) throw error
@@ -86,7 +87,8 @@ export const clientesService = {
   },
 
   async criarOuAtualizar(telefone, dadosCliente) {
-    const existente = await clientesService.buscarPorTelefone(telefone)
+    const telefoneNormalizado = normalizarTelefone(telefone)
+    const existente = await clientesService.buscarPorTelefone(telefoneNormalizado)
 
     if (existente) {
       const { data, error } = await supabase
@@ -102,7 +104,7 @@ export const clientesService = {
 
     const { data, error } = await supabase
       .from('clientes')
-      .insert({ telefone, ...dadosCliente })
+      .insert({ telefone: telefoneNormalizado, ...dadosCliente })
       .select()
       .single()
 
