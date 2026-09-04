@@ -12,11 +12,43 @@
 //
 // Client ISOLADO do Separador/Entregador (separadorSupabase) — mesmo client
 // usado pelos outros services deste app, nunca um client genérico.
+//
+// ATENÇÃO — bug real corrigido em 04/09: `expo-notifications` não pode nem
+// ser IMPORTADO no Android dentro do app genérico "Expo Go" a partir do SDK
+// 53. O próprio pacote lança uma exceção no escopo do módulo, não só quando
+// alguma função de push é chamada explicitamente — ver
+// node_modules/expo-notifications/src/DevicePushTokenAutoRegistration.fx.ts
+// (chama `addPushTokenListener` no top-level, ao ser importado) e
+// node_modules/expo-notifications/src/warnOfExpoGoPushUsage.ts (faz `throw`
+// no Android quando `isRunningInExpoGo()` é true). Ou seja: um
+// `import * as Notifications from 'expo-notifications'` estático incondicional
+// no topo do arquivo já derruba o app inteiro na inicialização, mesmo que
+// `registrarAposLogin` nunca seja chamado. Por isso o módulo é carregado com
+// `require` tardio (dentro de uma função, nunca no topo do arquivo) e SÓ
+// fora do Expo Go — detectado com `isRunningInExpoGo()` do pacote `expo`
+// (a mesma função que o próprio expo-notifications usa internamente pra essa
+// checagem; é mais precisa que `Constants.executionEnvironment ===
+// 'storeClient'`, que também dá match numa build de desenvolvimento própria
+// com expo-dev-client — onde push funciona normalmente e não deveria ser
+// pulado). Isso é uma limitação de plataforma documentada pela própria Expo,
+// não um bug nosso, e só deixa de acontecer quando existir uma build própria
+// gerada via `eas build` (ver app.json > extra.buildIdentity.eas.projectId,
+// hoje "PENDENTE").
 import { Platform } from 'react-native'
-import * as Notifications from 'expo-notifications'
+import { isRunningInExpoGo } from 'expo'
 import * as Device from 'expo-device'
 import Constants from 'expo-constants'
 import { separadorSupabase } from '../supabase/separadorClient'
+
+// Carrega `expo-notifications` só quando é seguro fazê-lo. Retorna `null`
+// dentro do Expo Go (nunca chega a executar o `require`, então o `throw`
+// interno do pacote nunca dispara). Fora do Expo Go isso é equivalente a um
+// `import` normal — o módulo real é usado numa build própria/EAS.
+function carregarNotifications() {
+  if (isRunningInExpoGo()) return null
+  // eslint-disable-next-line global-require -- carregamento condicional é o objetivo
+  return require('expo-notifications')
+}
 
 // Necessário no Android 13+ (API 33): o prompt de permissão do sistema só
 // aparece depois de existir pelo menos um canal de notificação — e
@@ -24,7 +56,7 @@ import { separadorSupabase } from '../supabase/separadorClient'
 // `getPermissionsAsync`/`requestPermissionsAsync`/`getExpoPushTokenAsync`
 // (doc SDK 57, seção "Permissions > Android"). Em iOS essa chamada é
 // ignorada silenciosamente (é uma no-op fora do Android).
-async function garantirCanalAndroid() {
+async function garantirCanalAndroid(Notifications) {
   if (Platform.OS !== 'android') return
   await Notifications.setNotificationChannelAsync('default', {
     name: 'Geral',
@@ -49,9 +81,22 @@ export const pushNotificationsService = {
   // Pede permissão (se ainda não concedida), obtém o Expo Push Token e
   // registra via RPC. Retorna o token em caso de sucesso, ou `null` em
   // qualquer cenário de "não deu, mas tudo bem" (sem permissão, sem
-  // projectId, sem dispositivo físico, erro de rede/RPC). Nunca lança.
+  // projectId, sem dispositivo físico, Expo Go, erro de rede/RPC). Nunca
+  // lança.
   async registrarAposLogin() {
     try {
+      // Expo Go (SDK 53+) não suporta push remoto no Android nem oferece um
+      // fluxo utilizável no iOS — ver bloco de comentário no topo do
+      // arquivo. Pular aqui é o comportamento correto e esperado até existir
+      // uma build própria via `eas build`; não é uma falha.
+      if (isRunningInExpoGo()) {
+        console.log(
+          '[push] rodando no Expo Go — push remoto não é suportado pelo Expo Go desde o SDK 53. ' +
+            'Isso é esperado; vai funcionar normalmente numa build própria (eas build). Pulando registro.'
+        )
+        return null
+      }
+
       // Push (remoto) não funciona em emulador/simulador sem configuração
       // nativa extra — pedir permissão e tentar token nesse caso só gera
       // ruído/erro sem utilidade nenhuma pro protótipo em desenvolvimento.
@@ -60,7 +105,10 @@ export const pushNotificationsService = {
         return null
       }
 
-      await garantirCanalAndroid()
+      const Notifications = carregarNotifications()
+      if (!Notifications) return null
+
+      await garantirCanalAndroid(Notifications)
 
       const { status: statusAtual } = await Notifications.getPermissionsAsync()
       let status = statusAtual

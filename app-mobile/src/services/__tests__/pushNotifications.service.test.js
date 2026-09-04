@@ -4,6 +4,7 @@
 // chamar a RPC quando permissão + dispositivo físico + projectId realmente
 // permitirem, e (3) o payload exato mandado pra `registrar_push_token`.
 import { Platform } from 'react-native';
+import { isRunningInExpoGo } from 'expo';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
@@ -13,6 +14,13 @@ import { separadorSupabase } from '../../supabase/separadorClient';
 jest.mock('../../supabase/separadorClient', () => ({
   separadorSupabase: { rpc: jest.fn() },
 }));
+
+// `isRunningInExpoGo` controla o `require('expo-notifications')` tardio
+// dentro do service (ver comentário no topo de pushNotifications.service.js
+// sobre o bug real do SDK 53 removendo push do Expo Go). Por padrão os
+// testes simulam uma build própria (fora do Expo Go); o describe dedicado
+// abaixo simula o Expo Go de verdade.
+jest.mock('expo', () => ({ isRunningInExpoGo: jest.fn(() => false) }));
 
 jest.mock('expo-notifications', () => ({
   setNotificationChannelAsync: jest.fn().mockResolvedValue(undefined),
@@ -34,6 +42,7 @@ function setPlataforma(os) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  isRunningInExpoGo.mockReturnValue(false);
   Device.isDevice = true;
   Constants.expoConfig = { extra: { eas: { projectId: 'projeto-real-123' } } };
   setPlataforma('ios');
@@ -158,5 +167,33 @@ describe('pushNotificationsService.registrarAposLogin', () => {
     separadorSupabase.rpc.mockResolvedValue({ data: null, error: new Error('function not found') });
 
     await expect(pushNotificationsService.registrarAposLogin()).resolves.toBeNull();
+  });
+});
+
+// Cobre o bug real de produção (04/09): `expo-notifications` lança uma
+// exceção só de ser IMPORTADO no Android dentro do Expo Go (SDK 53+) — ver
+// node_modules/expo-notifications/src/warnOfExpoGoPushUsage.ts. O service
+// nunca deve chamar nada do módulo real nesse cenário; ele só é carregado
+// via `require` tardio depois de checar `isRunningInExpoGo()`.
+describe('pushNotificationsService.registrarAposLogin (dentro do Expo Go)', () => {
+  it('pula o registro sem lançar erro e sem tocar em expo-notifications/RPC, mesmo no Android', async () => {
+    isRunningInExpoGo.mockReturnValue(true);
+    setPlataforma('android');
+
+    const resultado = await pushNotificationsService.registrarAposLogin();
+
+    expect(resultado).toBeNull();
+    expect(Notifications.getPermissionsAsync).not.toHaveBeenCalled();
+    expect(Notifications.setNotificationChannelAsync).not.toHaveBeenCalled();
+    expect(Notifications.getExpoPushTokenAsync).not.toHaveBeenCalled();
+    expect(separadorSupabase.rpc).not.toHaveBeenCalled();
+  });
+
+  it('pula o registro no Expo Go mesmo com dispositivo físico e permissão concedida', async () => {
+    isRunningInExpoGo.mockReturnValue(true);
+    Device.isDevice = true;
+
+    await expect(pushNotificationsService.registrarAposLogin()).resolves.toBeNull();
+    expect(Notifications.getExpoPushTokenAsync).not.toHaveBeenCalled();
   });
 });
