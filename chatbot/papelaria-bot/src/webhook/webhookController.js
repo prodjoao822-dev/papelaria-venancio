@@ -23,6 +23,7 @@ const notifyTargets = require('../config/notifyTargets');
 const analyticsService = require('../services/analyticsService');
 const escalonamentoService = require('../services/escalonamentoService');
 const logger = require('../utils/logger');
+const { ESTADO_ESCOLA_OUTRA_LISTA_MATERIAL } = require('../botEngine/states/listaEscolar');
 
 const STATUS_PEDIDO_LEGIVEL = {
   confirmado: 'confirmado',
@@ -111,6 +112,15 @@ const conversasEmFinalizacao = new Set();
 
 const MENSAGEM_FALLBACK_AGENTE_VENDAS = 'Desculpa a demora! Vou te conectar com nossa equipe agora, um momento.';
 const MENSAGEM_CONFIRMACAO_PDF_RECEBIDO = 'Recebemos seu arquivo! Já encaminhamos pra nossa equipe de vendas dar uma olhada.';
+// Caso real de 08/09/2026: cliente mandou o PDF exatamente no passo em que o
+// bot pediu a lista de material por texto (o bot ainda não lê PDF aqui, ver
+// listaEscolar.js). Sem avisar isso, o estado continua esperando texto e a
+// próxima mensagem do cliente (mesmo "ok") é tratada como se fosse a lista
+// inteira. A guarda estrutural em processarOutraListaMaterial já impede o
+// "ok" virar item — esta mensagem evita a confusão de origem, deixando claro
+// que o arquivo não substitui o texto pedido.
+const MENSAGEM_CONFIRMACAO_PDF_RECEBIDO_AGUARDANDO_LISTA_TEXTO = 'Recebemos seu arquivo! Só que, pra gente calcular '
+  + 'o orçamento certinho, preciso que você escreva a lista de material aqui mesmo, um item por linha 🙂';
 const MENSAGEM_CONFIRMACAO_AUDIO_RECEBIDO = 'Recebi seu áudio! Já chamei alguém da nossa equipe pra te ouvir e responder por aqui. Só um instante 😊';
 const MENSAGEM_CONFIRMACAO_IMAGEM_RECEBIDA = 'Recebi sua imagem! Já chamei alguém da nossa equipe pra dar uma olhada e responder por aqui. Só um instante 😊';
 const MENSAGEM_MENSAGEM_CONCORRENTE = 'Só um instante, ainda estou vendo sua mensagem anterior 😊';
@@ -171,7 +181,7 @@ async function receberImagemFallback(mensagem, cliente, conversaId, { avisarVane
 // cliente, então vale encaminhar mesmo quando um humano já assumiu o
 // atendimento. Sem OCR/parsing: quem decide o que fazer com o conteúdo é a
 // Vanessa/vendas, olhando o arquivo.
-async function receberDocumentoPdf(mensagem, dadosBrutosWebhook, cliente, conversaId) {
+async function receberDocumentoPdf(mensagem, dadosBrutosWebhook, cliente, conversaId, estadoAtual) {
   const midia = await evolutionApi.baixarMidia(dadosBrutosWebhook);
   if (!midia?.base64) {
     throw new Error('Evolution API não retornou o conteúdo em base64 do PDF recebido.');
@@ -181,8 +191,12 @@ async function receberDocumentoPdf(mensagem, dadosBrutosWebhook, cliente, conver
   const legenda = `PDF recebido de ${cliente.nome || 'cliente sem nome'} (${cliente.telefone})`
     + (legendaDoCliente ? `\nLegenda do cliente: ${legendaDoCliente}` : '');
 
+  const mensagemConfirmacao = estadoAtual === ESTADO_ESCOLA_OUTRA_LISTA_MATERIAL
+    ? MENSAGEM_CONFIRMACAO_PDF_RECEBIDO_AGUARDANDO_LISTA_TEXTO
+    : MENSAGEM_CONFIRMACAO_PDF_RECEBIDO;
+
   await evolutionApi.enviarDocumentoBase64(notifyTargets.vendas, midia.base64, nomeArquivo, legenda);
-  await evolutionApi.enviarTexto(cliente.telefone, MENSAGEM_CONFIRMACAO_PDF_RECEBIDO);
+  await evolutionApi.enviarTexto(cliente.telefone, mensagemConfirmacao);
 
   // Best-effort: o arquivo já foi encaminhado pra Vendas acima, então uma
   // falha só no arquivamento (cópia de auditoria) não deve virar um erro 500
@@ -697,7 +711,7 @@ async function receberWebhook(req, res) {
       // antes da checagem de garantirBotAtivo.
       if (mensagem.documentoPdf) {
         try {
-          await receberDocumentoPdf(mensagem, req.body.data, cliente, conversa.id);
+          await receberDocumentoPdf(mensagem, req.body.data, cliente, conversa.id, conversa.estado_atual);
         } catch (erro) {
           logger.erro(`Falha ao processar PDF recebido do cliente ${mensagem.telefone}`, erro);
         }

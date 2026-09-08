@@ -228,10 +228,24 @@ function mensagemOutraListaMaterial() {
   return 'Me manda a lista de material (nomes dos itens), pode escrever tudo numa mensagem só, um item por linha.';
 }
 
+// Guarda estrutural (não é lista de palavras-chave, é forma): uma lista de
+// material de verdade tem mais de um item, então tem quebra de linha,
+// vírgula/ponto-e-vírgula separando itens, ou pelo menos duas palavras. Uma
+// resposta de 1 palavra só ("ok", "sim", "beleza", "obrigado"...) não tem essa
+// forma — e é exatamente o que um cliente digita reflexivamente depois de
+// mandar um PDF nesse passo (o bot ainda não sabe ler PDF aqui, ver comentário
+// acima; sem esta guarda essa palavra virava, ela sozinha, o item do orçamento
+// inteiro — caso real do teste de 08/09/2026, item "ok" no orçamento ORC-2026-0267).
+function pareceListaDeMaterial(texto) {
+  const temSeparadorDeItens = /[\n,;]/.test(texto);
+  const quantidadeDePalavras = texto.trim().split(/\s+/).filter(Boolean).length;
+  return temSeparadorDeItens || quantidadeDePalavras > 1;
+}
+
 function processarOutraListaMaterial(textoRecebido, sessao) {
   const listaMaterial = textoRecebido.trim();
 
-  if (!listaMaterial) {
+  if (!listaMaterial || !pareceListaDeMaterial(listaMaterial)) {
     return {
       estado: ESTADO_ESCOLA_OUTRA_LISTA_MATERIAL,
       resposta: fallback.mensagemOpcaoInvalida(mensagemOutraListaMaterial()),
@@ -359,6 +373,10 @@ function processarObservacao(textoRecebido, sessao, contexto = {}) {
 }
 
 module.exports = {
+  // Exportado à parte (fora de `estados`) pra webhookController.js poder
+  // reconhecer esse estado específico e customizar a mensagem de PDF recebido
+  // (ver receberDocumentoPdf) sem duplicar a string literal.
+  ESTADO_ESCOLA_OUTRA_LISTA_MATERIAL,
   estados: [
     { STATE: ESTADO_ESCOLA, mensagem: mensagemEscola, processar: processarEscola },
     {
