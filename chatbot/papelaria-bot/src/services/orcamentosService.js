@@ -34,12 +34,48 @@ function itemDeLinha(linha) {
   return { descricao_livre: match[2], quantidade: Number(match[1]) };
 }
 
-// Quebra o texto livre de itens (uma linha por item, como o cliente digitou no
-// WhatsApp) em linhas de itens_orcamento. Sem produto/preço: quem precifica é
-// o Agente de Orçamento no n8n a partir do protocolo criado aqui.
+// Divide o texto livre de itens em itens individuais. O caminho normal é uma
+// linha por item (é o que o bot pede). Mas cliente real costuma colar a lista
+// inteira de um PDF numa mensagem só, SEM quebra de linha nenhuma — aí o
+// `.split('\n')` antigo devolvia a lista toda como UM item só, o Agente de
+// Orçamento (n8n) casava esse blob gigante com um produto qualquer de
+// similaridade baixa e fechava o pedido com um valor completamente errado
+// (incidente real PED-2026-0270, 08/09/2026: ~30 itens viraram "2x 1 caderno
+// R$23,98"). Aqui a gente tenta reconhecer os limites de item por outros sinais.
+function segmentarItens(itensTexto) {
+  const texto = (itensTexto || '').trim();
+  if (!texto) return [];
+
+  // 1) Tem quebra de linha? Ela é o separador — respeita o que o cliente fez.
+  if (texto.includes('\n')) return texto.split('\n');
+
+  // 2) Linha única. (a) Prefixo de quantidade com zero à esquerda ("01 ",
+  //    "02 ", "04 ") é o formato clássico de lista escolar copiada de PDF, e
+  //    zero à esquerda praticamente nunca aparece no meio da descrição de um
+  //    item ("500 folhas", "180g", "111 peças" não têm zero à esquerda), então
+  //    é um limite de item confiável. Corta ANTES de cada "0N " seguido de letra.
+  const porQuantidadeComZero = texto
+    .split(/(?=\b0\d{1,2}\s+[A-Za-zÀ-ÿ])/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (porQuantidadeComZero.length >= 2) return porQuantidadeComZero;
+
+  // 2b) Vírgula ou ponto-e-vírgula separando itens ("2 cadernos, 3 canetas").
+  if (/[,;]/.test(texto)) {
+    const porPontuacao = texto.split(/[,;]+/).map((s) => s.trim()).filter(Boolean);
+    if (porPontuacao.length >= 2) return porPontuacao;
+  }
+
+  // 3) Não deu pra separar com confiança — devolve como um item só. O Agente
+  //    de Orçamento (n8n) tem uma trava de tamanho que joga itens longos
+  //    demais pra precificação manual em vez de chutar um preço.
+  return [texto];
+}
+
+// Quebra o texto livre de itens em linhas de itens_orcamento. Sem produto/preço:
+// quem precifica é o Agente de Orçamento no n8n a partir do protocolo criado aqui.
 function itensDeTexto(itensTexto) {
-  return (itensTexto || '')
-    .split('\n')
+  return segmentarItens(itensTexto)
     .map((linha) => linha.trim())
     .filter(Boolean)
     .map(itemDeLinha);
