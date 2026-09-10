@@ -25,13 +25,34 @@ const REGEX_MARCADOR_DE_LISTA = /^[-*•]\s*/;
 // — visto em teste real em 22/07.
 const REGEX_QUANTIDADE_NA_FRENTE = /^(\d+)\s*x?\s+(.+)$/i;
 
+// Cliente também escreve a quantidade por extenso ("dois cadernos", "três
+// canetas"). Sem isto, "dois cadernos" nascia com quantidade 1 e o valor do
+// item saía pela metade (achado dos testes de 09/09/2026). Só 1 a 10 — acima
+// disso é raro por extenso e o risco de falso positivo cresce.
+const NUMEROS_POR_EXTENSO = {
+  um: 1, uma: 1, dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5,
+  seis: 6, sete: 7, oito: 8, nove: 9, dez: 10,
+};
+
+function semAcento(texto) {
+  return texto.normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
 function itemDeLinha(linha) {
-  const linhaSemMarcador = linha.replace(REGEX_MARCADOR_DE_LISTA, '');
+  const linhaSemMarcador = linha.replace(REGEX_MARCADOR_DE_LISTA, '').trim();
+
   const match = linhaSemMarcador.match(REGEX_QUANTIDADE_NA_FRENTE);
-  if (!match) {
-    return { descricao_livre: linhaSemMarcador, quantidade: 1 };
+  if (match) {
+    return { descricao_livre: match[2], quantidade: Number(match[1]) };
   }
-  return { descricao_livre: match[2], quantidade: Number(match[1]) };
+
+  const [primeiraPalavra, ...resto] = linhaSemMarcador.split(/\s+/);
+  const quantidadePorExtenso = NUMEROS_POR_EXTENSO[semAcento(primeiraPalavra || '').toLowerCase()];
+  if (quantidadePorExtenso && resto.length > 0) {
+    return { descricao_livre: resto.join(' '), quantidade: quantidadePorExtenso };
+  }
+
+  return { descricao_livre: linhaSemMarcador, quantidade: 1 };
 }
 
 // Divide o texto livre de itens em itens individuais. O caminho normal é uma

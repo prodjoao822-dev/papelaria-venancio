@@ -115,6 +115,18 @@ test('linha única sem separador reconhecível fica como um item só (trava de t
   ]);
 });
 
+test('quantidade escrita por extenso ("dois cadernos") é reconhecida', () => {
+  assert.deepEqual(itensDeTexto('dois cadernos brochurão\ntrês canetas azuis\numa régua'), [
+    { descricao_livre: 'cadernos brochurão', quantidade: 2 },
+    { descricao_livre: 'canetas azuis', quantidade: 3 },
+    { descricao_livre: 'régua', quantidade: 1 },
+  ]);
+});
+
+test('número por extenso sozinho, sem descrição, não é tratado como quantidade', () => {
+  assert.deepEqual(itensDeTexto('dois'), [{ descricao_livre: 'dois', quantidade: 1 }]);
+});
+
 test('quebra de linha continua tendo prioridade sobre os outros sinais', () => {
   const itens = itensDeTexto('01 caderno, com virgula na descricao\n02 canetas');
 
