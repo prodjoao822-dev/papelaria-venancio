@@ -39,6 +39,17 @@ module.exports = criarEstadoDeMenu({
   // de acertar.
   primeiraMensagemSemErro: true,
 
+  // Caso real de 11/09/2026: cliente já tinha visto o menu, escreveu "eu sou
+  // a Ana" (se apresentando) e caiu em "Opção inválida" — duas vezes, porque
+  // a mensagem chegou duplicada (bug à parte). Mesma lógica estrutural já
+  // aplicada em SUBMENU_VENDAS (ver textoLivreVaiPara lá): texto sem nenhum
+  // dígito não é tentativa de digitar o número da opção, então cai na opção
+  // "Comprar / Ver preços" — é o caminho mais provável pra quem manda uma
+  // frase solta pro WhatsApp da loja, e de lá o cliente ainda passa pelo
+  // submenu de Vendas (que também não vai mais dizer "opção inválida" pra
+  // texto livre).
+  textoLivreVaiPara: '1',
+
   // Os rótulos dizem o que o cliente ganha, não o nome do setor interno. Em
   // 10/08, com o número oficial no ar, uma cliente que queria perguntar preço
   // de papel crepom escolheu "Financeiro" e depois "Atendimento" — nenhuma das

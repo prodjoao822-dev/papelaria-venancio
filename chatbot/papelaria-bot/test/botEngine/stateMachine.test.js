@@ -228,18 +228,39 @@ describe('submenu de vendas', () => {
   });
 });
 
-// --- correção de 01/09: garantir que o MENU_PRINCIPAL não sofreu nenhuma ---
-// regressão com a introdução de `textoLivreVaiPara` — ele não configura essa
-// opção de propósito (ver comentário em menuEngine.js), então texto livre sem
-// dígito continua acusando "opção inválida" exatamente como antes.
-describe('menu principal: sem regressão com o redirecionamento de texto livre', () => {
-  test('"obrigado" depois do menu já apresentado continua acusando "opção inválida", sem redirecionar pra nada', () => {
+// --- correção de 11/09: caso real de produção — cliente já tinha visto o ---
+// menu principal e escreveu "eu sou a Ana" (se apresentando), sem escolher
+// nenhuma opção; caiu em "Opção inválida". Mesma heurística estrutural do
+// submenu de Vendas (01/09): texto sem dígito nenhum não é tentativa de
+// digitar o número da opção, então cai na opção "Comprar / Ver preços" — o
+// caminho mais provável pra quem manda uma frase solta pro WhatsApp da loja.
+describe('menu principal: texto livre sem dígito cai em "Comprar / Ver preços"', () => {
+  ['eu sou a Ana', 'obrigado', 'blz', 'Só isso mesmo então, valeu!'].forEach((texto) => {
+    test(`"${texto}" não acusa "opção inválida" — vai pro submenu de Vendas`, () => {
+      const jaViuMenu = processarMensagem(estadoInicial(), 'oi').sessao;
+      const resultado = processarMensagem(jaViuMenu, texto);
+
+      assert.doesNotMatch(String(resultado.resposta), /Opção inválida/);
+      assert.equal(resultado.sessao.estado, 'SUBMENU_VENDAS');
+    });
+  });
+
+  test('texto com dígito que não é opção válida ("9") continua acusando "opção inválida"', () => {
     const jaViuMenu = processarMensagem(estadoInicial(), 'oi').sessao;
-    const resultado = processarMensagem(jaViuMenu, 'obrigado');
+    const resultado = processarMensagem(jaViuMenu, '9');
 
     assert.equal(resultado.sessao.estado, 'MENU_PRINCIPAL');
     assert.match(resultado.resposta, /Opção inválida/);
-    assert.equal(resultado.acoes.length, 0);
+  });
+
+  // Regressão: as opções numéricas 1 a 4 continuam funcionando exatamente
+  // como antes desta mudança.
+  test('opções numéricas válidas (1 a 4) continuam funcionando sem nenhuma mudança', () => {
+    ['1', '2', '3', '4'].forEach((opcao) => {
+      const jaViuMenu = processarMensagem(estadoInicial(), 'oi').sessao;
+      const resultado = processarMensagem(jaViuMenu, opcao);
+      assert.doesNotMatch(String(resultado.resposta ?? ''), /Opção inválida/);
+    });
   });
 });
 

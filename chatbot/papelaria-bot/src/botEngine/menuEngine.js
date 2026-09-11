@@ -168,7 +168,16 @@ function criarEstadoDeMenu(config) {
       return { estado: STATE, dados: dadosBase, resposta: mensagem(contexto) };
     }
 
-    if (textoLivreVaiPara && texto.length > 0 && !pareceTentativaNumerica(texto)) {
+    // (!primeiraMensagemSemErro || jaApresentado): num estado que mostra o
+    // menu inteiro na primeira mensagem (hoje só MENU_PRINCIPAL), a PRIMEIRA
+    // mensagem da conversa tem que continuar mostrando esse menu completo
+    // (endereço, horário etc.), não pular direto pra outra opção — o cliente
+    // ainda nem viu as opções. `textoLivreVaiPara` só entra em ação depois que
+    // o menu já foi apresentado ao menos uma vez.
+    if (
+      textoLivreVaiPara && texto.length > 0 && !pareceTentativaNumerica(texto)
+      && (!primeiraMensagemSemErro || jaApresentado)
+    ) {
       const opcaoDestino = opcoes[textoLivreVaiPara];
       // Substituir a intenção canônica da opção pelo texto real do cliente só
       // faz sentido pra "consultarAgente" — é o único tipo que usa esse texto
