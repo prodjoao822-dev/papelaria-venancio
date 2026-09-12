@@ -77,10 +77,14 @@
 -- documentado no baseline).
 --
 -- ── NOTA DE EXECUÇÃO ────────────────────────────────────────────────
--- PENDENTE. Não aplicado nesta sessão (sem `execute_sql`/`apply_migration`
--- — ver acima). Aplicar via `mcp__supabase__apply_migration` numa sessão
--- com a ferramenta disponível, depois rodar a validação no fim deste
--- arquivo e atualizar esta nota.
+-- Aplicado e validado ao vivo na sessão principal, 12/09/2026, via
+-- `mcp__supabase__apply_migration`. Confirmado antes (corpo antigo, sem
+-- desempate, batendo com o que este arquivo já dizia) e depois (corpo novo
+-- em produção). Reproduzida a instabilidade original e a estabilidade da
+-- correção: `buscar_produto_fuzzy('caneta', 5)` tem um empate real em
+-- 0.304348 (CANETA BIC CRISTAL AZUL / CANETA CIS SPIRO RT 0.7) — rodado 3x
+-- seguidas, ordem IDÊNTICA nas 3 (antes do fix isso não tinha garantia
+-- nenhuma). GRANTs de EXECUTE confirmados intactos.
 -- =====================================================================
 
 CREATE OR REPLACE FUNCTION public.buscar_produto_fuzzy(p_nome text, p_limit integer DEFAULT 5)

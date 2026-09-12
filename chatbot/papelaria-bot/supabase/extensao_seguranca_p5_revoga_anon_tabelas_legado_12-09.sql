@@ -132,12 +132,13 @@
 -- `authenticated` e `service_role` NÃO são tocados por este arquivo.
 --
 -- ── NOTA DE EXECUÇÃO ────────────────────────────────────────────────
--- PENDENTE. Não aplicado nesta sessão (sem `execute_sql`/
--- `apply_migration` — ver acima). Aplicar via
--- `mcp__supabase__apply_migration` numa sessão com a ferramenta
--- disponível, confirmar ao vivo os grants ANTES de rodar (passo 1 da
--- tarefa original, que esta sessão não conseguiu fazer), então aplicar,
--- validar com a query no fim deste arquivo, e atualizar esta nota.
+-- Aplicado e validado ao vivo na sessão principal, 12/09/2026, via
+-- `mcp__supabase__apply_migration`. Passo 1 (confirmação ANTES) rodado
+-- primeiro: as 31 tabelas realmente tinham as 93 linhas de INSERT/UPDATE/
+-- DELETE pra `anon` (31×3), exatamente como este arquivo previa a partir
+-- do baseline. Depois do revoke: `anon_grants_restantes = 0` nas 31.
+-- `authenticated`/`service_role` conferidos intactos (amostra: clientes,
+-- mensagens, produtos).
 -- =====================================================================
 
 revoke insert, update, delete on alertas_demanda from anon;
