@@ -1,0 +1,52 @@
+-- =====================================================================
+-- Fix "permission denied for table conversas" (12/09/2026)
+-- =====================================================================
+-- Relato real do dono: no dashboard, ele respondeu um cliente pela tela de
+-- Atendimento, conseguiu DESATIVAR a IA na conversa (bot_ativo=false), mas ao
+-- clicar pra REATIVAR levou "permission denied for table conversas".
+--
+-- Causa raiz: a tabela já tinha a policy de RLS certa pra isso —
+-- `operadores_atualizacao` (UPDATE, gated por `eh_operador_ativo()`) — mas a
+-- role `authenticated` (usada pelo dashboard) nunca tinha recebido o GRANT
+-- UPDATE de base na tabela. O Postgres barra a operação no nível de GRANT
+-- antes mesmo de chegar a avaliar RLS, então a policy correta nunca era
+-- avaliada. Mesmo padrão exato já visto e corrigido em `pedidos` em 02/09
+-- (ver item 30 do README, `extensao_fix_grant_pagamento_pedidos_02-09.sql`).
+--
+-- Confirmado ao vivo antes de corrigir: `information_schema.role_table_grants`
+-- mostrava `authenticated` com DELETE/INSERT/REFERENCES/SELECT/TRIGGER/
+-- TRUNCATE em `conversas`, mas sem UPDATE. `anon`, por outro lado, tinha
+-- INSERT/UPDATE/DELETE sem nenhum motivo documentado (mesma classe de achado
+-- já fechada noutras tabelas via P2/P3) — RLS já bloqueava isso na prática
+-- (todas as policies de escrita exigem `eh_operador_ativo()`/`eh_admin()`,
+-- que retornam falso pra `anon`), mas o grant de base foi removido aqui como
+-- defesa em profundidade.
+--
+-- Efeito prático depois do fix: `toggleIA(conversaId, true)` no dashboard
+-- (venancio-ai-ops/src/services/atendimento.service.js) já limpa
+-- `operador_id` ao religar a IA; e `garantirBotAtivo` (chatbot/papelaria-bot/
+-- src/middlewares/reativacaoBot.js) só olha `bot_ativo`/`pausado_pos_pedido`
+-- pra decidir se responde — nenhum outro campo (`status`, por exemplo)
+-- bloqueia a reativação. Ou seja, o UPDATE era a única peça faltando: a IA
+-- volta a responder já na próxima mensagem do cliente, sem esperar timeout.
+--
+-- Aplicado e validado ao vivo em 12/09/2026 via has_table_privilege:
+-- authenticated ganhou UPDATE, anon perdeu INSERT/UPDATE/DELETE,
+-- service_role permaneceu intacto.
+-- =====================================================================
+
+grant update on conversas to authenticated;
+
+revoke insert, update, delete on conversas from anon;
+
+-- =====================================================================
+-- VALIDAÇÃO
+-- =====================================================================
+-- select
+--   has_table_privilege('authenticated', 'conversas', 'UPDATE') as authenticated_pode_update,
+--   has_table_privilege('anon', 'conversas', 'UPDATE') as anon_pode_update,
+--   has_table_privilege('anon', 'conversas', 'INSERT') as anon_pode_insert,
+--   has_table_privilege('anon', 'conversas', 'DELETE') as anon_pode_delete,
+--   has_table_privilege('service_role', 'conversas', 'UPDATE') as service_role_pode_update;
+-- -- esperado: true, false, false, false, true.
+-- =====================================================================
