@@ -120,9 +120,11 @@
 -- essa varredura como item de higiene sistêmica separado.
 --
 -- ── NOTA DE EXECUÇÃO ────────────────────────────────────────────────
--- NÃO aplicado em produção por este agente (sem `execute_sql`/
--- `execute_mutation` nesta sessão — ver acima). Rodar no SQL Editor do
--- Supabase e depois validar com a query no final deste arquivo.
+-- Este agente não tinha `execute_sql`/`execute_mutation` disponíveis e não
+-- aplicou o arquivo (ver acima). Aplicado e validado ao vivo NA MESMA SESSÃO
+-- principal, logo em seguida, via `mcp__supabase__apply_migration` — conferido
+-- com a query de validação abaixo (0 linhas de `anon`, `authenticated`/
+-- `service_role` intactos). Commit `b114033`.
 -- =====================================================================
 
 revoke all on tarefas from anon;
