@@ -1091,6 +1091,28 @@ async function receberWebhook(req, res) {
       // deixaria o operador lendo no dashboard algo que o cliente nunca viu.
       await registrarNoHistorico(conversa.id, 'bot', resposta);
 
+      // Diagnóstico (TRB-2026-0005, 12/09/2026): investigando respostas
+      // duplicadas ao cliente (ex.: "Opção inválida" mandada duas vezes
+      // seguidas, casos reais de 13/08 e 11/09), releitura de todo este
+      // arquivo não achou nenhum caminho de código que chame enviarTexto duas
+      // vezes pro mesmo resultado de processarMensagem — cada retorno deste
+      // handler manda no máximo uma resposta de menu. O suspeito mais
+      // provável que sobra é a Evolution API entregando o MESMO evento de
+      // mensagem duas vezes com um `mensagemId` DIFERENTE a cada entrega (por
+      // exemplo, um retry do lado do Baileys/WhatsApp) — isso passa batido
+      // pelo dedup por id que já existe (`conversa.ultima_mensagem_id`),
+      // porque cada cópia chega com um id novo. Não dava pra confirmar essa
+      // hipótese depois do fato: não existia nenhum log, por mensagem
+      // processada, cruzando `mensagemId` com o texto de fato enviado. Este
+      // log é só isso — não muda nenhum comportamento, existe pra a PRÓXIMA
+      // ocorrência já vir com a evidência de dois mensagemId distintos e
+      // resposta idêntica em segundos de diferença (ou não, descartando esta
+      // hipótese).
+      logger.info(
+        `Resposta de menu enviada a ${cliente.telefone} (conversa ${conversa.id}): "${resposta.slice(0, 60)}"`,
+        { mensagemId: mensagem.mensagemId || null, estado: resultado.sessao.estado }
+      );
+
       return res.status(200).json({ ok: true });
     } finally {
       if (chaveDuplicidade) mensagensEmProcessamento.delete(chaveDuplicidade);
