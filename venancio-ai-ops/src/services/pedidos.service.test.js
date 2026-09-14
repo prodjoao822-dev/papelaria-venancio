@@ -115,6 +115,36 @@ describe('atualizarStatus', () => {
     expect(supabase.rpc).toHaveBeenCalledWith('marcar_pronto_retirada_pedido', { p_pedido_id: 'p1' })
   })
 
+  // TRB (14/09/2026): marcar_pronto_retirada_pedido/marcar_saiu_entrega_pedido
+  // costumavam devolver `data: null` sem erro quando o UPDATE não encontrava
+  // a linha (status/forma_entrega não bateram no exato instante da chamada)
+  // — o dashboard mostrava sucesso e nada mudava de verdade. Fix no banco faz
+  // essas RPCs lançarem exceção nesse caso; este teste garante que o service
+  // propaga esse erro (não engole) igual já fazia pra atualizar_status_pedido_dashboard.
+  test('PRONTO_RETIRADA: erro devolvido por marcar_pronto_retirada_pedido é propagado (não é engolido)', async () => {
+    supabase.from.mockImplementation(() => chain({ data: pedidoRow({ status: 'pronto' }), error: null }))
+    supabase.rpc.mockResolvedValue({
+      data: null,
+      error: new Error('Não foi possível marcar como pronto para retirada: pedido p1 não está com status "pronto" e forma de entrega "retirada" no momento desta chamada'),
+    })
+
+    await expect(pedidosService.atualizarStatus('p1', 'PRONTO_RETIRADA')).rejects.toThrow(
+      'não está com status "pronto"'
+    )
+  })
+
+  test('SAIU_ENTREGA: erro devolvido por marcar_saiu_entrega_pedido é propagado (não é engolido)', async () => {
+    supabase.from.mockImplementation(() => chain({ data: pedidoRow({ status: 'pronto', forma_entrega: 'entrega_propria' }), error: null }))
+    supabase.rpc.mockResolvedValue({
+      data: null,
+      error: new Error('Não foi possível marcar como saiu para entrega: pedido p1 não está com status "pronto" e forma de entrega de entrega (não retirada) no momento desta chamada'),
+    })
+
+    await expect(pedidosService.atualizarStatus('p1', 'SAIU_ENTREGA')).rejects.toThrow(
+      'não está com status "pronto"'
+    )
+  })
+
   test('SAIU_ENTREGA a partir de em_separacao: transiciona pra "pronto" e depois marca a saída', async () => {
     let chamada = 0
     supabase.from.mockImplementation((tabela) => {
