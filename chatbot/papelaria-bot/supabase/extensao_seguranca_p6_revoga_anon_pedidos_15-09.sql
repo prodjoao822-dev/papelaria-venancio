@@ -1,0 +1,63 @@
+-- =====================================================================
+-- VENÂNCIO — TRB-2026-0018: revoga anon em `pedidos` (fecha o buraco que
+-- escapou das 2 varreduras anteriores)
+-- =====================================================================
+-- Achado da Auditoria Completa de 15/09/2026 (agente supabase-db): as
+-- varreduras de "revoga anon" já feitas neste projeto (item 34,
+-- `extensao_seguranca_p4_...sql`, 6 tabelas; item 36,
+-- `extensao_seguranca_p5_...sql`, 31 tabelas) cobriram `pedidos_status_historico`
+-- e `itens_pedido`, mas por algum motivo `pedidos` — a tabela irmã, com o
+-- MESMO desenho de GRANT completo pra anon desde o baseline — ficou de fora
+-- das duas. Confirmado ao vivo antes desta migração: `anon` tinha
+-- DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE em `pedidos`
+-- (7 privilégios), nunca revogados.
+--
+-- Não é um vazamento ativo: as policies de RLS de `pedidos`
+-- (`admin_exclusao`, `operadores_atualizacao`, `operadores_leitura`,
+-- `funcionarios_leem_pedidos_atribuidos`, `service_role_full_access`) são
+-- todas gateadas por `eh_admin()`/`eh_operador_ativo()`/`funcionario_atual_id()`,
+-- que resolvem falso/vazio pra `anon` (sem `auth.uid()`) — mesma defesa que
+-- já protegia as outras 37 tabelas antes de serem corrigidas. Mas é a mesma
+-- classe de fragilidade (GRANT de base sobrando sem necessidade, na
+-- contramão do princípio de menor privilégio) que motivou as duas varreduras
+-- anteriores.
+--
+-- Confirmado que nenhum fluxo legítimo depende do GRANT direto de `anon`
+-- em `pedidos`:
+--   - Bot/n8n usam `service_role` (bypassa GRANT e RLS de qualquer forma).
+--   - Dashboard usa sessão `authenticated` (RLS + GRANT próprios, intocados
+--     aqui).
+--   - A única função pensada pra consultar pedido "do lado do cliente"
+--     (`consultar_status_pedido_cliente`, tool do Agente de Vendas) é
+--     LANGUAGE SQL comum (NÃO security definer) e documentada explicitamente
+--     pra depender de quem chama já usar `service_role` — não de `anon` ter
+--     grant na tabela.
+--
+-- `authenticated` e `service_role` NÃO são tocados por este arquivo — só
+-- `anon` perde o grant, mesmo padrão dos itens 34/36.
+--
+-- ── NOTA DE EXECUÇÃO ────────────────────────────────────────────────
+-- Aplicado e validado ao vivo na sessão principal, 15/09/2026, via
+-- `mcp__supabase__apply_migration`. Confirmado antes (7 linhas de grant pra
+-- anon) e depois (0 linhas), authenticated/service_role intactos.
+-- =====================================================================
+
+revoke all on pedidos from anon;
+
+-- =====================================================================
+-- VALIDAÇÃO (rodar depois de aplicar)
+-- =====================================================================
+-- select table_name, grantee, privilege_type
+-- from information_schema.role_table_grants
+-- where table_schema = 'public' and table_name = 'pedidos' and grantee = 'anon';
+-- -- deve retornar ZERO linhas.
+--
+-- select table_name, grantee, privilege_type
+-- from information_schema.role_table_grants
+-- where table_schema = 'public' and table_name = 'pedidos'
+--   and grantee in ('authenticated','service_role')
+-- order by grantee, privilege_type;
+-- -- deve continuar retornando exatamente os mesmos privilégios de antes
+-- -- (authenticated sem UPDATE de linha inteira -- só as colunas já
+-- -- liberadas por extensao_fix_grant_pagamento_pedidos_02-09.sql).
+-- =====================================================================
