@@ -8,6 +8,7 @@ import { demandIntelligenceService } from '@/services/demand-intelligence.servic
 import { ocorrenciasService } from '@/services/ocorrencias.service'
 import { atendimentoService } from '@/services/atendimento.service'
 import { useTheme } from '@/contexts/AppContext'
+import { useAuth } from '@/contexts/AuthContext'
 
 function useAtendimentosPendentes() {
   const [count, setCount] = useState(0)
@@ -167,6 +168,10 @@ export function Sidebar({ aberta, onFechar }) {
   const ocorrenciasAbertas   = useOcorrenciasAbertas()
   const alertasDemanda       = useAlertasDemanda()
   const { theme, toggleTheme } = useTheme()
+  const { operador } = useAuth()
+
+  const nomeOperador = operador?.nome ?? 'Operador'
+  const papelOperador = operador?.papel === 'admin' ? 'Administrador' : 'Operador'
 
   const pedidosAtivos =
     (kpis?.contadores?.[STATUS.NOVO_PEDIDO]           ?? 0) +
@@ -237,8 +242,8 @@ export function Sidebar({ aberta, onFechar }) {
           <div className="sidebar-footer-operador">
             <div className="sidebar-footer-avatar">OP</div>
             <div className="sidebar-footer-info">
-              <span className="sidebar-footer-nome">Operador 01</span>
-              <span className="sidebar-footer-cargo">Sede Logística</span>
+              <span className="sidebar-footer-nome">{nomeOperador}</span>
+              <span className="sidebar-footer-cargo">{papelOperador}</span>
             </div>
             <div className="sidebar-footer-status" title="Conectado" />
           </div>

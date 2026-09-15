@@ -27,7 +27,7 @@ function minutosEmStatus(createdAt) {
 }
 
 export function DashboardPage() {
-  const { pedidos, carregando, realtimeStatus, atualizarStatus } = usePedidos()
+  const { pedidos, carregando, realtimeStatus } = usePedidos()
   const { kpis } = useKpis()
   const { mapa: mapaAtendimento, linhas: linhasAtendimento, carregando: carregandoAtendimento } = useAtendimentoAtivo()
   const [pedidoSelecionado, setPedidoSelecionado] = useState(null)
@@ -113,7 +113,7 @@ export function DashboardPage() {
           <p className="page-descricao">Visão em tempo real dos pedidos e produção</p>
         </div>
         <div className="page-header-acoes">
-          <button className="btn btn-ghost btn-sm">
+          <button className="btn btn-ghost btn-sm" disabled title="Em breve">
             📤 Exportar Relatório
           </button>
           <button className="btn btn-purple" onClick={() => setNovoPedidoAberto(true)}>

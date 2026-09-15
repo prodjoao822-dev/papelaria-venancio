@@ -192,8 +192,9 @@ export function NovoPedidoModal({ onFechar, clienteInicial = null }) {
               <p className="pedido-detalhe-titulo">Cliente</p>
               <div className="form-grid form-grid--2">
                 <div className="form-grupo">
-                  <label className="form-label">Nome *</label>
+                  <label className="form-label" htmlFor="pedido-cliente-nome">Nome *</label>
                   <input
+                    id="pedido-cliente-nome"
                     className="input"
                     placeholder="Nome completo"
                     value={cliente.nome}
@@ -201,8 +202,9 @@ export function NovoPedidoModal({ onFechar, clienteInicial = null }) {
                   />
                 </div>
                 <div className="form-grupo">
-                  <label className="form-label">Telefone / WhatsApp *</label>
+                  <label className="form-label" htmlFor="pedido-cliente-telefone">Telefone / WhatsApp *</label>
                   <input
+                    id="pedido-cliente-telefone"
                     className="input"
                     placeholder="+55 11 99999-0000"
                     value={cliente.telefone}
@@ -217,8 +219,9 @@ export function NovoPedidoModal({ onFechar, clienteInicial = null }) {
               <p className="pedido-detalhe-titulo">Entrega</p>
               <div className="form-grid form-grid--2">
                 <div className="form-grupo">
-                  <label className="form-label">Forma de Entrega</label>
+                  <label className="form-label" htmlFor="pedido-forma-entrega">Forma de Entrega</label>
                   <select
+                    id="pedido-forma-entrega"
                     className="input"
                     value={formaEntrega}
                     onChange={(e) => setFormaEntrega(e.target.value)}
@@ -229,8 +232,9 @@ export function NovoPedidoModal({ onFechar, clienteInicial = null }) {
                   </select>
                 </div>
                 <div className="form-grupo">
-                  <label className="form-label">Observações</label>
+                  <label className="form-label" htmlFor="pedido-observacoes">Observações</label>
                   <input
+                    id="pedido-observacoes"
                     className="input"
                     placeholder="Ex: entregar antes do meio-dia"
                     value={observacoes}
@@ -239,8 +243,9 @@ export function NovoPedidoModal({ onFechar, clienteInicial = null }) {
                 </div>
                 {formaEntrega !== 'retirada' && (
                   <div className="form-grupo form-grupo--full">
-                    <label className="form-label">Endereço de Entrega *</label>
+                    <label className="form-label" htmlFor="pedido-endereco-entrega">Endereço de Entrega *</label>
                     <input
+                      id="pedido-endereco-entrega"
                       className="input"
                       placeholder="Rua, número, bairro, cidade"
                       value={enderecoEntrega}
@@ -256,8 +261,9 @@ export function NovoPedidoModal({ onFechar, clienteInicial = null }) {
               <p className="pedido-detalhe-titulo">Pagamento</p>
               <div className="form-grid form-grid--2">
                 <div className="form-grupo">
-                  <label className="form-label">Forma de Pagamento</label>
+                  <label className="form-label" htmlFor="pedido-forma-pagamento">Forma de Pagamento</label>
                   <select
+                    id="pedido-forma-pagamento"
                     className="input"
                     value={formaPagamento}
                     onChange={(e) => setFormaPagamento(e.target.value)}
@@ -269,8 +275,9 @@ export function NovoPedidoModal({ onFechar, clienteInicial = null }) {
                   </select>
                 </div>
                 <div className="form-grupo">
-                  <label className="form-label">Status do Pagamento</label>
+                  <label className="form-label" htmlFor="pedido-status-pagamento">Status do Pagamento</label>
                   <select
+                    id="pedido-status-pagamento"
                     className="input"
                     value={statusPagamento}
                     onChange={(e) => setStatusPagamento(e.target.value)}
@@ -281,8 +288,9 @@ export function NovoPedidoModal({ onFechar, clienteInicial = null }) {
                   </select>
                 </div>
                 <div className="form-grupo">
-                  <label className="form-label">Horário Previsto (retirada/entrega)</label>
+                  <label className="form-label" htmlFor="pedido-horario-previsto">Horário Previsto (retirada/entrega)</label>
                   <input
+                    id="pedido-horario-previsto"
                     type="datetime-local"
                     className="input"
                     value={horarioPrevisto}
@@ -297,8 +305,9 @@ export function NovoPedidoModal({ onFechar, clienteInicial = null }) {
               <p className="pedido-detalhe-titulo">Logística</p>
               <div className="form-grid form-grid--2">
                 <div className="form-grupo">
-                  <label className="form-label">Responsável pela Separação</label>
+                  <label className="form-label" htmlFor="pedido-responsavel-separacao">Responsável pela Separação</label>
                   <select
+                    id="pedido-responsavel-separacao"
                     className="input"
                     value={responsavelSeparacaoId}
                     onChange={(e) => setResponsavelSeparacaoId(e.target.value)}
@@ -313,8 +322,9 @@ export function NovoPedidoModal({ onFechar, clienteInicial = null }) {
               </div>
 
               <div className="form-grupo form-grupo--full" style={{ marginTop: 12 }}>
-                <label className="form-label-check">
+                <label className="form-label-check" htmlFor="pedido-delegar-formalmente">
                   <input
+                    id="pedido-delegar-formalmente"
                     type="checkbox"
                     checked={delegarFormalmente}
                     onChange={(e) => setDelegarFormalmente(e.target.checked)}
@@ -326,8 +336,9 @@ export function NovoPedidoModal({ onFechar, clienteInicial = null }) {
               {delegarFormalmente && (
                 <div className="form-grid form-grid--2" style={{ marginTop: 8 }}>
                   <div className="form-grupo">
-                    <label className="form-label">Separador *</label>
+                    <label className="form-label" htmlFor="pedido-separador-delegado">Separador *</label>
                     <select
+                      id="pedido-separador-delegado"
                       className="input"
                       value={separadorDelegadoId}
                       onChange={(e) => setSeparadorDelegadoId(e.target.value)}
@@ -339,22 +350,23 @@ export function NovoPedidoModal({ onFechar, clienteInicial = null }) {
                     </select>
                   </div>
                   <div className="form-grupo">
-                    <label className="form-label">Prioridade *</label>
-                    <div style={{ display: 'flex', gap: 16, marginTop: 4 }}>
-                      <label className="form-label-check">
-                        <input type="radio" name="prioridadeNovoPedido" checked={prioridadeDelegacao === 'imediata'} onChange={() => setPrioridadeDelegacao('imediata')} />
+                    <span className="form-label" id="pedido-prioridade-label">Prioridade *</span>
+                    <div role="group" aria-labelledby="pedido-prioridade-label" style={{ display: 'flex', gap: 16, marginTop: 4 }}>
+                      <label className="form-label-check" htmlFor="pedido-prioridade-imediata">
+                        <input id="pedido-prioridade-imediata" type="radio" name="prioridadeNovoPedido" checked={prioridadeDelegacao === 'imediata'} onChange={() => setPrioridadeDelegacao('imediata')} />
                         ⚡ Imediata
                       </label>
-                      <label className="form-label-check">
-                        <input type="radio" name="prioridadeNovoPedido" checked={prioridadeDelegacao === 'agendada'} onChange={() => setPrioridadeDelegacao('agendada')} />
+                      <label className="form-label-check" htmlFor="pedido-prioridade-agendada">
+                        <input id="pedido-prioridade-agendada" type="radio" name="prioridadeNovoPedido" checked={prioridadeDelegacao === 'agendada'} onChange={() => setPrioridadeDelegacao('agendada')} />
                         🗓️ Agendada
                       </label>
                     </div>
                   </div>
                   {prioridadeDelegacao === 'agendada' && (
                     <div className="form-grupo form-grupo--full">
-                      <label className="form-label">Horário de retirada *</label>
+                      <label className="form-label" htmlFor="pedido-horario-retirada-delegacao">Horário de retirada *</label>
                       <input
+                        id="pedido-horario-retirada-delegacao"
                         type="datetime-local"
                         className="input"
                         value={horarioRetiradaDelegacao}
@@ -411,6 +423,7 @@ export function NovoPedidoModal({ onFechar, clienteInicial = null }) {
                       onClick={() => removerItem(idx)}
                       disabled={itens.length === 1}
                       title="Remover item"
+                      aria-label="Remover item"
                     >
                       ×
                     </button>

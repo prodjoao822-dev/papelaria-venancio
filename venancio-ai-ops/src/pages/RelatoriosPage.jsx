@@ -5,6 +5,7 @@ import { formatCurrency } from '@/utils/formatters'
 import { STATUS_CONFIG } from '@/utils/status'
 import { useKpis } from '@/hooks/usePedidos'
 import { ErrorState } from '@/components/ui/ErrorState'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GRÁFICO DE BARRAS CSS — Faturamento 7 dias
@@ -253,11 +254,17 @@ export function RelatoriosPage() {
       </div>
 
       {/* KPI grid 3x2 */}
-      <div className="fin-kpi-grid">
-        {kpiCards.map((card) => (
-          <FinKpiCard key={card.titulo} {...card} />
-        ))}
-      </div>
+      {carregando ? (
+        <div className="card">
+          <LoadingSpinner mensagem="Carregando métricas comerciais..." />
+        </div>
+      ) : (
+        <div className="fin-kpi-grid">
+          {kpiCards.map((card) => (
+            <FinKpiCard key={card.titulo} {...card} />
+          ))}
+        </div>
+      )}
 
       {/* Gráfico semanal + Conversão */}
       <div className="relatorio-row-2col">

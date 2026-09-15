@@ -166,13 +166,13 @@ export function NovoOrcamentoModal({ onFechar, onCriado, clienteInicial = null, 
               <p className="pedido-detalhe-titulo">Cliente</p>
               <div className="form-grid form-grid--2">
                 <div className="form-grupo">
-                  <label className="form-label">Nome *</label>
-                  <input className="input" placeholder="Nome completo" value={cliente.nome}
+                  <label className="form-label" htmlFor="orcamento-cliente-nome">Nome *</label>
+                  <input id="orcamento-cliente-nome" className="input" placeholder="Nome completo" value={cliente.nome}
                     onChange={(e) => setCliente((c) => ({ ...c, nome: e.target.value }))} />
                 </div>
                 <div className="form-grupo">
-                  <label className="form-label">Telefone / WhatsApp *</label>
-                  <input className="input" placeholder="+55 11 99999-0000" value={cliente.telefone}
+                  <label className="form-label" htmlFor="orcamento-cliente-telefone">Telefone / WhatsApp *</label>
+                  <input id="orcamento-cliente-telefone" className="input" placeholder="+55 11 99999-0000" value={cliente.telefone}
                     onChange={(e) => setCliente((c) => ({ ...c, telefone: e.target.value }))} />
                 </div>
               </div>
@@ -183,15 +183,15 @@ export function NovoOrcamentoModal({ onFechar, onCriado, clienteInicial = null, 
               <p className="pedido-detalhe-titulo">Configurações</p>
               <div className="form-grid form-grid--2">
                 <div className="form-grupo">
-                  <label className="form-label">Status Inicial</label>
-                  <select className="input" value={status} onChange={(e) => setStatus(e.target.value)}>
+                  <label className="form-label" htmlFor="orcamento-status-inicial">Status Inicial</label>
+                  <select id="orcamento-status-inicial" className="input" value={status} onChange={(e) => setStatus(e.target.value)}>
                     <option value="rascunho">Rascunho</option>
                     <option value="enviado">Enviado</option>
                   </select>
                 </div>
                 <div className="form-grupo">
-                  <label className="form-label">Observações</label>
-                  <input className="input" placeholder="Ex: desconto negociado..." value={observacoes}
+                  <label className="form-label" htmlFor="orcamento-observacoes">Observações</label>
+                  <input id="orcamento-observacoes" className="input" placeholder="Ex: desconto negociado..." value={observacoes}
                     onChange={(e) => setObservacoes(e.target.value)} />
                 </div>
               </div>
@@ -219,7 +219,7 @@ export function NovoOrcamentoModal({ onFechar, onCriado, clienteInicial = null, 
                       onChange={(e) => setItem(idx, 'quantidade', e.target.value)} style={{ textAlign: 'center' }} />
                     <input className="input input-sm" placeholder="0,00" value={item.valor_unitario}
                       onChange={(e) => setItem(idx, 'valor_unitario', e.target.value)} style={{ textAlign: 'right' }} />
-                    <button className="btn-remover-item" onClick={() => removeItem(idx)} disabled={itens.length === 1}>×</button>
+                    <button className="btn-remover-item" onClick={() => removeItem(idx)} disabled={itens.length === 1} aria-label="Remover item">×</button>
                   </div>
                 ))}
               </div>

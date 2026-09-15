@@ -314,10 +314,12 @@ function ChecklistSeparacao({ pedido, onAtualizar }) {
           return (
           <label
             key={item.id}
+            htmlFor={`checklist-item-${item.id}`}
             className={`checklist-item ${marcado ? 'checklist-item--separado' : ''}`}
             title={separacaoConfirmadaPeloStatus ? 'Pedido já separado — checklist bloqueado' : undefined}
           >
             <input
+              id={`checklist-item-${item.id}`}
               type="checkbox"
               className="checklist-checkbox"
               checked={marcado}

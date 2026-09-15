@@ -13,12 +13,13 @@ export const metricasService = {
       dias.map(async (dia) => {
         const inicio = dia.toISOString()
         const fim = new Date(dia.getTime() + 86400000).toISOString()
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('pedidos')
           .select('valor_total')
           .gte('criado_em', inicio)
           .lt('criado_em', fim)
           .eq('status', 'concluido')
+        if (error) throw error
         const valor = (data ?? []).reduce((acc, p) => acc + (p.valor_total ?? 0), 0)
         return {
           dia,
@@ -68,6 +69,12 @@ export const metricasService = {
         .select('status')
         .gte('criado_em', mesInicio.toISOString()),
     ])
+
+    if (pedidosHoje.error) throw pedidosHoje.error
+    if (pedidosOntem.error) throw pedidosOntem.error
+    if (pedidosMes.error) throw pedidosMes.error
+    if (clientes.error) throw clientes.error
+    if (orcamentosMes.error) throw orcamentosMes.error
 
     const calc = (rows, statusFilter = null) =>
       (rows ?? []).filter((p) => !statusFilter || p.status === statusFilter)
