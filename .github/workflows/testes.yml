@@ -59,6 +59,7 @@ jobs:
       # o Vite ja carrega .env.test automaticamente (verificado ao vivo em
       # 27/08/2026 rodando sem nenhum .env presente).
       - run: npm test
+      - run: npm run build
 
   mobile:
     name: App Mobile (app-mobile)
