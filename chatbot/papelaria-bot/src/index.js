@@ -6,6 +6,7 @@ const verifyToken = require('./middlewares/verifyToken');
 const verifyOperador = require('./middlewares/verifyOperador');
 const { limiteWebhook, limiteLoginSeparador, limiteLoginOperador } = require('./middlewares/rateLimiter');
 const webhookController = require('./webhook/webhookController');
+const healthController = require('./healthController');
 const operadorController = require('./dashboard/operadorController');
 const separadorAuthController = require('./dashboard/separadorAuthController');
 const operadorAuthController = require('./dashboard/operadorAuthController');
@@ -52,6 +53,10 @@ app.use(express.json({ limit: '25mb' }));
 app.get('/', (req, res) => {
   res.json({ status: 'ok', servico: 'papelaria-bot' });
 });
+
+// Health check de infra (Docker/Caddy) — sem autenticação de propósito, ver
+// comentário em src/healthController.js.
+app.get('/health', healthController.verificarSaude);
 
 // Instrumentação (análise de instabilidade, 29/07/2026): mede o tempo total
 // de processamento de cada webhook (Supabase + stateMachine + chamada ao

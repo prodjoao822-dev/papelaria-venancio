@@ -4,7 +4,7 @@
   "description": "Bot de atendimento via WhatsApp (Evolution API) para uma papelaria",
   "main": "src/index.js",
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "scripts": {
     "start": "node src/index.js",
