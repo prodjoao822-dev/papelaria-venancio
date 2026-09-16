@@ -5,10 +5,29 @@ import {
 } from 'react-native';
 import { colors } from '../../theme/colors';
 import { radius, spacing } from '../../theme/spacing';
-import { SetaVoltarIcon, EnviarIcon, PerfilIcon } from '../../components/icons';
+import { SetaVoltarIcon, EnviarIcon, PerfilIcon, AlertaIcon, RecarregarIcon } from '../../components/icons';
 import { separacaoSeparadorService } from '../../services/separacaoSeparador.service';
 import { separadorSupabase } from '../../supabase/separadorClient';
 import { traduzErroRpc } from '../../utils/traduzErroRpc';
+
+// Mesmo estado de erro com retry das telas de lista (ver PainelScreen.js).
+function TelaErro({ onTentarNovamente }) {
+  return (
+    <View style={styles.estadoContainer}>
+      <View style={[styles.estadoIconeCirculo, { backgroundColor: colors.erroFundo }]}>
+        <AlertaIcon size={28} color={colors.erro} />
+      </View>
+      <Text style={styles.estadoTitulo}>Não foi possível carregar</Text>
+      <Text style={styles.estadoSubtitulo}>
+        Verifique sua conexão com a internet e tente novamente.
+      </Text>
+      <TouchableOpacity style={styles.tentarNovamenteBtn} onPress={onTentarNovamente}>
+        <RecarregarIcon size={15} color={colors.primary} />
+        <Text style={styles.tentarNovamenteText}>Tentar novamente</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
 
 function formatHorario(isoString) {
   if (!isoString) return '';
@@ -32,11 +51,13 @@ export default function ChatSolicitacaoScreen({ route, navigation }) {
   const [solicitacao, setSolicitacao] = useState(null);
   const [mensagens, setMensagens] = useState([]);
   const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState(null);
   const [novaMensagem, setNovaMensagem] = useState('');
   const [enviando, setEnviando] = useState(false);
   const scrollRef = useRef(null);
 
   const carregar = useCallback(async () => {
+    setErro(null);
     try {
       const [s, m] = await Promise.all([
         separacaoSeparadorService.buscarPorId(solicitacaoId),
@@ -44,6 +65,10 @@ export default function ChatSolicitacaoScreen({ route, navigation }) {
       ]);
       setSolicitacao(s);
       setMensagens(m);
+    } catch (err) {
+      // Bug de UX corrigido (TRB-2026-0021): erro era engolido pelo
+      // try/finally e a tela caía silenciosamente em "não encontrado".
+      setErro(err);
     } finally {
       setCarregando(false);
     }
@@ -80,6 +105,13 @@ export default function ChatSolicitacaoScreen({ route, navigation }) {
     return (
       <SafeAreaView style={[styles.container, { justifyContent: 'center' }]}>
         <ActivityIndicator size="large" color={colors.primary} />
+      </SafeAreaView>
+    );
+  }
+  if (erro) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <TelaErro onTentarNovamente={carregar} />
       </SafeAreaView>
     );
   }
@@ -208,4 +240,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   sendButtonDisabled: { backgroundColor: colors.textoDesabilitado },
+
+  estadoContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
+  estadoIconeCirculo: {
+    width: 64, height: 64, borderRadius: 32,
+    backgroundColor: colors.primaryLight,
+    justifyContent: 'center', alignItems: 'center', marginBottom: 18,
+  },
+  estadoTitulo: { fontSize: 16, fontWeight: '800', color: colors.texto, marginBottom: 6, textAlign: 'center' },
+  estadoSubtitulo: { fontSize: 13, color: colors.textoTerciario, lineHeight: 19, textAlign: 'center' },
+  tentarNovamenteBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    borderWidth: 1.5, borderColor: colors.primary,
+    paddingHorizontal: 20, paddingVertical: 11, borderRadius: 12,
+    marginTop: 20,
+  },
+  tentarNovamenteText: { fontSize: 14, fontWeight: '700', color: colors.primary },
 });
