@@ -25,14 +25,32 @@ import { separadorSupabase } from '../supabase/separadorClient'
 // (nulo em itens de texto livre) e a policy de leitura de `produtos`
 // também é `eh_operador_ativo()`-only, sem cláusula de separador — por
 // isso omitido deliberadamente do SELECT e da UI (ver relatório da
-// Etapa B).
+// Etapa B). `observacao` foi adicionada ao embed na Fase 2 (item
+// faltou/substituído) — é onde a RPC grava o texto digitado pelo
+// separador quando `status_item = 'faltou_substituido'`.
+//
+// separador:funcionarios!separador_id — join NOVO da Fase 2, mesmo padrão
+// de hint de coluna (não nome de constraint) já usado em
+// pedidosOperador.service.js (`funcionarios!responsavel_separacao_id`) e
+// tarefasOperador.service.js (`funcionarios!responsavel_id`). Diferente do
+// caso de `operador_delegante` (comentário acima), aqui a RLS JÁ libera:
+// a policy `separador_le_a_si_mesmo` em `funcionarios` (baseline_producao,
+// `auth_user_id = auth.uid()`) permite ao separador ler a própria linha, e
+// como `separador_id` desta solicitação É o funcionário autenticado, o
+// embed deve resolver normalmente. Mesmo assim a UI trata `nome` ausente
+// com o mesmo fallback gracioso (nunca quebra a tela por causa disso).
 const SELECT_SOLICITACAO = `
   *,
-  pedidos (id, protocolo, valor_total, clientes (id, nome, telefone)),
+  pedidos (
+    id, protocolo, valor_total, forma_entrega, forma_pagamento, status_pagamento,
+    horario_retirada_desejado, observacoes,
+    clientes (id, nome, telefone)
+  ),
   operador_delegante:operadores (id, nome),
+  separador:funcionarios!separador_id (id, nome),
   itens:solicitacoes_separacao_itens (
-    id, separado, separado_em,
-    itens_pedido (id, nome_item, quantidade)
+    id, separado, separado_em, status_item,
+    itens_pedido (id, nome_item, quantidade, observacao)
   )
 `
 
@@ -80,10 +98,17 @@ export const separacaoSeparadorService = {
     return data
   },
 
-  async marcarItem(solicitacaoItemId, separado) {
+  // Fase 2 (checklist de 3 estados): assinatura nova usa sempre
+  // `p_status_item` ('separado' | 'faltou_substituido' | 'pendente'),
+  // nunca mais `p_separado` (parâmetro legado da RPC, mantido no banco só
+  // por compatibilidade — não usado a partir daqui). `observacao` só tem
+  // sentido junto de 'faltou_substituido' (texto livre do que aconteceu
+  // com o item); nos outros dois estados vai `null`.
+  async marcarItem(solicitacaoItemId, statusItem, observacao = null) {
     const { data, error } = await separadorSupabase.rpc('marcar_item_separado_solicitacao', {
       p_solicitacao_item_id: solicitacaoItemId,
-      p_separado: separado,
+      p_status_item: statusItem,
+      p_observacao: observacao,
     })
     if (error) throw error
     return data

@@ -84,6 +84,26 @@ describe('buscarPorId', () => {
 
     await expect(separacaoSeparadorService.buscarPorId('inexistente')).rejects.toThrow('not found');
   });
+
+  // Fase 2: garante que os campos novos (status_item, dados do pedido
+  // somente-leitura, separador responsável) fazem parte do SELECT — sem
+  // isso a tela de detalhe não teria como exibi-los.
+  it('inclui status_item, campos do pedido e o separador responsável no SELECT', async () => {
+    const builder = criarBuilder({ data: { id: 's1' }, error: null });
+    separadorSupabase.from.mockReturnValue(builder);
+
+    await separacaoSeparadorService.buscarPorId('s1');
+
+    const selectArg = builder.select.mock.calls[0][0];
+    expect(selectArg).toEqual(expect.stringContaining('status_item'));
+    expect(selectArg).toEqual(expect.stringContaining('forma_entrega'));
+    expect(selectArg).toEqual(expect.stringContaining('forma_pagamento'));
+    expect(selectArg).toEqual(expect.stringContaining('status_pagamento'));
+    expect(selectArg).toEqual(expect.stringContaining('horario_retirada_desejado'));
+    expect(selectArg).toEqual(expect.stringContaining('observacoes'));
+    expect(selectArg).toEqual(expect.stringContaining('separador:funcionarios!separador_id'));
+    expect(selectArg).toEqual(expect.stringContaining('itens_pedido (id, nome_item, quantidade, observacao)'));
+  });
 });
 
 describe('listarMensagens', () => {
@@ -109,14 +129,41 @@ describe('RPCs de mutação', () => {
     expect(separadorSupabase.rpc).toHaveBeenCalledWith('assumir_separacao', { p_solicitacao_id: 's1' });
   });
 
-  it('marcarItem repassa o id do item e o novo estado de separado', async () => {
+  // Fase 2: marcarItem agora usa sempre p_status_item/p_observacao — nunca
+  // mais p_separado (legado da RPC, mantido no banco só por compatibilidade).
+  it('marcarItem repassa o id do item e status_item "separado" sem observação', async () => {
     separadorSupabase.rpc.mockResolvedValue({ data: {}, error: null });
 
-    await separacaoSeparadorService.marcarItem('si1', true);
+    await separacaoSeparadorService.marcarItem('si1', 'separado');
 
     expect(separadorSupabase.rpc).toHaveBeenCalledWith('marcar_item_separado_solicitacao', {
       p_solicitacao_item_id: 'si1',
-      p_separado: true,
+      p_status_item: 'separado',
+      p_observacao: null,
+    });
+  });
+
+  it('marcarItem repassa status_item "faltou_substituido" com a observação digitada', async () => {
+    separadorSupabase.rpc.mockResolvedValue({ data: {}, error: null });
+
+    await separacaoSeparadorService.marcarItem('si1', 'faltou_substituido', 'sem estoque, veio substituído');
+
+    expect(separadorSupabase.rpc).toHaveBeenCalledWith('marcar_item_separado_solicitacao', {
+      p_solicitacao_item_id: 'si1',
+      p_status_item: 'faltou_substituido',
+      p_observacao: 'sem estoque, veio substituído',
+    });
+  });
+
+  it('marcarItem repassa status_item "pendente" para desfazer uma marcação', async () => {
+    separadorSupabase.rpc.mockResolvedValue({ data: {}, error: null });
+
+    await separacaoSeparadorService.marcarItem('si1', 'pendente');
+
+    expect(separadorSupabase.rpc).toHaveBeenCalledWith('marcar_item_separado_solicitacao', {
+      p_solicitacao_item_id: 'si1',
+      p_status_item: 'pendente',
+      p_observacao: null,
     });
   });
 

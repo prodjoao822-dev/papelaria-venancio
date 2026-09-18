@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity,
-  ActivityIndicator, Alert, SafeAreaView,
+  View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput,
+  ActivityIndicator, Alert, SafeAreaView, Modal, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { colors } from '../../theme/colors';
 import { radius, spacing } from '../../theme/spacing';
@@ -37,6 +37,13 @@ export default function DetalheSolicitacaoScreen({ route, navigation }) {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState(null);
   const [concluindo, setConcluindo] = useState(false);
+
+  // Modal "Faltou/substituído" (Fase 2) — item alvo fica em estado local
+  // porque a modal é compartilhada por qualquer linha da lista, não uma
+  // por item. `null` = modal fechada.
+  const [itemModalAberto, setItemModalAberto] = useState(null);
+  const [textoObservacao, setTextoObservacao] = useState('');
+  const [enviandoObservacao, setEnviandoObservacao] = useState(false);
 
   const carregar = useCallback(async () => {
     setErro(null);
@@ -90,10 +97,22 @@ export default function DetalheSolicitacaoScreen({ route, navigation }) {
   const isImediata = solicitacao.prioridade === 'imediata';
   const itens = solicitacao.itens ?? [];
   const totalItens = itens.length;
-  const separadosCount = itens.filter(i => i.separado).length;
-  const todosSeparados = totalItens > 0 && separadosCount === totalItens;
-  const percentual = totalItens > 0 ? Math.round((separadosCount / totalItens) * 100) : 0;
+  // "Prontos" conta os dois estados finais (separado + faltou_substituido)
+  // — a barra de progresso enche até 100% independente de como cada item
+  // foi resolvido; o badge de "faltou" à parte é o que sinaliza que nem
+  // tudo saiu perfeito, sem precisar de uma segunda barra.
+  const separadosCount = itens.filter(i => i.status_item === 'separado').length;
+  const faltouCount = itens.filter(i => i.status_item === 'faltou_substituido').length;
+  const prontosCount = separadosCount + faltouCount;
+  const todosFinalizados = totalItens > 0 && itens.every(i => i.status_item !== 'pendente');
+  const percentual = totalItens > 0 ? Math.round((prontosCount / totalItens) * 100) : 0;
   const delegante = solicitacao.operador_delegante?.nome;
+  const nomeSeparador = solicitacao.separador?.nome;
+
+  const pedido = solicitacao.pedidos;
+  const pago = pedido?.status_pagamento === 'pago';
+  const ehRetirada = pedido?.forma_entrega === 'retirada';
+  const observacoesPedido = (pedido?.observacoes ?? '').trim();
 
   const assumir = async () => {
     try {
@@ -103,22 +122,61 @@ export default function DetalheSolicitacaoScreen({ route, navigation }) {
     }
   };
 
+  // Toque na linha: gesto rápido do caminho comum (90% dos itens só são
+  // encontrados e marcados). `pendente` -> `separado` direto; tocar de novo
+  // num item já finalizado (separado OU faltou_substituido) desfaz para
+  // `pendente` — corrige um toque errado sem exigir passar pela modal.
   const toggleItem = async (item) => {
     if (solicitacao.status !== 'em_andamento') return;
+    const novoStatus = item.status_item === 'pendente' ? 'separado' : 'pendente';
     try {
-      await separacaoSeparadorService.marcarItem(item.id, !item.separado);
+      await separacaoSeparadorService.marcarItem(item.id, novoStatus);
     } catch (err) {
       Alert.alert('Erro ao marcar item', traduzErroRpc(err));
     }
   };
 
-  // concluir_separacao já existe e funciona em produção para o caminho
-  // normal (todo item marcado — é a única forma deste botão habilitar, ver
-  // `todosSeparados`). O que fica pendente de decisão do dono (D1, tela 10
-  // do bundle de design) é só a CONCLUSÃO PARCIAL — chamar essa mesma RPC
-  // com item faltando, que ela hoje rejeita de propósito. Como esta tela
-  // nunca chama a RPC com item pendente, não há conflito com essa decisão
-  // em aberto, e nenhum link "concluir parcial" é oferecido.
+  const abrirModalFaltou = (item) => {
+    if (solicitacao.status !== 'em_andamento') return;
+    setItemModalAberto(item);
+    setTextoObservacao(item.itens_pedido?.observacao ?? '');
+  };
+
+  const fecharModalFaltou = () => {
+    setItemModalAberto(null);
+    setTextoObservacao('');
+  };
+
+  const confirmarFaltouSubstituido = async () => {
+    if (!itemModalAberto) return;
+    setEnviandoObservacao(true);
+    try {
+      await separacaoSeparadorService.marcarItem(itemModalAberto.id, 'faltou_substituido', textoObservacao.trim());
+      fecharModalFaltou();
+    } catch (err) {
+      Alert.alert('Erro ao marcar item', traduzErroRpc(err));
+    } finally {
+      setEnviandoObservacao(false);
+    }
+  };
+
+  // Ícone secundário do item já em `faltou_substituido`: uma forma extra
+  // (além do toque na linha) de voltar pra `pendente` sem passar pela
+  // modal de novo, já que reabrir a modal só pra "desfazer" seria fricção
+  // desnecessária.
+  const limparFaltouSubstituido = async (item) => {
+    try {
+      await separacaoSeparadorService.marcarItem(item.id, 'pendente');
+    } catch (err) {
+      Alert.alert('Erro ao marcar item', traduzErroRpc(err));
+    }
+  };
+
+  // concluir_separacao aceita desde a Fase 2 qualquer combinação de
+  // 'separado'/'faltou_substituido' — só bloqueia com item 'pendente'
+  // (ver `todosFinalizados`, único gate deste botão). A decisão D1 (tela
+  // 10 do bundle de design, "conclusão parcial com item pendente") segue
+  // fora de escopo: esta tela nunca chama a RPC com item pendente.
   const concluir = async () => {
     setConcluindo(true);
     try {
@@ -127,7 +185,7 @@ export default function DetalheSolicitacaoScreen({ route, navigation }) {
         protocolo: solicitacao.pedidos?.protocolo,
         cliente: solicitacao.pedidos?.clientes?.nome,
         totalItens,
-        separadosCount: totalItens,
+        separadosCount: prontosCount,
       });
     } catch (err) {
       Alert.alert('Erro ao concluir', traduzErroRpc(err));
@@ -137,22 +195,49 @@ export default function DetalheSolicitacaoScreen({ route, navigation }) {
   };
 
   const renderItem = ({ item }) => {
-    const marcado = item.separado;
+    const status = item.status_item ?? (item.separado ? 'separado' : 'pendente');
+    const separado = status === 'separado';
+    const faltou = status === 'faltou_substituido';
+    const podeInteragir = solicitacao.status === 'em_andamento';
+
     return (
-      <TouchableOpacity
-        style={[styles.itemCard, marcado && styles.itemCardMarcado]}
-        onPress={() => toggleItem(item)}
-        disabled={solicitacao.status !== 'em_andamento'}
-        activeOpacity={0.75}
-      >
-        <View style={[styles.itemCheckbox, marcado && styles.itemCheckboxMarcado]}>
-          {marcado && <CheckIcon size={16} color="#fff" />}
-        </View>
-        <View style={styles.itemInfo}>
-          <Text style={styles.itemNome}>{item.itens_pedido?.nome_item}</Text>
-          <Text style={styles.itemQuantidade}>Qtd: {item.itens_pedido?.quantidade}</Text>
-        </View>
-      </TouchableOpacity>
+      <View style={[styles.itemCard, separado && styles.itemCardMarcado, faltou && styles.itemCardFaltou]}>
+        <TouchableOpacity
+          style={styles.itemToqueArea}
+          onPress={() => toggleItem(item)}
+          disabled={!podeInteragir}
+          activeOpacity={0.75}
+          testID={`item-linha-${item.id}`}
+        >
+          <View style={[
+            styles.itemCheckbox,
+            separado && styles.itemCheckboxMarcado,
+            faltou && styles.itemCheckboxFaltou,
+          ]}>
+            {separado && <CheckIcon size={16} color="#fff" />}
+            {faltou && <AlertaIcon size={14} color="#fff" />}
+          </View>
+          <View style={styles.itemInfo}>
+            <Text style={styles.itemNome}>{item.itens_pedido?.nome_item}</Text>
+            <Text style={styles.itemQuantidade}>Qtd: {item.itens_pedido?.quantidade}</Text>
+            {faltou && !!item.itens_pedido?.observacao && (
+              <Text style={styles.itemObservacaoFaltou}>{item.itens_pedido.observacao}</Text>
+            )}
+          </View>
+        </TouchableOpacity>
+
+        {/* Controle secundário — deliberadamente menor/menos proeminente
+            que o toque na linha, que cobre o caminho comum. */}
+        <TouchableOpacity
+          style={styles.itemAcaoFaltou}
+          hitSlop={10}
+          disabled={!podeInteragir}
+          onPress={() => (faltou ? limparFaltouSubstituido(item) : abrirModalFaltou(item))}
+          testID={`item-acao-faltou-${item.id}`}
+        >
+          <AlertaIcon size={18} color={faltou ? colors.andamento : colors.textoTerciario} />
+        </TouchableOpacity>
+      </View>
     );
   };
 
@@ -191,10 +276,10 @@ export default function DetalheSolicitacaoScreen({ route, navigation }) {
         {!isPendente && (
           <View style={styles.progressoContainer}>
             <View style={styles.progressoLabelRow}>
-              <Text style={[styles.progressoLabel, { color: todosSeparados ? colors.sucesso : colors.textoSecundario }]}>
-                {separadosCount} de {totalItens} separados
+              <Text style={[styles.progressoLabel, { color: todosFinalizados ? colors.sucesso : colors.textoSecundario }]}>
+                {prontosCount} de {totalItens} prontos
               </Text>
-              <Text style={[styles.progressoLabel, { color: todosSeparados ? colors.sucesso : colors.textoSecundario }]}>
+              <Text style={[styles.progressoLabel, { color: todosFinalizados ? colors.sucesso : colors.textoSecundario }]}>
                 {percentual}%
               </Text>
             </View>
@@ -202,12 +287,50 @@ export default function DetalheSolicitacaoScreen({ route, navigation }) {
               <View
                 style={[
                   styles.progressoBarraPreenchida,
-                  { width: `${percentual}%`, backgroundColor: todosSeparados ? colors.sucesso : colors.andamento },
+                  { width: `${percentual}%`, backgroundColor: todosFinalizados ? colors.sucesso : colors.andamento },
                 ]}
               />
             </View>
+            {/* Badge à parte (não uma segunda barra) pra sinalizar, num
+                relance, que nem tudo saiu perfeito — só aparece quando
+                existe pelo menos 1 item faltou/substituído. */}
+            {faltouCount > 0 && (
+              <View style={styles.badgeFaltouContainer}>
+                <AlertaIcon size={12} color={colors.andamento} />
+                <Text style={styles.badgeFaltouText}>
+                  {faltouCount} {faltouCount === 1 ? 'item' : 'itens'} faltou/substituído
+                </Text>
+              </View>
+            )}
           </View>
         )}
+      </View>
+
+      {/* Painel somente-leitura (Fase 2) — pagamento, entrega, horário,
+          observações do cliente e separador responsável. Nada aqui é
+          editável nesta tela: pagamento/entrega/horário/observações são
+          decisão tomada no fechamento do pedido (Agente de Vendas/loja),
+          não no galpão de separação. */}
+      <View style={styles.infoPainel}>
+        <View style={styles.infoPainelLinha}>
+          <Text style={styles.infoPainelItem}>
+            {pago ? '🟢 Pago' : '🟡 Aguardando pagamento'}
+          </Text>
+          <Text style={styles.infoPainelItem}>
+            {ehRetirada ? '🏬 Retirada' : '🚚 Entrega'}
+          </Text>
+        </View>
+        <Text style={styles.infoPainelLabel}>
+          Horário: <Text style={styles.infoPainelValor}>{pedido?.horario_retirada_desejado || 'não informado'}</Text>
+        </Text>
+        {!!observacoesPedido && (
+          <Text style={styles.infoPainelLabel}>
+            Observações do cliente: <Text style={styles.infoPainelValor}>{observacoesPedido}</Text>
+          </Text>
+        )}
+        <Text style={styles.infoPainelLabel}>
+          Separador responsável: <Text style={styles.infoPainelValor}>{nomeSeparador || 'não informado'}</Text>
+        </Text>
       </View>
 
       {/* Bug corrigido (vistoria 19/08): a lista de itens antes só renderizava
@@ -236,20 +359,74 @@ export default function DetalheSolicitacaoScreen({ route, navigation }) {
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            style={[styles.concluirButton, (!todosSeparados || concluindo) && styles.concluirButtonDisabled]}
-            disabled={!todosSeparados || concluindo}
+            style={[styles.concluirButton, (!todosFinalizados || concluindo) && styles.concluirButtonDisabled]}
+            disabled={!todosFinalizados || concluindo}
             onPress={concluir}
           >
             {concluindo ? (
-              <ActivityIndicator color={todosSeparados ? '#fff' : colors.textoDesabilitado} />
+              <ActivityIndicator color={todosFinalizados ? '#fff' : colors.textoDesabilitado} />
             ) : (
-              <Text style={[styles.concluirButtonText, !todosSeparados && styles.concluirButtonTextDisabled]}>
-                Separação Pronta
+              <Text style={[styles.concluirButtonText, !todosFinalizados && styles.concluirButtonTextDisabled]}>
+                {faltouCount > 0 ? 'Finalizar com pendências' : 'Separação Pronta'}
               </Text>
             )}
           </TouchableOpacity>
         )}
       </View>
+
+      {/* Modal "Faltou/substituído" — mesmo padrão visual/estrutural do
+          modal de insucesso em DetalheEntregaScreen.js (overlay + card +
+          TextInput multiline + par cancelar/confirmar), reaproveitado aqui
+          por consistência entre telas do app. Observação é opcional (pode
+          confirmar em branco se o separador não quiser detalhar). */}
+      <Modal
+        visible={!!itemModalAberto}
+        transparent
+        animationType="fade"
+        onRequestClose={fecharModalFaltou}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitulo}>Faltou ou foi substituído</Text>
+            <Text style={styles.modalSubtitulo}>
+              {itemModalAberto?.itens_pedido?.nome_item}
+              {'\n'}Conte o que aconteceu (opcional).
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Ex: sem estoque, substituído por outra marca..."
+              placeholderTextColor={colors.textoTerciario}
+              value={textoObservacao}
+              onChangeText={setTextoObservacao}
+              multiline
+              editable={!enviandoObservacao}
+              testID="modal-faltou-input"
+            />
+            <View style={styles.modalAcoes}>
+              <TouchableOpacity
+                style={styles.modalBotaoCancelar}
+                onPress={fecharModalFaltou}
+                disabled={enviandoObservacao}
+              >
+                <Text style={styles.modalBotaoCancelarTexto}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalBotaoConfirmar}
+                onPress={confirmarFaltouSubstituido}
+                disabled={enviandoObservacao}
+                testID="modal-faltou-confirmar"
+              >
+                {enviandoObservacao ? <ActivityIndicator color="#fff" size="small" /> : (
+                  <Text style={styles.modalBotaoConfirmarTexto}>Confirmar</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -279,6 +456,23 @@ const styles = StyleSheet.create({
   progressoLabel: { fontSize: 12.5, fontWeight: '700' },
   progressoBarraFundo: { height: 8, borderRadius: 4, backgroundColor: colors.divisor, overflow: 'hidden' },
   progressoBarraPreenchida: { height: '100%', borderRadius: 4 },
+  badgeFaltouContainer: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    marginTop: 8, alignSelf: 'flex-start',
+  },
+  badgeFaltouText: { fontSize: 11.5, fontWeight: '700', color: colors.andamento },
+
+  // Painel somente-leitura de dados do pedido (Fase 2) — texto simples,
+  // sem nenhum controle editável (regra não-negociável do plano).
+  infoPainel: {
+    marginHorizontal: spacing.xl, marginTop: spacing.lg,
+    backgroundColor: colors.fundo, borderWidth: 1, borderColor: colors.borda,
+    borderRadius: radius.lg, padding: 14, gap: 6,
+  },
+  infoPainelLinha: { flexDirection: 'row', justifyContent: 'space-between' },
+  infoPainelItem: { fontSize: 13.5, fontWeight: '700', color: colors.texto },
+  infoPainelLabel: { fontSize: 12.5, color: colors.textoSecundario },
+  infoPainelValor: { fontWeight: '700', color: colors.texto },
 
   pendenteBanner: {
     fontSize: 13, color: colors.textoSecundario, textAlign: 'center',
@@ -297,16 +491,25 @@ const styles = StyleSheet.create({
 
   listaContent: { padding: spacing.xl, paddingBottom: 8 },
   itemCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: colors.superficie,
     borderWidth: 1.5, borderColor: colors.borda,
-    borderRadius: radius.lg, padding: 14, paddingHorizontal: 16,
+    borderRadius: radius.lg, paddingVertical: 14, paddingHorizontal: 16,
     marginBottom: 10,
   },
   itemCardMarcado: {
     backgroundColor: colors.sucessoFundo,
     borderColor: colors.sucesso,
   },
+  // Variante "faltou/substituído" — reaproveita o laranja de `andamento`
+  // (já usado como estado "em progresso"/atenção no restante do app) em
+  // vez de criar um token de cor novo, e também em vez do vermelho de
+  // `erro` (reservado para falha de verdade, não é o caso aqui).
+  itemCardFaltou: {
+    backgroundColor: colors.andamentoFundo,
+    borderColor: colors.andamento,
+  },
+  itemToqueArea: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 14, minWidth: 0 },
   itemCheckbox: {
     width: 28, height: 28, borderRadius: 8,
     borderWidth: 2, borderColor: colors.bordaCheckbox,
@@ -316,9 +519,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.sucesso,
     borderColor: colors.sucesso,
   },
+  itemCheckboxFaltou: {
+    backgroundColor: colors.andamento,
+    borderColor: colors.andamento,
+  },
   itemInfo: { flex: 1, minWidth: 0 },
   itemNome: { fontSize: 15, fontWeight: '700', color: colors.texto },
   itemQuantidade: { fontSize: 12.5, color: colors.textoSecundario, marginTop: 3 },
+  itemObservacaoFaltou: { fontSize: 12, color: colors.andamento, marginTop: 4, fontStyle: 'italic' },
+  itemAcaoFaltou: { padding: 6, marginLeft: 4 },
 
   footer: {
     padding: spacing.xl, paddingTop: 14,
@@ -356,4 +565,40 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   tentarNovamenteText: { fontSize: 14, fontWeight: '700', color: colors.primary },
+
+  // Modal "Faltou/substituído" — mesmo padrão visual de
+  // DetalheEntregaScreen.js (modal de Insucesso/Ocorrência), reaproveitado
+  // aqui por consistência entre telas do app.
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(28, 32, 51, 0.5)',
+    justifyContent: 'center', alignItems: 'center', padding: spacing.xl,
+  },
+  modalCard: {
+    width: '100%', maxWidth: 420,
+    backgroundColor: colors.superficie, borderRadius: radius.lg,
+    padding: spacing.xl,
+  },
+  modalTitulo: { fontSize: 17, fontWeight: '800', color: colors.texto, marginBottom: 4 },
+  modalSubtitulo: { fontSize: 13, color: colors.textoSecundario, marginBottom: 16, lineHeight: 18 },
+  modalInput: {
+    minHeight: 90, maxHeight: 160,
+    borderWidth: 1.5, borderColor: colors.borda, borderRadius: radius.md,
+    paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: 14, color: colors.texto,
+    backgroundColor: colors.fundoInput,
+    textAlignVertical: 'top',
+  },
+  modalAcoes: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  modalBotaoCancelar: {
+    flex: 1, height: 48, borderRadius: radius.md,
+    borderWidth: 1.5, borderColor: colors.borda,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  modalBotaoCancelarTexto: { fontSize: 14, fontWeight: '700', color: colors.textoSecundario },
+  modalBotaoConfirmar: {
+    flex: 1, height: 48, borderRadius: radius.md,
+    backgroundColor: colors.primary,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  modalBotaoConfirmarTexto: { fontSize: 14, fontWeight: '700', color: '#fff' },
 });
