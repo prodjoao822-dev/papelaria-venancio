@@ -36,6 +36,13 @@ validar();
 const DASHBOARD_ORIGIN_RAW = process.env.DASHBOARD_ORIGIN || 'http://localhost:3000,http://localhost:3001';
 const DASHBOARD_ORIGINS = DASHBOARD_ORIGIN_RAW.split(',').map((origem) => origem.trim()).filter(Boolean);
 
+// Allowlist SEPARADA da do dashboard (DASHBOARD_ORIGINS acima) — o painel
+// admin (admin-panel/) é um app diferente, dono-only, servido de outra
+// origem. Mesmo parsing (lista separada por vírgula, com trim) usado pro
+// corsAdmin em src/index.js.
+const ADMIN_PANEL_ORIGIN_RAW = process.env.ADMIN_PANEL_ORIGINS || 'http://localhost:5500';
+const ADMIN_PANEL_ORIGINS = ADMIN_PANEL_ORIGIN_RAW.split(',').map((origem) => origem.trim()).filter(Boolean);
+
 module.exports = {
   EVOLUTION_API_URL: process.env.EVOLUTION_API_URL,
   EVOLUTION_API_KEY: process.env.EVOLUTION_API_KEY,
@@ -76,6 +83,10 @@ module.exports = {
   // abaixo (array já parseado) e corsDashboard em src/index.js.
   DASHBOARD_ORIGIN: DASHBOARD_ORIGIN_RAW,
   DASHBOARD_ORIGINS: DASHBOARD_ORIGINS,
+  // Origem(ns) do painel admin (admin-panel/, dono-only) — ver corsAdmin em
+  // src/index.js. Separada de DASHBOARD_ORIGINS de propósito: são dois
+  // frontends diferentes, com público e nível de acesso diferentes.
+  ADMIN_PANEL_ORIGINS: ADMIN_PANEL_ORIGINS,
   // Token enviado no header x-n8n-webhook-token ao chamar o webhook do Agente
   // de Vendas (opcional só pra não quebrar quem ainda não configurou a
   // credential Header Auth correspondente no n8n — ver AGENTE_VENDAS.json,

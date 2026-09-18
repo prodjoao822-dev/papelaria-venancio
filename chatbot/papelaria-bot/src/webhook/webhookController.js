@@ -19,7 +19,7 @@ const comandosGlobais = require('../botEngine/comandosGlobais');
 const intencaoFechamento = require('../botEngine/intencaoFechamento');
 const actions = require('../botEngine/actions');
 const n8nClient = require('../integracoes/n8nClient');
-const notifyTargets = require('../config/notifyTargets');
+const { resolverAlvo } = require('../config/notifyTargets');
 const analyticsService = require('../services/analyticsService');
 const escalonamentoService = require('../services/escalonamentoService');
 const logger = require('../utils/logger');
@@ -140,7 +140,7 @@ async function receberAudioFallback(mensagem, cliente, conversaId, { avisarVanes
 
   if (avisarVanessa) {
     await evolutionApi.enviarTexto(
-      notifyTargets.vendas,
+      await resolverAlvo('vendas'),
       `🎧 ${cliente.nome || 'Cliente sem nome'} (${cliente.telefone}) mandou ${rotulo}${duracao} `
       + 'no WhatsApp da loja. Não deu pra transcrever automaticamente — precisa de atendimento humano.'
     );
@@ -161,7 +161,7 @@ async function receberAudioFallback(mensagem, cliente, conversaId, { avisarVanes
 async function receberImagemFallback(mensagem, cliente, conversaId, { avisarVanessa }) {
   if (avisarVanessa) {
     await evolutionApi.enviarTexto(
-      notifyTargets.vendas,
+      await resolverAlvo('vendas'),
       `🖼️ ${cliente.nome || 'Cliente sem nome'} (${cliente.telefone}) mandou uma imagem `
       + 'no WhatsApp da loja. Não deu pra descrever automaticamente — precisa de atendimento humano.'
     );
@@ -195,7 +195,7 @@ async function receberDocumentoPdf(mensagem, dadosBrutosWebhook, cliente, conver
     ? MENSAGEM_CONFIRMACAO_PDF_RECEBIDO_AGUARDANDO_LISTA_TEXTO
     : MENSAGEM_CONFIRMACAO_PDF_RECEBIDO;
 
-  await evolutionApi.enviarDocumentoBase64(notifyTargets.vendas, midia.base64, nomeArquivo, legenda);
+  await evolutionApi.enviarDocumentoBase64(await resolverAlvo('vendas'), midia.base64, nomeArquivo, legenda);
   await evolutionApi.enviarTexto(cliente.telefone, mensagemConfirmacao);
 
   // Best-effort: o arquivo já foi encaminhado pra Vendas acima, então uma

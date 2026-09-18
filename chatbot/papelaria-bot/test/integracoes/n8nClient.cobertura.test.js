@@ -28,6 +28,24 @@ require.cache[caminhoMensagens] = {
   },
 };
 
+// n8nClient lê timeout e liga/desliga do Agente de Vendas de configResolver
+// (painel admin, 18/09/2026) em vez de env.js direto — dublado aqui com os
+// mesmos valores que os testes deste arquivo já assumiam antes da migração.
+let agenteVendasHabilitado = true;
+const caminhoConfigResolver = require.resolve('../../src/config/configResolver');
+require.cache[caminhoConfigResolver] = {
+  id: caminhoConfigResolver,
+  filename: caminhoConfigResolver,
+  loaded: true,
+  exports: {
+    obter: async (chave) => {
+      if (chave === 'agente_vendas_timeout_ms') return 6000;
+      if (chave === 'agente_vendas_habilitado') return agenteVendasHabilitado;
+      return null;
+    },
+  },
+};
+
 const env = require('../../src/config/env');
 const n8nClient = require('../../src/integracoes/n8nClient');
 
@@ -148,6 +166,22 @@ test('notificarAgenteOrcamento com corpo de resposta não-parseável devolve nul
 });
 
 // --- consultarAgenteVendas: ramos sem recuperação via Supabase ---
+
+test('consultarAgenteVendas com o Agente de Vendas desabilitado no painel admin devolve null sem chamar a rede', async () => {
+  agenteVendasHabilitado = false;
+  let chamouFetch = false;
+
+  try {
+    const resultado = await comFetch(
+      async () => { chamouFetch = true; return respostaOk({ resposta: 'oi' }); },
+      () => n8nClient.consultarAgenteVendas(payload)
+    );
+    assert.equal(resultado, null);
+    assert.equal(chamouFetch, false);
+  } finally {
+    agenteVendasHabilitado = true;
+  }
+});
 
 test('consultarAgenteVendas sem URL configurada devolve null sem chamar a rede', async () => {
   const urlOriginal = env.N8N_VENDAS_WEBHOOK_URL;

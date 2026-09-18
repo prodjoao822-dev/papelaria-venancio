@@ -50,4 +50,18 @@ const limiteLoginOperador = rateLimit({
   message: { ok: false, erro: 'Muitas tentativas de login em pouco tempo. Tente novamente em instantes.' },
 });
 
-module.exports = { limiteWebhook, limiteLoginSeparador, limiteLoginOperador };
+// Escrita de config do painel admin (PUT /admin/config/:chave) — defesa em
+// profundidade, não uma restrição de uso real: é um painel de uso único, do
+// dono, protegido por verifyAdmin (papel admin) e por CORS restrito
+// (corsAdmin). 60/min é generoso o bastante pra nunca atrapalhar uso legítimo.
+const limiteAdmin = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, erro: 'Muitas alterações em pouco tempo. Tente novamente em instantes.' },
+});
+
+module.exports = {
+  limiteWebhook, limiteLoginSeparador, limiteLoginOperador, limiteAdmin,
+};

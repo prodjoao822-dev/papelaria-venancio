@@ -12,6 +12,7 @@
 
 const { Agent } = require('undici');
 const env = require('../config/env');
+const configResolver = require('../config/configResolver');
 const logger = require('../utils/logger');
 const mensagensService = require('../services/mensagensService');
 
@@ -170,11 +171,22 @@ async function consultarAgenteVendas(payload) {
     return null;
   }
 
+  // Liga/desliga do painel admin (18/09/2026, ver configResolver.js) — mesmo
+  // comportamento de fallback de quando a URL não está configurada acima:
+  // nunca lança, só devolve null pra quem chama acionar a rede de segurança
+  // (mensagem de espera + notifica humano + pausa o bot).
+  const agenteHabilitado = await configResolver.obter('agente_vendas_habilitado');
+  if (!agenteHabilitado) {
+    logger.erro('Agente de Vendas desabilitado no painel admin; não foi possível consultar o Agente de Vendas.');
+    return null;
+  }
+
+  const timeoutMs = await configResolver.obter('agente_vendas_timeout_ms');
   const inicioConsultaIso = new Date().toISOString();
   let resposta;
   for (let tentativa = 1; tentativa <= TENTATIVAS_AGENTE_VENDAS; tentativa += 1) {
     const controleTimeout = new AbortController();
-    const timeoutId = setTimeout(() => controleTimeout.abort(), env.AGENTE_VENDAS_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => controleTimeout.abort(), timeoutMs);
 
     try {
       // eslint-disable-next-line no-await-in-loop -- tentativas são sequenciais por design (só repete se a anterior falhou)
@@ -202,7 +214,7 @@ async function consultarAgenteVendas(payload) {
         // que causou respostas duplicadas pro cliente e falha ao gravar o
         // pedido num teste real (30/07/2026) — por isso timeout nunca
         // tenta de novo, só falha direto e aciona a rede de segurança.
-        logger.erro(`Timeout de ${env.AGENTE_VENDAS_TIMEOUT_MS}ms ao consultar o Agente de Vendas`, {
+        logger.erro(`Timeout de ${timeoutMs}ms ao consultar o Agente de Vendas`, {
           conversaId: payload.conversa_id,
           tentativa,
         });
@@ -222,7 +234,7 @@ async function consultarAgenteVendas(payload) {
       // de qualquer forma se a conexão tivesse se mantido.
       if (requisicaoChegouAoN8n(erro)) {
         const prazoRestanteMs = Math.max(
-          env.AGENTE_VENDAS_TIMEOUT_MS - (Date.now() - Date.parse(inicioConsultaIso)),
+          timeoutMs - (Date.now() - Date.parse(inicioConsultaIso)),
           RECUPERACAO_PRAZO_CORPO_VAZIO_MS
         );
         logger.aviso(

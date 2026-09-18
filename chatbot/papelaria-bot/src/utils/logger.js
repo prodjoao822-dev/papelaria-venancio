@@ -105,4 +105,10 @@ function erro(mensagem, erroOriginal) {
   persistirEmArquivo('ERRO', mensagem, dadosMascarados);
 }
 
-module.exports = { info, aviso, erro };
+module.exports = {
+  info, aviso, erro,
+  // Exportado pro painel admin (src/admin/adminLogsController.js,
+  // logTailService.js) ler os mesmos arquivos que este módulo escreve, sem
+  // duplicar o cálculo do caminho.
+  PASTA_LOGS,
+};

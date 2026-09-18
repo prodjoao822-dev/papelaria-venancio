@@ -4,12 +4,17 @@ const express = require('express');
 const env = require('./config/env'); // valida as variáveis de ambiente já na subida (falha rápido)
 const verifyToken = require('./middlewares/verifyToken');
 const verifyOperador = require('./middlewares/verifyOperador');
-const { limiteWebhook, limiteLoginSeparador, limiteLoginOperador } = require('./middlewares/rateLimiter');
+const verifyAdmin = require('./middlewares/verifyAdmin');
+const {
+  limiteWebhook, limiteLoginSeparador, limiteLoginOperador, limiteAdmin,
+} = require('./middlewares/rateLimiter');
 const webhookController = require('./webhook/webhookController');
 const healthController = require('./healthController');
 const operadorController = require('./dashboard/operadorController');
 const separadorAuthController = require('./dashboard/separadorAuthController');
 const operadorAuthController = require('./dashboard/operadorAuthController');
+const adminConfigController = require('./admin/adminConfigController');
+const adminLogsController = require('./admin/adminLogsController');
 const analyticsService = require('./services/analyticsService');
 const logger = require('./utils/logger');
 
@@ -147,6 +152,38 @@ app.post('/operador/criar-com-codigo', corsDashboard, verifyOperador, operadorAu
 
 app.options('/operador/:operadorId/reset-pin', corsDashboard);
 app.post('/operador/:operadorId/reset-pin', corsDashboard, verifyOperador, operadorAuthController.resetarPin);
+
+// Rotas do painel admin (admin-panel/, dono-only) — origem restrita via CORS
+// PRÓPRIO (corsAdmin, ADMIN_PANEL_ORIGINS: allowlist separada da do
+// dashboard) e autenticação por verifyAdmin (sessão de operador com
+// papel='admin', não qualquer operador). Mesmo padrão allowlist + reflect de
+// corsDashboard (ver comentário acima), só que liberando também GET/PUT
+// (o dashboard só usa POST).
+function corsAdmin(req, res, next) {
+  const origem = req.get('origin');
+  if (origem && env.ADMIN_PANEL_ORIGINS.includes(origem)) {
+    res.set('Access-Control-Allow-Origin', origem);
+    res.set('Vary', 'Origin');
+  }
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.set('Access-Control-Allow-Methods', 'GET, PUT, OPTIONS');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  return next();
+}
+
+app.options('/admin/config', corsAdmin);
+app.get('/admin/config', corsAdmin, verifyAdmin, adminConfigController.listar);
+app.options('/admin/config/:chave', corsAdmin);
+app.put('/admin/config/:chave', corsAdmin, verifyAdmin, limiteAdmin, adminConfigController.atualizar);
+
+app.options('/admin/logs', corsAdmin);
+app.get('/admin/logs', corsAdmin, verifyAdmin, adminLogsController.listarArquivos);
+app.options('/admin/logs/:data', corsAdmin);
+app.get('/admin/logs/:data', corsAdmin, verifyAdmin, adminLogsController.lerArquivo);
+// Sem OPTIONS/preflight de propósito: EventSource não faz preflight (não
+// manda Authorization como header customizado — usa ?token=, ver
+// verifyAdmin.js), então não há requisição OPTIONS real pra responder aqui.
+app.get('/admin/logs/stream', corsAdmin, verifyAdmin, adminLogsController.streamLogs);
 
 app.listen(env.PORT, () => {
   logger.info(`Papelaria bot escutando na porta ${env.PORT}`);

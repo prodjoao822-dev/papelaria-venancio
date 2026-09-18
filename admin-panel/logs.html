@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Logs · Painel Admin</title>
+  <link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+  <div class="topo">
+    <div class="topo-marca"><span class="ponto"></span> Painel Admin</div>
+    <nav class="topo-nav">
+      <a href="config.html">Configuração</a>
+      <a href="logs.html" class="ativo">Logs</a>
+    </nav>
+    <button class="topo-sair" id="btn-sair">Sair</button>
+  </div>
+
+  <div class="conteudo">
+    <h1 class="pagina-titulo">Logs do bot</h1>
+    <p class="pagina-subtitulo">O mesmo que aparece no terminal — só o dia mais recente atualiza ao vivo.</p>
+
+    <div class="logs-controles">
+      <select id="select-data"></select>
+      <button class="btn secundario" id="btn-mais-antigo">Carregar mais antigo</button>
+      <label style="font-size:12.5px;color:var(--ink-soft);display:flex;align-items:center;gap:6px;">
+        <input type="checkbox" id="chk-autoscroll" checked> auto-scroll
+      </label>
+      <span class="logs-badge-live" id="badge-live">● AO VIVO</span>
+    </div>
+
+    <div class="logs-caixa" id="caixa-logs">Carregando...</div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="shared/config.js"></script>
+  <script src="shared/auth.js"></script>
+  <script src="shared/api.js"></script>
+  <script>
+    const caixa = document.getElementById('caixa-logs');
+    const selectData = document.getElementById('select-data');
+    const btnMaisAntigo = document.getElementById('btn-mais-antigo');
+    const chkAutoscroll = document.getElementById('chk-autoscroll');
+    const badgeLive = document.getElementById('badge-live');
+
+    let dataMaisRecente = null;
+    let offsetInicio = null;
+    let eventSourceAtual = null;
+    let autoScrollPausadoPorScroll = false;
+
+    function linhaParaElemento(linha) {
+      const div = document.createElement('div');
+      if (/\[erro\]/i.test(linha)) div.className = 'linha-erro';
+      else if (/\[aviso\]/i.test(linha)) div.className = 'linha-aviso';
+      div.textContent = linha;
+      return div;
+    }
+
+    function rolarSeNecessario() {
+      if (chkAutoscroll.checked && !autoScrollPausadoPorScroll) {
+        caixa.scrollTop = caixa.scrollHeight;
+      }
+    }
+
+    caixa.addEventListener('scroll', () => {
+      const distanciaDoFim = caixa.scrollHeight - caixa.scrollTop - caixa.clientHeight;
+      autoScrollPausadoPorScroll = distanciaDoFim > 40;
+    });
+
+    function pararLive() {
+      if (eventSourceAtual) {
+        eventSourceAtual.close();
+        eventSourceAtual = null;
+      }
+      badgeLive.classList.remove('ativo');
+    }
+
+    async function iniciarLiveSeForHoje(dataSelecionada, offsetFim) {
+      pararLive();
+      if (dataSelecionada !== dataMaisRecente) return;
+
+      const url = await window.adminApi.streamUrl(offsetFim);
+      eventSourceAtual = new EventSource(url);
+      badgeLive.classList.add('ativo');
+
+      eventSourceAtual.onmessage = (evento) => {
+        caixa.appendChild(linhaParaElemento(evento.data));
+        rolarSeNecessario();
+      };
+      eventSourceAtual.onerror = () => {
+        badgeLive.classList.remove('ativo');
+      };
+    }
+
+    async function carregarData(data, { manterScroll = false } = {}) {
+      pararLive();
+      try {
+        const resultado = await window.adminApi.lerLog(data);
+        caixa.innerHTML = '';
+        for (const linha of resultado.linhas) caixa.appendChild(linhaParaElemento(linha));
+        offsetInicio = resultado.offsetInicio;
+        if (!manterScroll) caixa.scrollTop = caixa.scrollHeight;
+        await iniciarLiveSeForHoje(data, resultado.offsetFim);
+      } catch (erro) {
+        caixa.textContent = 'Falha ao carregar log: ' + erro.message;
+      }
+    }
+
+    btnMaisAntigo.addEventListener('click', async () => {
+      if (offsetInicio == null || offsetInicio <= 0) return;
+      const data = selectData.value;
+      const alturaAntes = caixa.scrollHeight;
+      try {
+        const resultado = await window.adminApi.lerLog(data, offsetInicio);
+        const fragmento = document.createDocumentFragment();
+        for (const linha of resultado.linhas) fragmento.appendChild(linhaParaElemento(linha));
+        caixa.prepend(fragmento);
+        offsetInicio = resultado.offsetInicio;
+        caixa.scrollTop = caixa.scrollHeight - alturaAntes;
+      } catch (erro) {
+        // Mantém a tela como está; não vale a pena substituir o conteúdo já
+        // carregado por causa de uma página antiga que falhou.
+      }
+    });
+
+    selectData.addEventListener('change', () => carregarData(selectData.value));
+
+    async function iniciar() {
+      const sessao = await window.adminAuth.exigirSessao();
+      if (!sessao) return;
+
+      try {
+        const { arquivos } = await window.adminApi.listarLogs();
+        if (arquivos.length === 0) {
+          caixa.textContent = 'Nenhum arquivo de log encontrado ainda.';
+          return;
+        }
+        dataMaisRecente = arquivos[0].data;
+        selectData.innerHTML = arquivos
+          .map((a) => `<option value="${a.data}">${a.data}${a.data === dataMaisRecente ? ' (hoje)' : ''}</option>`)
+          .join('');
+        await carregarData(dataMaisRecente);
+      } catch (erro) {
+        caixa.textContent = 'Falha ao listar logs: ' + erro.message;
+      }
+    }
+
+    document.getElementById('btn-sair').addEventListener('click', () => window.adminAuth.logout());
+    iniciar();
+  </script>
+</body>
+</html>

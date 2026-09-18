@@ -59,6 +59,12 @@ dubla('../../src/services/conversasService', {
 dubla('../../src/integracoes/n8nClient', {
   notificarAgenteOrcamento: async (payload) => { chamadasNotificarAgenteOrcamento.push(payload); return null; },
 });
+// notifyTargets.resolverAlvo agora lê de configResolver (Supabase) — dublado
+// aqui pra manter o mesmo telefone de vendas de sempre (PHONE_VANESSA) sem
+// bater na rede, e pra rodar o teste na hora (sem o custo real de rede).
+dubla('../../src/config/configResolver', {
+  obter: async (chave) => (chave === 'telefone_vendas' ? process.env.PHONE_VANESSA : null),
+});
 
 const { executarAcoes } = require('../../src/botEngine/actions');
 

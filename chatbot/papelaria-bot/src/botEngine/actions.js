@@ -6,7 +6,7 @@
 // descrevem a intenção da ação (função pura, sem I/O); é aqui que ela vira
 // uma chamada real à Evolution API/Supabase/n8n.
 
-const notifyTargets = require('../config/notifyTargets');
+const { resolverAlvo } = require('../config/notifyTargets');
 const evolutionApi = require('../services/evolutionApi');
 const clientesService = require('../services/clientesService');
 const orcamentosService = require('../services/orcamentosService');
@@ -42,7 +42,7 @@ function montarMensagemNotificacao(cliente, acao) {
 }
 
 async function notificarHumano(acao, cliente) {
-  const telefoneDestino = notifyTargets[acao.alvo];
+  const telefoneDestino = await resolverAlvo(acao.alvo);
   if (!telefoneDestino) {
     logger.erro(`Nenhum telefone configurado para o alvo de notificação "${acao.alvo}"`);
     return;
@@ -184,15 +184,15 @@ async function criarOrcamentoListaEscolar(acao, cliente, conversaId) {
     orcamento = await orcamentosService.criarOrcamentoComItens({ clienteId: cliente.id, conversaId, ...origemOrcamento });
   } catch (erro) {
     logger.erro(`Falha ao criar orçamento de lista escolar do cliente ${cliente.telefone}`, erro);
-    await rodarEtapaBestEffort('Falha ao avisar vendas sobre falha ao criar orçamento de lista escolar', cliente, () => evolutionApi.enviarTexto(
-      notifyTargets.vendas,
+    await rodarEtapaBestEffort('Falha ao avisar vendas sobre falha ao criar orçamento de lista escolar', cliente, async () => evolutionApi.enviarTexto(
+      await resolverAlvo('vendas'),
       mensagemFalhaOrcamentoListaEscolar(cliente, origemOrcamento)
     ));
     return;
   }
 
-  await rodarEtapaBestEffort('Falha ao notificar vendas sobre o novo orçamento de lista escolar', cliente, () => evolutionApi.enviarTexto(
-    notifyTargets.vendas,
+  await rodarEtapaBestEffort('Falha ao notificar vendas sobre o novo orçamento de lista escolar', cliente, async () => evolutionApi.enviarTexto(
+    await resolverAlvo('vendas'),
     mensagemNovoOrcamentoListaEscolar(cliente, orcamento, origemOrcamento)
   ));
 
@@ -229,8 +229,8 @@ async function finalizarCadastroEPedido(acao, cliente, conversaId) {
       cliente.telefone,
       'Tivemos um problema técnico ao confirmar seu pedido. Já avisamos nossa equipe e já já te retornamos — não precisa refazer nada.'
     ));
-    await rodarEtapaBestEffort('Falha ao avisar vendas sobre problema técnico no pedido', cliente, () => evolutionApi.enviarTexto(
-      notifyTargets.vendas,
+    await rodarEtapaBestEffort('Falha ao avisar vendas sobre problema técnico no pedido', cliente, async () => evolutionApi.enviarTexto(
+      await resolverAlvo('vendas'),
       mensagemFalhaFechamento(cliente, origemOrcamento, cadastroFiscal)
     ));
     return;
@@ -241,8 +241,8 @@ async function finalizarCadastroEPedido(acao, cliente, conversaId) {
     mensagemConfirmacaoProtocolo(pedido.protocolo)
   ));
 
-  await rodarEtapaBestEffort('Falha ao notificar vendas sobre o pedido fechado', cliente, () => evolutionApi.enviarTexto(
-    notifyTargets.vendas,
+  await rodarEtapaBestEffort('Falha ao notificar vendas sobre o pedido fechado', cliente, async () => evolutionApi.enviarTexto(
+    await resolverAlvo('vendas'),
     mensagemDadosFiscaisProOperador(cliente, cadastroFiscal, origemOrcamento, pedido)
   ));
 

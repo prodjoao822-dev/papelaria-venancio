@@ -106,6 +106,12 @@ dubla('../../src/utils/mediaProcessor', {
   transcreverAudio: async (base64, mimetype) => comportamentoTranscreverAudio(base64, mimetype),
   descreverImagem: async (base64, mimetype, legenda) => comportamentoDescreverImagem(base64, mimetype, legenda),
 });
+// notifyTargets.resolverAlvo agora lê de configResolver (Supabase) — dublado
+// aqui pra manter o mesmo telefone de vendas de sempre (PHONE_VANESSA) sem
+// bater na rede.
+dubla('../../src/config/configResolver', {
+  obter: async (chave) => (chave === 'telefone_vendas' ? process.env.PHONE_VANESSA : null),
+});
 
 const { receberWebhook } = require('../../src/webhook/webhookController');
 const env = require('../../src/config/env');

@@ -29,6 +29,19 @@ require.cache[CAMINHO_CONVERSAS] = {
   },
 };
 
+// reativacaoBot lê o timeout de configResolver (painel admin, 18/09/2026) em
+// vez de env.js direto — dublado aqui com o mesmo valor de sempre (120min)
+// pra manter o comportamento exercitado por este arquivo, sem bater na rede.
+const CAMINHO_CONFIG_RESOLVER = require.resolve('../../src/config/configResolver');
+require.cache[CAMINHO_CONFIG_RESOLVER] = {
+  id: CAMINHO_CONFIG_RESOLVER,
+  filename: CAMINHO_CONFIG_RESOLVER,
+  loaded: true,
+  exports: {
+    obter: async (chave) => (chave === 'reactivation_timeout_minutos' ? 120 : null),
+  },
+};
+
 const reativacaoBot = require('../../src/middlewares/reativacaoBot');
 
 const MINUTO = 60 * 1000;

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Painel Admin · Venâncio</title>
+  <link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+  <div class="login-wrap">
+    <form class="login-card" id="form-login">
+      <h1>Painel Admin</h1>
+      <p class="sub">Acesso restrito ao administrador da Papelaria Venâncio.</p>
+
+      <label for="email">E-mail</label>
+      <input type="email" id="email" required autocomplete="username">
+
+      <label for="senha">Senha</label>
+      <input type="password" id="senha" required autocomplete="current-password">
+
+      <button class="btn" type="submit" id="btn-entrar">Entrar</button>
+      <div class="login-erro" id="login-erro"></div>
+    </form>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="shared/config.js"></script>
+  <script src="shared/auth.js"></script>
+  <script>
+    (async () => {
+      // Já logado? Pula direto pro painel (a checagem de admin de verdade
+      // acontece lá, no primeiro fetch à API).
+      const sessaoExistente = await window.adminAuth.obterSessao();
+      if (sessaoExistente) window.location.href = 'config.html';
+    })();
+
+    const form = document.getElementById('form-login');
+    const erroEl = document.getElementById('login-erro');
+    const botao = document.getElementById('btn-entrar');
+
+    form.addEventListener('submit', async (evento) => {
+      evento.preventDefault();
+      erroEl.textContent = '';
+      botao.disabled = true;
+      botao.textContent = 'Entrando...';
+      try {
+        await window.adminAuth.login(
+          document.getElementById('email').value.trim(),
+          document.getElementById('senha').value
+        );
+        window.location.href = 'config.html';
+      } catch (erro) {
+        erroEl.textContent = 'Não foi possível entrar. Confira e-mail e senha.';
+        botao.disabled = false;
+        botao.textContent = 'Entrar';
+      }
+    });
+  </script>
+</body>
+</html>

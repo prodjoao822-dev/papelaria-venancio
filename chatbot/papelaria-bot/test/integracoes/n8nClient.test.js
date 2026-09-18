@@ -22,6 +22,23 @@ require.cache[caminhoMensagens] = {
   },
 };
 
+// n8nClient lê timeout e liga/desliga do Agente de Vendas de configResolver
+// (painel admin, 18/09/2026) em vez de env.js direto — dublado aqui com os
+// mesmos valores que os testes deste arquivo já assumiam antes da migração.
+const caminhoConfigResolver = require.resolve('../../src/config/configResolver');
+require.cache[caminhoConfigResolver] = {
+  id: caminhoConfigResolver,
+  filename: caminhoConfigResolver,
+  loaded: true,
+  exports: {
+    obter: async (chave) => {
+      if (chave === 'agente_vendas_timeout_ms') return 6000;
+      if (chave === 'agente_vendas_habilitado') return true;
+      return null;
+    },
+  },
+};
+
 const n8nClient = require('../../src/integracoes/n8nClient');
 
 function erroDeLeitura() {

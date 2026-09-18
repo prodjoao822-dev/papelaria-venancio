@@ -7,7 +7,7 @@
 // webhookController já buscou o cliente e a conversa no banco. Por isso é
 // chamado diretamente pelo controller como função de apoio.
 
-const env = require('../config/env');
+const configResolver = require('../config/configResolver');
 const conversasService = require('../services/conversasService');
 const logger = require('../utils/logger');
 
@@ -51,7 +51,8 @@ async function garantirBotAtivo(conversa) {
   }
 
   const minutosInativo = minutosDesde(conversa.ultima_interacao_em);
-  if (minutosInativo < env.REACTIVATION_TIMEOUT_MINUTES) {
+  const timeoutMinutos = await configResolver.obter('reactivation_timeout_minutos');
+  if (minutosInativo < timeoutMinutos) {
     // Ainda dentro da janela humana: fica em silêncio, e — importante — sem
     // escrever nada na conversa.
     //

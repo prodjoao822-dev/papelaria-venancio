@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Configuração · Painel Admin</title>
+  <link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+  <div class="topo">
+    <div class="topo-marca"><span class="ponto"></span> Painel Admin</div>
+    <nav class="topo-nav">
+      <a href="config.html" class="ativo">Configuração</a>
+      <a href="logs.html">Logs</a>
+    </nav>
+    <button class="topo-sair" id="btn-sair">Sair</button>
+  </div>
+
+  <div class="conteudo">
+    <h1 class="pagina-titulo">Configuração do bot</h1>
+    <p class="pagina-subtitulo">Valores de comportamento que hoje ficavam fixos no <code>.env</code> — mudam na hora, sem reiniciar o bot.</p>
+
+    <div id="secoes">Carregando...</div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="shared/config.js"></script>
+  <script src="shared/auth.js"></script>
+  <script src="shared/api.js"></script>
+  <script>
+    const CATEGORIAS = {
+      timeouts: 'Timeouts',
+      telefones: 'Telefones de notificação',
+      recursos: 'Recursos (liga/desliga)',
+    };
+
+    function criarInput(item) {
+      if (item.tipo === 'booleano') {
+        const label = document.createElement('label');
+        label.className = 'switch';
+        label.innerHTML = `<input type="checkbox" ${item.valor ? 'checked' : ''}><span class="switch-trilho"></span>`;
+        return { el: label, ler: () => label.querySelector('input').checked };
+      }
+      const input = document.createElement('input');
+      input.type = item.tipo === 'numero' ? 'number' : 'text';
+      input.value = item.valor ?? '';
+      if (item.minimo != null) input.min = item.minimo;
+      if (item.maximo != null) input.max = item.maximo;
+      return {
+        el: input,
+        ler: () => (item.tipo === 'numero' ? Number(input.value) : input.value.trim()),
+      };
+    }
+
+    function criarLinha(item) {
+      const linha = document.createElement('div');
+      linha.className = 'linha-config';
+
+      const label = document.createElement('div');
+      label.className = 'linha-config-label';
+      label.innerHTML = `<div class="chave">${item.chave}</div><div class="descricao">${item.descricao}</div>`;
+
+      const { el: inputEl, ler } = criarInput(item);
+
+      const status = document.createElement('span');
+      status.className = 'status-linha';
+
+      const botaoSalvar = document.createElement('button');
+      botaoSalvar.className = 'btn secundario';
+      botaoSalvar.textContent = 'Salvar';
+      botaoSalvar.addEventListener('click', async () => {
+        botaoSalvar.disabled = true;
+        status.className = 'status-linha salvando';
+        status.textContent = 'salvando...';
+        try {
+          await window.adminApi.atualizarConfig(item.chave, ler());
+          status.className = 'status-linha ok';
+          status.textContent = 'salvo ✓';
+        } catch (erro) {
+          status.className = 'status-linha erro';
+          status.textContent = erro.message || 'erro';
+        } finally {
+          botaoSalvar.disabled = false;
+          setTimeout(() => { status.textContent = ''; }, 4000);
+        }
+      });
+
+      const grupoInput = document.createElement('div');
+      grupoInput.className = 'linha-config-input';
+      grupoInput.append(inputEl, botaoSalvar, status);
+
+      linha.append(label, grupoInput);
+      return linha;
+    }
+
+    async function carregar() {
+      const sessao = await window.adminAuth.exigirSessao();
+      if (!sessao) return;
+
+      const raiz = document.getElementById('secoes');
+      try {
+        const { itens } = await window.adminApi.listarConfig();
+        raiz.innerHTML = '';
+
+        const porCategoria = {};
+        for (const item of itens) {
+          const cat = item.categoria || 'outros';
+          (porCategoria[cat] = porCategoria[cat] || []).push(item);
+        }
+
+        for (const [cat, label] of Object.entries(CATEGORIAS)) {
+          if (!porCategoria[cat]) continue;
+          const secao = document.createElement('div');
+          secao.className = 'secao';
+          secao.innerHTML = `<div class="secao-cabecalho">${label}</div>`;
+          for (const item of porCategoria[cat]) {
+            secao.appendChild(criarLinha(item));
+          }
+          raiz.appendChild(secao);
+        }
+      } catch (erro) {
+        if (raiz.isConnected) raiz.textContent = 'Falha ao carregar configuração: ' + erro.message;
+      }
+    }
+
+    document.getElementById('btn-sair').addEventListener('click', () => window.adminAuth.logout());
+    carregar();
+  </script>
+</body>
+</html>
