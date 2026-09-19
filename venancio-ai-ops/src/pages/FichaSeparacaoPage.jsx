@@ -23,9 +23,11 @@ export function FichaSeparacaoPage() {
   const [salvandoResponsavel, setSalvandoResponsavel] = useState(false)
   const obsTimers = useRef({})
 
+  // Retorna a Promise (não só dispara) pra handleImprimir poder encadear
+  // "busca de novo, ENTÃO imprime" — ver comentário na Fase 4 abaixo.
   const carregar = useCallback(() => {
     setCarregando(true)
-    Promise.all([
+    return Promise.all([
       pedidosService.buscarPorId(id),
       funcionariosService.listarPorPapel('separacao'),
     ])
@@ -95,8 +97,17 @@ export function FichaSeparacaoPage() {
     toast.sucesso('Ficha salva.')
   }
 
+  // Fase 4 (18/09/2026): a ficha impressa tem que sempre refletir o estado
+  // ATUAL do pedido, nunca um snapshot antigo — se a aba ficou aberta um
+  // tempo (outro operador mexeu no pedido nesse meio tempo, por exemplo),
+  // o que já estava carregado em memória pode estar desatualizado. Busca
+  // de novo antes de imprimir, em vez de confiar no estado já carregado;
+  // requestAnimationFrame garante que o print só dispara depois que o
+  // re-render com os dados novos já aconteceu.
   function handleImprimir() {
-    window.print()
+    carregar().then(() => {
+      requestAnimationFrame(() => window.print())
+    })
   }
 
   if (carregando) {
