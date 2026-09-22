@@ -98,9 +98,37 @@ A linha **existe de fato** — confirmada via varejista autorizado (Armarinho S�
 
 ---
 
+## Resolução de pendências (22/09/2026, mesma tarefa)
+
+Depois da segunda rodada, 13 itens ficaram com `precisa_validacao`. Uma nova pesquisa, mais direcionada (procurando código de barras, catálogos de distribuidor, preço por candidato, fotos de embalagem), resolveu **8 deles** com evidência concreta. Migração `extensao_resolucao_validacoes_22-09.sql`, aplicada e validada ao vivo (5 itens permanecem `precisa_validacao`, confirmado por contagem).
+
+### Resolvidos
+
+| SKU | Item | Como foi resolvido |
+|---|---|---|
+| 4376 | Canetinha Hidrocor FC 12 cores | Por preço: R$16,99 bate com a linha "Colors/Hidrocor" tradicional (R$14,99-17,20 em 2 varejistas), não com a Bicolor (que só existe como "12 canetas = 24 cores") |
+| 1810 | Canetinha Hidrocor FC 24 cores | Por preço: R$34,99 muito mais próximo do Colors 24 Cores (R$35,50) que da Bicolor (R$29,60-52,60) |
+| 69975/69977 | Caneta Compactor Economic fina | Achada página oficial própria (`compactor.com.br/esferograficas-economic/`) que a pesquisa anterior não tinha localizado |
+| 25886 | Marca texto Compactor Destaq azul | Cor "azul" confirmada como produto real (variante pastel e neon) em varejistas de peso — lista de cores da pesquisa anterior estava incompleta |
+| 15561 | Marca texto Pilot 200-SL violeta | Cor "violeta" confirmada na página oficial da Pilot — lista de cores da pesquisa anterior estava incompleta |
+| 70317 | Caderno "Strong" | **Achado principal**: o produto físico do ticket corresponde à linha oficial Tilibra **"Hide"** (brochura camuflada 80fls), não "Strong" (que só existe como espiral multimatéria). "Strong" era nome de gôndola/apelido interno da loja |
+| 9029 | Caderno "Mais+" | Confirmado por varejista de peso (eFácil) um produto oficial idêntico ao cadastro (espiral, capa dura, 96fls, 1 matéria) — a versão brochura 48fls achada antes é outra apresentação da mesma linha básica, não um erro |
+
+### Continuam em aberto (reforçadas, não resolvidas — precisam de checagem física na loja)
+
+| SKU | Item | Por que continua aberto |
+|---|---|---|
+| 30939 | Caneta FC Trilux "vermelha/azul" | Kits Trilux 2-3 cores existem no mercado, mas custam mais que o preço cadastrado (R$1,50) — hipótese de kit enfraquecida; nova hipótese (SKU de cor sortida) também não confirmada |
+| 4387 | Apontador FC "Since 1761" | Nenhum dos 5 apontadores oficiais na faixa de preço tem esse nome — reforça que é selo de heritage, não nome de linha |
+| 4380 | Grafite FC 0.5 "2B/HB" | Confirmado que a FC vende 2B e HB como produtos separados; nenhum kit combinado encontrado — não dá pra saber qual graduação o ticket realmente vendeu |
+| 68801 | Lapiseira Sky Paper "SK1303" | Achado um código parecido real (SK1310, R$2,25) mas com preço incompatível com o cadastrado (R$9,99) — não é o mesmo produto |
+| 70601 | Canetinha Sky Paper Jumbo 24 cores | Confirmada só a versão 12 cores da marca; nenhuma fonte confirma a de 24 cores |
+
+Estes 5 itens têm um limite real de pesquisa por internet — resolver de verdade exige comparar o código/nome impresso na embalagem física com o que está cadastrado. Recomendado como tarefa rápida na loja, não como pesquisa adicional online.
+
 ## O que muda na prática para o agente
 
 - Os 78 itens deixam de estar "sem característica" — agora têm descrição real, com fonte e nível de confiança, prontos para virar texto de RAG.
-- **9 itens carregam uma ressalva explícita de "precisa_validacao"** e não devem ter uma característica específica repassada ao cliente como fato até confirmação física: apontador FC "Since 1761" (4387), caneta Trilux "vermelha/azul" (30939), Compactor Economic (69975/69977), canetinha FC 4376/1810, grafite FC 0.5 (4380, quanto à graduação exata), lapiseira Sky Paper SK1303 (68801).
+- **5 itens continuam com "precisa_validacao" após duas rodadas de pesquisa** e não devem ter característica específica repassada ao cliente como fato até checagem física na loja: apontador FC "Since 1761" (4387), caneta Trilux "vermelha/azul" (30939), grafite FC 0.5 2B/HB (4380, quanto à graduação exata), lapiseira Sky Paper "SK1303" (68801), canetinha Sky Paper Jumbo 24 cores (70601).
 - **1 correção de entendimento, sem mudança de cadastro**: SKU 39121 não é lápis de cor (é grafite comum com cabo neon) — não oferecer como opção de colorir.
-- **1 dúvida resolvida** (Mais+ é uma linha real) e **1 dúvida aprofundada, não resolvida** (Strong continua com divergência de encadernação/folhas) — ambas exigem, na prática, uma checagem física do produto na loja antes de a informação virar resposta padrão do agente.
+- **Os 2 cadernos foram totalmente resolvidos**: "Mais+" é uma linha real vendida em 2 apresentações (brochura 48fls e espiral 96fls, o cadastro já estava certo); "Strong" era na verdade a linha oficial "Hide" (nome de gôndola divergente do nome de fabricante) — ambos elevados a `confirmado_site_oficial`.
