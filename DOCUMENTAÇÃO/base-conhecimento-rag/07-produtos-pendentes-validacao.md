@@ -1,5 +1,7 @@
 # 07 — Produtos Pendentes de Validação
 
+> **ATUALIZAÇÃO 22/09/2026:** a pesquisa destes 78 itens foi concluída na segunda rodada — ver **Documento 08** (`08-segunda-rodada-pesquisa.md`) para as características encontradas, fontes e confiança. A tag `pendente_pesquisa` foi removida de todos os 78 produtos no Supabase (migração `extensao_segunda_rodada_pesquisa_22-09.sql`). Este documento fica mantido como registro histórico do estado "cadastro leve" da primeira rodada.
+
 **O que entra aqui:** os itens que já foram cadastrados no catálogo do Agente de IA (existem em `produtos`, com nome/SKU/preço/categoria/marca corretos), mas que **ainda não passaram pela pesquisa de características** que os 21 cadernos (Documento 02) já receberam. Decisão do dono da loja (21/09/2026): cadernos primeiro, esse lote entra numa rodada de pesquisa futura. Nenhum destes 78 itens deve ser tratado como "sem informação" — eles têm nome, preço e categoria corretos, e são plenamente utilizáveis pelo agente para localizar o produto e informar o preço; só falta o enriquecimento de características/diferenciais que uma pesquisa mais profunda traria.
 
 Consulta ao vivo no Supabase confirmou: **78 produtos** com a tag `pendente_pesquisa`, migração `extensao_catalogo_produtos_novos_leves_21-09.sql`.
